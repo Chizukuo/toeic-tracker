@@ -1,63 +1,281 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Lap = {
-  part: string;
-  timeSpentMs: number; // Time spent on this part in ms
+import {
+  type MistakeKey,
+  type ReadingLapKey,
+  type SessionRecord,
+  type SessionStatus,
+  createInitialSessions,
+  mergeSessionWithDefaults,
+} from '@/lib/toeic';
+import type { Locale as AppLocale } from '@/lib/i18n';
+
+type LegacyRecord = {
+  day?: number;
+  type?: 'L' | 'R';
+  status?: 'todo' | 'ongoing' | 'completed';
+  totalTimeMs?: number;
+  laps?: Array<{ part?: string; timeSpentMs?: number }>;
+  mistakes?: Partial<Record<MistakeKey, number>>;
+  reasons?: string[];
 };
 
-export type TaskStatus = 'todo' | 'ongoing' | 'completed';
+export type SprintSnapshot = {
+  app: 'Cheese-TOEIC-Tracker';
+  version: 1;
+  exportedAt: string;
+  data: {
+    sessions: SessionRecord[];
+    activeSessionId: string;
+    locale: AppLocale;
+  };
+};
 
-export type DayRecord = {
-  day: number; // 1-20
-  type: 'L' | 'R'; // Listening or Reading
-  status: TaskStatus;
-  totalTimeMs?: number;
-  laps: Lap[];
-  mistakes: Record<string, number>; // Part (e.g., '1', '5') -> Number of mistakes
-  reasons: string[]; // Debug tags
+type SnapshotLike = {
+  data?: {
+    sessions?: unknown;
+    activeSessionId?: string;
+    locale?: AppLocale;
+  };
+  sessions?: unknown;
+  activeSessionId?: string;
+  locale?: AppLocale;
 };
 
 interface AppState {
-  records: DayRecord[];
-  activeDay: number;
-  activeType: 'L' | 'R';
-  setActiveSession: (day: number, type: 'L' | 'R') => void;
-  updateRecord: (day: number, type: 'L' | 'R', data: Partial<DayRecord>) => void;
-  initRecords: () => void;
+  sessions: SessionRecord[];
+  activeSessionId: string;
+  locale: AppLocale;
+  ensureInitialized: () => void;
+  selectSession: (sessionId: string) => void;
+  setLocale: (locale: AppLocale) => void;
+  patchSession: (sessionId: string, data: Partial<SessionRecord>) => void;
+  saveDiagnostics: (
+    sessionId: string,
+    payload: {
+      mistakes: Partial<Record<MistakeKey, number>>;
+      reasons: string[];
+      status?: SessionStatus;
+    }
+  ) => void;
+  exportSnapshot: () => SprintSnapshot;
+  importSnapshot: (snapshot: unknown) => void;
+  resetProgress: () => void;
+}
+
+function isLocale(value: unknown): value is AppLocale {
+  return value === 'zh' || value === 'en';
+}
+
+function normalizeSessions(incoming: unknown): SessionRecord[] {
+  const defaults = createInitialSessions();
+  if (!Array.isArray(incoming)) {
+    return defaults;
+  }
+
+  const merged = defaults.map((session) => {
+    const match = incoming.find(
+      (item): item is Partial<SessionRecord> & Pick<SessionRecord, 'id'> =>
+        typeof item === 'object' && item !== null && 'id' in item && item.id === session.id
+    );
+
+    return match ? mergeSessionWithDefaults(match) : session;
+  });
+
+  return merged;
+}
+
+function migrateLegacyRecords(records: LegacyRecord[] | undefined) {
+  const sessions = createInitialSessions();
+  if (!Array.isArray(records)) {
+    return sessions;
+  }
+
+  for (const record of records) {
+    if (!record.day || !record.type || record.day > 10) {
+      continue;
+    }
+
+    const sessionId = `${record.type}${record.day}`;
+    const index = sessions.findIndex((session) => session.id === sessionId);
+    if (index === -1) {
+      continue;
+    }
+
+    const readingLapTimes: Partial<Record<ReadingLapKey, number>> = {};
+    for (const lap of record.laps ?? []) {
+      if (
+        lap.part === 'Part 5 (10m)' ||
+        lap.part === 'Part 6 (8m)' ||
+        lap.part === 'Part 7 Single (25m)' ||
+        lap.part === 'Part 7 Multiple (32m)'
+      ) {
+        const normalizedKey = lap.part.replace(/ \(.+\)/, '') as ReadingLapKey;
+        readingLapTimes[normalizedKey] = lap.timeSpentMs ?? 0;
+      }
+    }
+
+    sessions[index] = {
+      ...sessions[index],
+      status:
+        record.status === 'completed'
+          ? 'debugged'
+          : record.status === 'ongoing'
+            ? 'in-progress'
+            : 'not-started',
+      mistakes: record.mistakes ?? {},
+      reasons: record.reasons ?? [],
+      readingLapTimes,
+      timerSummary: record.totalTimeMs
+        ? {
+            totalElapsedMs: record.totalTimeMs,
+            forcedSubmit: false,
+            timedOut: false,
+            unfinishedQuestions: 0,
+            completedAt: new Date().toISOString(),
+          }
+        : undefined,
+    };
+  }
+
+  return sessions;
+}
+
+function parseImportSnapshot(snapshot: unknown) {
+  if (typeof snapshot !== 'object' || snapshot === null) {
+    throw new Error('Invalid snapshot payload');
+  }
+
+  const candidate = snapshot as SnapshotLike;
+  const source = candidate.data ?? candidate;
+  const sessions = normalizeSessions(source.sessions);
+
+  if (!Array.isArray(source.sessions)) {
+    throw new Error('Snapshot does not contain session data');
+  }
+
+  const activeSessionId =
+    typeof source.activeSessionId === 'string' && sessions.some((session) => session.id === source.activeSessionId)
+      ? source.activeSessionId
+      : 'L1';
+
+  return {
+    sessions,
+    activeSessionId,
+    locale: isLocale(source.locale) ? source.locale : 'zh',
+  };
 }
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
-      records: [],
-      activeDay: 1,
-      activeType: 'L',
-      setActiveSession: (day, type) => set({ activeDay: day, activeType: type }),
-      updateRecord: (day, type, data) =>
-        set((state) => {
-          const newRecords = [...state.records];
-          const index = newRecords.findIndex((r) => r.day === day && r.type === type);
-          if (index !== -1) {
-            newRecords[index] = { ...newRecords[index], ...data };
-          } else {
-            // Should not happen if initialized, but safe fallback
-            newRecords.push({ day, type, status: 'ongoing', laps: [], mistakes: {}, reasons: [], ...data });
-          }
-          return { records: newRecords };
-        }),
-      initRecords: () =>
-        set(() => {
-          const records: DayRecord[] = [];
-          for (let i = 1; i <= 10; i++) {
-            records.push({ day: i, type: 'L', status: 'todo', laps: [], mistakes: {}, reasons: [] });
-            records.push({ day: i, type: 'R', status: 'todo', laps: [], mistakes: {}, reasons: [] });
-          }
-          return { records };
-        }),
+    (set, get) => ({
+      sessions: createInitialSessions(),
+      activeSessionId: 'L1',
+      locale: 'zh',
+      ensureInitialized: () =>
+        set((state) => ({
+          sessions: normalizeSessions(state.sessions),
+          activeSessionId:
+            state.sessions.some((session) => session.id === state.activeSessionId)
+              ? state.activeSessionId
+              : 'L1',
+        })),
+      selectSession: (sessionId) => set({ activeSessionId: sessionId }),
+      setLocale: (locale) => set({ locale }),
+      patchSession: (sessionId, data) =>
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  ...data,
+                  mistakes: data.mistakes ?? session.mistakes,
+                  reasons: data.reasons ?? session.reasons,
+                  readingLapTimes: data.readingLapTimes ?? session.readingLapTimes,
+                  updatedAt: new Date().toISOString(),
+                }
+              : session
+          ),
+        })),
+      saveDiagnostics: (sessionId, payload) =>
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  mistakes: payload.mistakes,
+                  reasons: payload.reasons,
+                  status: payload.status ?? 'debugged',
+                  updatedAt: new Date().toISOString(),
+                }
+              : session
+          ),
+        })),
+      exportSnapshot: () => {
+        const state = get();
+
+        return {
+          app: 'Cheese-TOEIC-Tracker',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data: {
+            sessions: state.sessions,
+            activeSessionId: state.activeSessionId,
+            locale: state.locale,
+          },
+        };
+      },
+      importSnapshot: (snapshot) => {
+        const next = parseImportSnapshot(snapshot);
+        set(next);
+      },
+      resetProgress: () =>
+        set((state) => ({
+          sessions: createInitialSessions(),
+          activeSessionId: 'L1',
+          locale: state.locale,
+        })),
     }),
     {
       name: 'cheese-toeic-storage',
+      version: 3,
+      partialize: (state) => ({
+        sessions: state.sessions,
+        activeSessionId: state.activeSessionId,
+        locale: state.locale,
+      }),
+      migrate: (persistedState: unknown, version) => {
+        const persisted = persistedState as {
+          sessions?: unknown;
+          activeSessionId?: string;
+          locale?: AppLocale;
+          records?: LegacyRecord[];
+          activeDay?: number;
+          activeType?: 'L' | 'R';
+        };
+
+        if (version < 2 && persisted?.records) {
+          const activeSessionId =
+            persisted.activeDay && persisted.activeType && persisted.activeDay <= 10
+              ? `${persisted.activeType}${persisted.activeDay}`
+              : 'L1';
+
+          return {
+            sessions: migrateLegacyRecords(persisted.records),
+            activeSessionId,
+            locale: 'zh' as AppLocale,
+          };
+        }
+
+        return {
+          sessions: normalizeSessions(persisted?.sessions),
+          activeSessionId: persisted?.activeSessionId ?? 'L1',
+          locale: persisted?.locale ?? 'zh',
+        };
+      },
     }
   )
 );
+
+export type { SessionRecord } from '@/lib/toeic';
