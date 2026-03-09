@@ -21,7 +21,12 @@ import { sumMistakes } from '@/lib/toeic';
 import { useStore } from '@/store/useStore';
 
 export default function Home() {
-  const { sessions, ensureInitialized, activeSessionId, locale, examDate, setExamDate } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const ensureInitialized = useStore((state) => state.ensureInitialized);
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const locale = useStore((state) => state.locale);
+  const examDate = useStore((state) => state.examDate);
+  const setExamDate = useStore((state) => state.setExamDate);
   const copy = getCopy(locale);
   const [now, setNow] = useState<number | null>(null);
 

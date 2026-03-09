@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 
 import {
   CartesianGrid,
@@ -35,42 +36,48 @@ export function AnalyticsDashboard() {
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
 
-  const trendData = Array.from({ length: 10 }, (_, index) => {
-    const setNumber = index + 1;
-    const listening = sessions.find((session) => session.id === `L${setNumber}`);
-    const reading = sessions.find((session) => session.id === `R${setNumber}`);
+  const { trendData, radarData, reasonData } = useMemo(() => {
+    const sessionMap = new Map(sessions.map((session) => [session.id, session]));
 
-    return {
-      set: `S${setNumber}`,
-      Listening: listening && listening.status !== 'not-started' ? sumMistakes(listening) : undefined,
-      Reading: reading && reading.status !== 'not-started' ? sumMistakes(reading) : undefined,
-    };
-  });
+    const trendData = Array.from({ length: 10 }, (_, index) => {
+      const setNumber = index + 1;
+      const listening = sessionMap.get(`L${setNumber}`);
+      const reading = sessionMap.get(`R${setNumber}`);
 
-  const radarData = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
-    const matchingSessions = sessions.filter((session) => part in session.mistakes);
-    const totalMistakes = matchingSessions.reduce((sum, session) => sum + (session.mistakes[part] ?? 0), 0);
-    const totalQuestions = PART_QUESTION_COUNTS[part] * Math.max(matchingSessions.length, 1);
-    const errorRate = totalQuestions > 0 ? Number(((totalMistakes / totalQuestions) * 100).toFixed(1)) : 0;
+      return {
+        set: `S${setNumber}`,
+        Listening: listening && listening.status !== 'not-started' ? sumMistakes(listening) : undefined,
+        Reading: reading && reading.status !== 'not-started' ? sumMistakes(reading) : undefined,
+      };
+    });
 
-    return {
-      part: translatePart(locale, part),
-      errorRate,
-      baseline: 100,
-    };
-  });
+    const radarData = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
+      const matchingSessions = sessions.filter((session) => part in session.mistakes);
+      const totalMistakes = matchingSessions.reduce((sum, session) => sum + (session.mistakes[part] ?? 0), 0);
+      const totalQuestions = PART_QUESTION_COUNTS[part] * Math.max(matchingSessions.length, 1);
+      const errorRate = totalQuestions > 0 ? Number(((totalMistakes / totalQuestions) * 100).toFixed(1)) : 0;
 
-  const reasonCounts = new Map<string, number>();
-  for (const session of sessions) {
-    for (const reason of session.reasons) {
-      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+      return {
+        part: translatePart(locale, part),
+        errorRate,
+        baseline: 100,
+      };
+    });
+
+    const reasonCounts = new Map<string, number>();
+    for (const session of sessions) {
+      for (const reason of session.reasons) {
+        reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+      }
     }
-  }
 
-  const reasonData = [...reasonCounts.entries()]
-    .map(([reason, count]) => ({ reason: translateReason(locale, reason), count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
+    const reasonData = [...reasonCounts.entries()]
+      .map(([reason, count]) => ({ reason: translateReason(locale, reason), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    return { trendData, radarData, reasonData };
+  }, [locale, sessions]);
 
   return (
     <section className="grid gap-6">

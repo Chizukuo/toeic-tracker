@@ -41,7 +41,8 @@ type ScoreTrendPoint = {
 };
 
 export function ScoreEstimatorPanel() {
-  const { sessions, locale } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
 
   const listeningSessions = useMemo(() => sessions.filter((session) => session.type === 'L'), [sessions]);
@@ -52,15 +53,21 @@ export function ScoreEstimatorPanel() {
   const [selectedReadingId, setSelectedReadingId] = useState('R1');
   const [selectedPair, setSelectedPair] = useState('1');
 
-  const selectedListening = listeningSessions.find((session) => session.id === selectedListeningId) ?? listeningSessions[0];
-  const selectedReading = readingSessions.find((session) => session.id === selectedReadingId) ?? readingSessions[0];
-  const selectedPairListening = listeningSessions.find((session) => session.id === `L${selectedPair}`) ?? listeningSessions[0];
-  const selectedPairReading = readingSessions.find((session) => session.id === `R${selectedPair}`) ?? readingSessions[0];
+  const sessionMap = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions]);
+  const estimateMap = useMemo(
+    () => new Map(sessions.map((session) => [session.id, buildEstimate(session)])),
+    [sessions]
+  );
 
-  const listeningEstimate = selectedListening ? buildEstimate(selectedListening) : undefined;
-  const readingEstimate = selectedReading ? buildEstimate(selectedReading) : undefined;
-  const pairListeningEstimate = selectedPairListening ? buildEstimate(selectedPairListening) : undefined;
-  const pairReadingEstimate = selectedPairReading ? buildEstimate(selectedPairReading) : undefined;
+  const selectedListening = sessionMap.get(selectedListeningId) ?? listeningSessions[0];
+  const selectedReading = sessionMap.get(selectedReadingId) ?? readingSessions[0];
+  const selectedPairListening = sessionMap.get(`L${selectedPair}`) ?? listeningSessions[0];
+  const selectedPairReading = sessionMap.get(`R${selectedPair}`) ?? readingSessions[0];
+
+  const listeningEstimate = selectedListening ? estimateMap.get(selectedListening.id) : undefined;
+  const readingEstimate = selectedReading ? estimateMap.get(selectedReading.id) : undefined;
+  const pairListeningEstimate = selectedPairListening ? estimateMap.get(selectedPairListening.id) : undefined;
+  const pairReadingEstimate = selectedPairReading ? estimateMap.get(selectedPairReading.id) : undefined;
   const pairAvailable = Boolean(pairListeningEstimate?.available && pairReadingEstimate?.available);
   const totalScore = pairAvailable
     ? (pairListeningEstimate?.scaled ?? 0) + (pairReadingEstimate?.scaled ?? 0)
@@ -68,39 +75,39 @@ export function ScoreEstimatorPanel() {
   const listeningTrend = useMemo(
     () =>
       listeningSessions.map((session) => {
-        const estimate = buildEstimate(session);
+        const estimate = estimateMap.get(session.id);
 
         return {
           label: session.label,
-          score: estimate.available ? estimate.scaled : undefined,
-          rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
+          score: estimate?.available ? estimate.scaled : undefined,
+          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
           active: session.id === selectedListeningId,
         };
       }),
-    [listeningSessions, selectedListeningId]
+    [estimateMap, listeningSessions, selectedListeningId]
   );
   const readingTrend = useMemo(
     () =>
       readingSessions.map((session) => {
-        const estimate = buildEstimate(session);
+        const estimate = estimateMap.get(session.id);
 
         return {
           label: session.label,
-          score: estimate.available ? estimate.scaled : undefined,
-          rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
+          score: estimate?.available ? estimate.scaled : undefined,
+          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
           active: session.id === selectedReadingId,
         };
       }),
-    [readingSessions, selectedReadingId]
+    [estimateMap, readingSessions, selectedReadingId]
   );
   const totalTrend = useMemo(
     () =>
       Array.from({ length: 10 }, (_, index) => {
         const pair = `${index + 1}`;
-        const listening = listeningSessions.find((session) => session.id === `L${pair}`);
-        const reading = readingSessions.find((session) => session.id === `R${pair}`);
-        const listeningEstimate = listening ? buildEstimate(listening) : undefined;
-        const readingEstimate = reading ? buildEstimate(reading) : undefined;
+        const listening = sessionMap.get(`L${pair}`);
+        const reading = sessionMap.get(`R${pair}`);
+        const listeningEstimate = listening ? estimateMap.get(listening.id) : undefined;
+        const readingEstimate = reading ? estimateMap.get(reading.id) : undefined;
         const available = Boolean(listeningEstimate?.available && readingEstimate?.available);
 
         return {
@@ -110,7 +117,7 @@ export function ScoreEstimatorPanel() {
           active: selectedPair === pair,
         };
       }),
-    [listeningSessions, readingSessions, selectedPair]
+    [estimateMap, selectedPair, sessionMap]
   );
 
   return (

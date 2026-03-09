@@ -164,13 +164,28 @@ export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
 	}
 ).flat();
 
+const INITIAL_SESSIONS_TEMPLATE: SessionRecord[] = TOEIC_SPRINT_SESSIONS.map((session) => ({
+	...session,
+	status: "not-started",
+	mistakes: {},
+	reasons: [],
+	readingLapTimes: {},
+}));
+
+const SESSION_BLUEPRINT_MAP = new Map(
+	TOEIC_SPRINT_SESSIONS.map((session) => [session.id, session])
+);
+
+const INITIAL_SESSION_MAP = new Map(
+	INITIAL_SESSIONS_TEMPLATE.map((session) => [session.id, session])
+);
+
 export function createInitialSessions(): SessionRecord[] {
-	return TOEIC_SPRINT_SESSIONS.map((session) => ({
+	return INITIAL_SESSIONS_TEMPLATE.map((session) => ({
 		...session,
-		status: "not-started",
-		mistakes: {},
-		reasons: [],
-		readingLapTimes: {},
+		mistakes: { ...session.mistakes },
+		reasons: [...session.reasons],
+		readingLapTimes: { ...session.readingLapTimes },
 	}));
 }
 
@@ -325,13 +340,18 @@ export function getWorstPartLabel(sessions: SessionRecord[]) {
 export function mergeSessionWithDefaults(
 	incoming: Partial<SessionRecord> & Pick<SessionRecord, "id">
 ) {
-	const blueprint = TOEIC_SPRINT_SESSIONS.find((session) => session.id === incoming.id);
+	const blueprint = SESSION_BLUEPRINT_MAP.get(incoming.id);
 	if (!blueprint) {
 		throw new Error(`Unknown TOEIC session id: ${incoming.id}`);
 	}
 
+	const initial = INITIAL_SESSION_MAP.get(incoming.id);
+	if (!initial) {
+		throw new Error(`Missing initial TOEIC session id: ${incoming.id}`);
+	}
+
 	return {
-		...createInitialSessions().find((session) => session.id === incoming.id),
+		...initial,
 		...blueprint,
 		...incoming,
 		mistakes: incoming.mistakes ?? {},

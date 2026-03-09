@@ -183,15 +183,20 @@ export const useStore = create<AppState>()(
       locale: 'zh',
       examDate: DEFAULT_EXAM_DATE,
       ensureInitialized: () =>
-        set((state) => ({
-          sessions: normalizeSessions(state.sessions),
-          activeSessionId:
-            state.sessions.some((session) => session.id === state.activeSessionId)
+        set((state) => {
+          const sessions = normalizeSessions(state.sessions);
+          return {
+            sessions,
+            activeSessionId: sessions.some((session) => session.id === state.activeSessionId)
               ? state.activeSessionId
               : 'L1',
-          examDate: state.examDate || DEFAULT_EXAM_DATE,
+            examDate: state.examDate || DEFAULT_EXAM_DATE,
+          };
+        }),
+      selectSession: (sessionId) =>
+        set((state) => ({
+          activeSessionId: state.sessions.some((session) => session.id === sessionId) ? sessionId : state.activeSessionId,
         })),
-      selectSession: (sessionId) => set({ activeSessionId: sessionId }),
       setLocale: (locale) => set({ locale }),
       setExamDate: (examDate) => set({ examDate }),
       patchSession: (sessionId, data) =>
