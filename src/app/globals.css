@@ -137,8 +137,9 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(circle at top, color-mix(in oklab, oklch(0.81 0.165 85) 18%, transparent) 0%, transparent 36%),
-      linear-gradient(180deg, color-mix(in oklab, var(--background) 88%, white) 0%, var(--background) 100%);
+      radial-gradient(circle at top, color-mix(in oklab, white 78%, transparent) 0%, transparent 26%),
+      radial-gradient(circle at top right, color-mix(in oklab, oklch(0.81 0.165 85) 10%, transparent) 0%, transparent 20%),
+      linear-gradient(180deg, color-mix(in oklab, var(--background) 94%, white) 0%, var(--background) 100%);
     background-attachment: fixed;
   }
   html {
@@ -182,29 +183,30 @@
     position: absolute;
     inset: 0;
     background:
-      linear-gradient(135deg, color-mix(in oklab, var(--primary) 18%, transparent), transparent 42%),
-      linear-gradient(180deg, rgba(255,255,255,0.18), transparent 32%);
-    opacity: 0.8;
+      linear-gradient(135deg, color-mix(in oklab, white 72%, transparent), transparent 48%),
+      linear-gradient(180deg, rgba(255,255,255,0.24), transparent 30%);
+    opacity: 0.75;
     pointer-events: none;
     z-index: -1;
   }
 
   .dashboard-grid {
     background-image:
-      linear-gradient(to right, rgba(113,113,122,0.08) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(113,113,122,0.08) 1px, transparent 1px);
-    background-size: 28px 28px;
+      linear-gradient(to right, rgba(113,113,122,0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(113,113,122,0.035) 1px, transparent 1px);
+    background-size: 30px 30px;
   }
 
   .dark .dashboard-grid {
     background-image:
-      linear-gradient(to right, rgba(244,244,245,0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(244,244,245,0.04) 1px, transparent 1px);
+      linear-gradient(to right, rgba(244,244,245,0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(244,244,245,0.025) 1px, transparent 1px);
   }
 
   .glass-panel {
-    background: color-mix(in oklab, var(--card) 88%, transparent);
-    backdrop-filter: blur(18px);
+    background: color-mix(in oklab, var(--card) 92%, transparent);
+    backdrop-filter: blur(24px) saturate(120%);
+    box-shadow: 0 24px 80px -48px rgba(15, 23, 42, 0.24);
   }
 
   .text-gradient-cheese {

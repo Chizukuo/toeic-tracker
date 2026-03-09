@@ -73,6 +73,12 @@ type Copy = {
 	appName: string;
 	heroTitle: string;
 	heroBody: string;
+	examCountdownTitle: string;
+	examCountdownDescription: string;
+	examCountdownLabel: string;
+	examCountdownDays: string;
+	examCountdownHours: string;
+	examCountdownReady: string;
 	currentSession: string;
 	status: string;
 	hotRootCause: string;
@@ -235,8 +241,14 @@ type Copy = {
 const copy: Record<Locale, Copy> = {
 	zh: {
 		appName: 'Cheese-TOEIC-Tracker',
-		heroTitle: '20 天冲刺控制台，专门用来压榨《新东方 1000 题》TOEIC 备考表现。',
-		heroBody: '20 个 session 按听力与阅读交替推进。计时、打点、错因与未完成题数都会持续保存，刷新后也能继续追踪。',
+		heroTitle: '把 20 天冲刺收进一个清晰面板，直接看进度、时间和估分变化。',
+		heroBody: '20 个 session 按听力与阅读交替推进，计时、错题、未完成题和估分趋势都会持续保存。',
+		examCountdownTitle: '考试倒计时',
+		examCountdownDescription: '设定考试日，随时查看剩余时间。',
+		examCountdownLabel: '考试日期',
+		examCountdownDays: '剩余天数',
+		examCountdownHours: '总剩余小时',
+		examCountdownReady: '今天就是考试日，去考场。',
 		currentSession: '当前任务',
 		status: '状态',
 		hotRootCause: '高频错因',
@@ -260,9 +272,9 @@ const copy: Record<Locale, Copy> = {
 		protocolListeningTitle: '听力',
 		protocolListeningBody: '固定 45 分钟红区倒计时。没有暂停键，也没有缓冲区。',
 		protocolReadingTitle: '阅读',
-		protocolReadingBody: '固定 75 分钟，必须在 Part 5、Part 6、Part 7 单篇、Part 7 多篇完成时打点。',
+		protocolReadingBody: '固定 75 分钟，按 Part 5、6、7 单篇、7 多篇顺序打点。',
 		protocolTimeoutTitle: '超时',
-		protocolTimeoutBody: '如果 75 分钟耗尽但 lap 未完成，计时器会冻结，并强制录入未完成题数。',
+		protocolTimeoutBody: '75 分钟耗尽后计时冻结，并强制录入未完成题数。',
 		protocolPersistTitle: '持久化',
 		protocolPersistBody: '所有 session 记录、计时结果、Debug 标签和图表数据都通过 Zustand persist 保存。',
 		dashboardTitle: '冲刺总览',
@@ -397,8 +409,14 @@ const copy: Record<Locale, Copy> = {
 	},
 	en: {
 		appName: 'Cheese-TOEIC-Tracker',
-		heroTitle: 'A 20-day sprint command center built to expose every weakness in your TOEIC 1000-set grind.',
-		heroBody: 'All 20 sessions alternate between listening and reading. Timer captures, lap splits, root causes, and unfinished counts stay persisted for fast review after refresh.',
+		heroTitle: 'Put the 20-day TOEIC sprint on one clean surface for pace, progress, and score trend.',
+		heroBody: 'All 20 sessions alternate between listening and reading, with timers, mistakes, unfinished counts, and score trends saved automatically.',
+		examCountdownTitle: 'Exam Countdown',
+		examCountdownDescription: 'Set the test date and keep the remaining time visible.',
+		examCountdownLabel: 'Exam date',
+		examCountdownDays: 'Days left',
+		examCountdownHours: 'Total hours left',
+		examCountdownReady: 'Exam day is here. Time to go.',
 		currentSession: 'Current Session',
 		status: 'Status',
 		hotRootCause: 'Hot Root Cause',
@@ -422,9 +440,9 @@ const copy: Record<Locale, Copy> = {
 		protocolListeningTitle: 'Listening',
 		protocolListeningBody: 'Fixed 45-minute red-zone countdown. No pause button, no comfort blanket.',
 		protocolReadingTitle: 'Reading',
-		protocolReadingBody: 'Fixed 75 minutes with mandatory lap hits at Part 5, Part 6, Part 7 single, and Part 7 multiple.',
+		protocolReadingBody: 'Fixed 75 minutes with lap checkpoints for Part 5, 6, 7 single, and 7 multiple.',
 		protocolTimeoutTitle: 'Timeout',
-		protocolTimeoutBody: 'If the clock reaches zero before all laps are done, the timer freezes and unfinished questions must be recorded.',
+		protocolTimeoutBody: 'When time runs out, the timer freezes and unfinished questions must be logged.',
 		protocolPersistTitle: 'Persistence',
 		protocolPersistBody: 'All session records, timer results, debug tags, and chart datasets survive refresh through Zustand persist.',
 		dashboardTitle: 'Sprint Dashboard',

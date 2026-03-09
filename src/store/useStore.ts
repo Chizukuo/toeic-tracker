@@ -29,6 +29,7 @@ export type SprintSnapshot = {
     sessions: SessionRecord[];
     activeSessionId: string;
     locale: AppLocale;
+    examDate: string;
   };
 };
 
@@ -37,19 +38,25 @@ type SnapshotLike = {
     sessions?: unknown;
     activeSessionId?: string;
     locale?: AppLocale;
+    examDate?: string;
   };
   sessions?: unknown;
   activeSessionId?: string;
   locale?: AppLocale;
+  examDate?: string;
 };
+
+const DEFAULT_EXAM_DATE = '2026-05-24';
 
 interface AppState {
   sessions: SessionRecord[];
   activeSessionId: string;
   locale: AppLocale;
+  examDate: string;
   ensureInitialized: () => void;
   selectSession: (sessionId: string) => void;
   setLocale: (locale: AppLocale) => void;
+  setExamDate: (examDate: string) => void;
   patchSession: (sessionId: string, data: Partial<SessionRecord>) => void;
   saveDiagnostics: (
     sessionId: string,
@@ -164,6 +171,7 @@ function parseImportSnapshot(snapshot: unknown) {
     sessions,
     activeSessionId,
     locale: isLocale(source.locale) ? source.locale : 'zh',
+    examDate: typeof source.examDate === 'string' && source.examDate ? source.examDate : DEFAULT_EXAM_DATE,
   };
 }
 
@@ -173,6 +181,7 @@ export const useStore = create<AppState>()(
       sessions: createInitialSessions(),
       activeSessionId: 'L1',
       locale: 'zh',
+      examDate: DEFAULT_EXAM_DATE,
       ensureInitialized: () =>
         set((state) => ({
           sessions: normalizeSessions(state.sessions),
@@ -180,9 +189,11 @@ export const useStore = create<AppState>()(
             state.sessions.some((session) => session.id === state.activeSessionId)
               ? state.activeSessionId
               : 'L1',
+          examDate: state.examDate || DEFAULT_EXAM_DATE,
         })),
       selectSession: (sessionId) => set({ activeSessionId: sessionId }),
       setLocale: (locale) => set({ locale }),
+      setExamDate: (examDate) => set({ examDate }),
       patchSession: (sessionId, data) =>
         set((state) => ({
           sessions: state.sessions.map((session) =>
@@ -223,6 +234,7 @@ export const useStore = create<AppState>()(
             sessions: state.sessions,
             activeSessionId: state.activeSessionId,
             locale: state.locale,
+            examDate: state.examDate,
           },
         };
       },
@@ -235,21 +247,24 @@ export const useStore = create<AppState>()(
           sessions: createInitialSessions(),
           activeSessionId: 'L1',
           locale: state.locale,
+          examDate: state.examDate || DEFAULT_EXAM_DATE,
         })),
     }),
     {
       name: 'cheese-toeic-storage',
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
         locale: state.locale,
+        examDate: state.examDate,
       }),
       migrate: (persistedState: unknown, version) => {
         const persisted = persistedState as {
           sessions?: unknown;
           activeSessionId?: string;
           locale?: AppLocale;
+          examDate?: string;
           records?: LegacyRecord[];
           activeDay?: number;
           activeType?: 'L' | 'R';
@@ -265,6 +280,7 @@ export const useStore = create<AppState>()(
             sessions: migrateLegacyRecords(persisted.records),
             activeSessionId,
             locale: 'zh' as AppLocale,
+            examDate: DEFAULT_EXAM_DATE,
           };
         }
 
@@ -272,6 +288,7 @@ export const useStore = create<AppState>()(
           sessions: normalizeSessions(persisted?.sessions),
           activeSessionId: persisted?.activeSessionId ?? 'L1',
           locale: persisted?.locale ?? 'zh',
+          examDate: persisted?.examDate ?? DEFAULT_EXAM_DATE,
         };
       },
     }

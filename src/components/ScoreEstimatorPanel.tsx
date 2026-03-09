@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Calculator, CircleGauge, Headphones, LibraryBig, Sigma } from 'lucide-react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -32,6 +33,13 @@ type SectionEstimate = {
   accuracy: number;
 };
 
+type ScoreTrendPoint = {
+  label: string;
+  score?: number;
+  rawCorrect?: number;
+  active: boolean;
+};
+
 export function ScoreEstimatorPanel() {
   const { sessions, locale } = useStore();
   const copy = getCopy(locale);
@@ -57,6 +65,53 @@ export function ScoreEstimatorPanel() {
   const totalScore = pairAvailable
     ? (pairListeningEstimate?.scaled ?? 0) + (pairReadingEstimate?.scaled ?? 0)
     : 0;
+  const listeningTrend = useMemo(
+    () =>
+      listeningSessions.map((session) => {
+        const estimate = buildEstimate(session);
+
+        return {
+          label: session.label,
+          score: estimate.available ? estimate.scaled : undefined,
+          rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
+          active: session.id === selectedListeningId,
+        };
+      }),
+    [listeningSessions, selectedListeningId]
+  );
+  const readingTrend = useMemo(
+    () =>
+      readingSessions.map((session) => {
+        const estimate = buildEstimate(session);
+
+        return {
+          label: session.label,
+          score: estimate.available ? estimate.scaled : undefined,
+          rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
+          active: session.id === selectedReadingId,
+        };
+      }),
+    [readingSessions, selectedReadingId]
+  );
+  const totalTrend = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, index) => {
+        const pair = `${index + 1}`;
+        const listening = listeningSessions.find((session) => session.id === `L${pair}`);
+        const reading = readingSessions.find((session) => session.id === `R${pair}`);
+        const listeningEstimate = listening ? buildEstimate(listening) : undefined;
+        const readingEstimate = reading ? buildEstimate(reading) : undefined;
+        const available = Boolean(listeningEstimate?.available && readingEstimate?.available);
+
+        return {
+          label: `S${pair}`,
+          score: available ? (listeningEstimate?.scaled ?? 0) + (readingEstimate?.scaled ?? 0) : undefined,
+          rawCorrect: available ? (listeningEstimate?.rawCorrect ?? 0) + (readingEstimate?.rawCorrect ?? 0) : undefined,
+          active: selectedPair === pair,
+        };
+      }),
+    [listeningSessions, readingSessions, selectedPair]
+  );
 
   return (
     <Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
@@ -68,7 +123,7 @@ export function ScoreEstimatorPanel() {
           {copy.scoreEstimatorDescription}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 p-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <CardContent className="grid items-start gap-4 p-6 xl:grid-cols-[290px_minmax(0,1fr)]">
         <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
           <div className="grid grid-cols-3 gap-2">
             <ModeButton
@@ -118,7 +173,7 @@ export function ScoreEstimatorPanel() {
                 <PairSelect value={selectedPair} onValueChange={setSelectedPair} placeholder={copy.scoreSelectPair} />
               )}
             </div>
-            <p className="mt-4 text-[13px] leading-6 text-zinc-500 dark:text-zinc-400">
+            <p className="mt-3 text-[13px] leading-6 text-zinc-500 dark:text-zinc-400">
               {copy.scoreEstimatorNote}
             </p>
           </div>
@@ -129,12 +184,20 @@ export function ScoreEstimatorPanel() {
             copyLabel={copy.scoreListeningLabel}
             sessionLabel={selectedListening.label}
             estimate={listeningEstimate}
+            trendData={listeningTrend}
+            trendLabel={copy.scoreListeningLabel}
+            totalQuestions={100}
+            lineColor="#f59e0b"
           />
         ) : mode === 'R' && readingEstimate && selectedReading ? (
           <SectionEstimateView
             copyLabel={copy.scoreReadingLabel}
             sessionLabel={selectedReading.label}
             estimate={readingEstimate}
+            trendData={readingTrend}
+            trendLabel={copy.scoreReadingLabel}
+            totalQuestions={100}
+            lineColor="#38bdf8"
           />
         ) : (
           <TotalEstimateView
@@ -145,6 +208,8 @@ export function ScoreEstimatorPanel() {
             readingEstimate={pairReadingEstimate}
             totalScore={totalScore}
             available={pairAvailable}
+            trendData={totalTrend}
+            lineColor="#f97316"
           />
         )}
       </CardContent>
@@ -226,13 +291,23 @@ function SectionEstimateView({
   copyLabel,
   sessionLabel,
   estimate,
+  trendData,
+  trendLabel,
+  totalQuestions,
+  lineColor,
 }: {
   copyLabel: string;
   sessionLabel: string;
   estimate: SectionEstimate;
+  trendData: ScoreTrendPoint[];
+  trendLabel: string;
+  totalQuestions: number;
+  lineColor: string;
 }) {
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
+  const previousPoint = [...trendData].reverse().find((point) => !point.active && point.score !== undefined);
+  const delta = previousPoint?.score !== undefined ? estimate.scaled - previousPoint.score : null;
 
   if (!estimate.available) {
     return <EstimatePlaceholder />;
@@ -240,34 +315,47 @@ function SectionEstimateView({
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_320px]">
-      <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-          {copyLabel} · {sessionLabel}
-        </div>
-        <div className="mt-4 flex items-end gap-3">
-          <div className="font-mono text-6xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {estimate.scaled}
+      <div className="grid gap-4">
+        <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+            {copyLabel} · {sessionLabel}
           </div>
-          <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-            {copy.scoreScaled}
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <div className="font-mono text-6xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+              {estimate.scaled}
+            </div>
+            <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+              {copy.scoreScaled}
+            </div>
+            {delta !== null ? (
+              <div className={`mb-2 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] ${delta >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'bg-red-500/10 text-red-600 dark:text-red-300'}`}>
+                {delta >= 0 ? '+' : ''}{delta} vs prev
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-5 grid auto-rows-fr gap-3 sm:grid-cols-3">
+            <ScoreStat label={copy.scoreRawCorrect} value={`${estimate.rawCorrect}/${totalQuestions}`} />
+            <ScoreStat label={copy.scoreMistakes} value={`${estimate.mistakes}`} />
+            <ScoreStat label={copy.scoreAccuracy} value={`${estimate.accuracy}%`} />
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <ScoreStat label={copy.scoreRawCorrect} value={`${estimate.rawCorrect}/100`} />
-          <ScoreStat label={copy.scoreMistakes} value={`${estimate.mistakes}`} />
-          <ScoreStat label={copy.scoreAccuracy} value={`${estimate.accuracy}%`} />
-        </div>
+
+        <ScoreTrendChart data={trendData} lineColor={lineColor} lineLabel={trendLabel} />
       </div>
-      <div className="rounded-[24px] border border-zinc-200/70 bg-white/80 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
+      <div className="flex h-full flex-col rounded-[24px] border border-zinc-200/70 bg-white/80 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
         <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-400/12 text-amber-700 dark:text-amber-300">
           <Calculator className="size-4.5" />
         </div>
         <div className="mt-4 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-          {copy.scoreEstimatorTitle}
+          {locale === 'zh' ? '当前估分摘要' : 'Current score snapshot'}
         </div>
         <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-          {copy.scoreEstimatorNote}
+          {locale === 'zh' ? '看当前分数、所在分区和本次套次。' : 'Quick view of the current score, band, and selected set.'}
         </p>
+        <div className="mt-auto grid gap-3 pt-4">
+          <ScoreStat label={locale === 'zh' ? '当前套次' : 'Current set'} value={sessionLabel} />
+          <ScoreStat label={locale === 'zh' ? '稳定区间' : 'Current band'} value={formatScoreBand(estimate.scaled)} />
+        </div>
       </div>
     </div>
   );
@@ -281,6 +369,8 @@ function TotalEstimateView({
   readingEstimate,
   totalScore,
   available,
+  trendData,
+  lineColor,
 }: {
   copy: ReturnType<typeof getCopy>;
   listeningSession?: SessionRecord;
@@ -289,32 +379,40 @@ function TotalEstimateView({
   readingEstimate?: SectionEstimate;
   totalScore: number;
   available: boolean;
+  trendData: ScoreTrendPoint[];
+  lineColor: string;
 }) {
+  const locale = useStore((state) => state.locale);
+
   if (!available || !listeningEstimate || !readingEstimate || !listeningSession || !readingSession) {
     return <EstimatePlaceholder />;
   }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_320px]">
-      <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-          {`${listeningSession.label} + ${readingSession.label}`}
-        </div>
-        <div className="mt-4 flex items-end gap-3">
-          <div className="font-mono text-6xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {totalScore}
+      <div className="grid gap-4">
+        <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+            {`${listeningSession.label} + ${readingSession.label}`}
           </div>
-          <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-            {copy.scoreTotalLabel}
+          <div className="mt-4 flex items-end gap-3">
+            <div className="font-mono text-6xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+              {totalScore}
+            </div>
+            <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+              {copy.scoreTotalLabel}
+            </div>
+          </div>
+          <div className="mt-5 grid auto-rows-fr gap-3 sm:grid-cols-3">
+            <ScoreStat label={copy.scoreListeningLabel} value={`${listeningEstimate.scaled}`} />
+            <ScoreStat label={copy.scoreReadingLabel} value={`${readingEstimate.scaled}`} />
+            <ScoreStat label={copy.scoreAccuracy} value={`${(((listeningEstimate.rawCorrect + readingEstimate.rawCorrect) / 200) * 100).toFixed(1)}%`} />
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <ScoreStat label={copy.scoreListeningLabel} value={`${listeningEstimate.scaled}`} />
-          <ScoreStat label={copy.scoreReadingLabel} value={`${readingEstimate.scaled}`} />
-          <ScoreStat label={copy.scoreAccuracy} value={`${(((listeningEstimate.rawCorrect + readingEstimate.rawCorrect) / 200) * 100).toFixed(1)}%`} />
-        </div>
+
+        <ScoreTrendChart data={trendData} lineColor={lineColor} lineLabel={copy.scoreTotalLabel} />
       </div>
-      <div className="grid gap-3">
+      <div className="grid auto-rows-fr gap-3">
         <ScoreStatCard
           label={`${copy.scoreListeningLabel} · ${listeningSession.label}`}
           rawCorrect={listeningEstimate.rawCorrect}
@@ -326,6 +424,10 @@ function TotalEstimateView({
           rawCorrect={readingEstimate.rawCorrect}
           mistakes={readingEstimate.mistakes}
           scaled={readingEstimate.scaled}
+        />
+        <ScoreStat
+          label={locale === 'zh' ? '目标分区' : 'Score band'}
+          value={formatScoreBand(totalScore)}
         />
       </div>
     </div>
@@ -380,7 +482,7 @@ function ModeButton({
 
 function ScoreStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-200/70 bg-white/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/70">
+    <div className="flex h-full flex-col rounded-2xl border border-zinc-200/70 bg-white/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/70">
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">{label}</div>
       <div className="mt-1.5 font-mono text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{value}</div>
     </div>
@@ -402,7 +504,7 @@ function ScoreStatCard({
   const copy = getCopy(locale);
 
   return (
-    <div className="rounded-[22px] border border-zinc-200/70 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/70">
+    <div className="flex h-full flex-col rounded-[22px] border border-zinc-200/70 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/70">
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{label}</div>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="font-mono text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{scaled}</div>
@@ -413,4 +515,109 @@ function ScoreStatCard({
       </div>
     </div>
   );
+}
+
+function ScoreTrendChart({
+  data,
+  lineColor,
+  lineLabel,
+}: {
+  data: ScoreTrendPoint[];
+  lineColor: string;
+  lineLabel: string;
+}) {
+  const locale = useStore((state) => state.locale);
+  const availablePoints = data.filter((point) => point.score !== undefined);
+  const latest = [...availablePoints].reverse()[0];
+  const best = [...availablePoints].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+
+  if (availablePoints.length === 0) {
+    return <EstimatePlaceholder />;
+  }
+
+  return (
+    <div className="rounded-[24px] border border-zinc-200/70 bg-white/80 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? '估分折线图' : 'Score Trend'}
+          </div>
+          <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? '跟随当前模式观察分数走势。' : 'Track the score trajectory for the active mode.'}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1 dark:border-zinc-800 dark:bg-zinc-900">
+            {locale === 'zh' ? '最新' : 'Latest'} {latest?.score ?? '--'}
+          </span>
+          <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1 dark:border-zinc-800 dark:bg-zinc-900">
+            {locale === 'zh' ? '最佳' : 'Best'} {best?.score ?? '--'}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(161,161,170,0.15)" vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" />
+            <YAxis tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" allowDecimals={false} domain={['dataMin - 10', 'dataMax + 10']} />
+            <Tooltip
+              cursor={{ stroke: 'rgba(245,158,11,0.24)', strokeWidth: 1 }}
+              contentStyle={{
+                background: 'var(--tooltip-bg)',
+                borderColor: 'var(--tooltip-border)',
+                borderRadius: '12px',
+                fontSize: '12px',
+                color: 'var(--tooltip-color)',
+              }}
+              formatter={(value: number, _name, item) => [
+                `${Number(value)} ${lineLabel}`,
+                item?.payload?.rawCorrect !== undefined
+                  ? locale === 'zh'
+                    ? `Raw ${item.payload.rawCorrect}`
+                    : `Raw ${item.payload.rawCorrect}`
+                  : lineLabel,
+              ]}
+            />
+            <Line
+              type="monotone"
+              dataKey="score"
+              name={lineLabel}
+              stroke={lineColor}
+              strokeWidth={2.5}
+              connectNulls
+              dot={(props) => {
+                const { cx, cy, payload } = props;
+
+                if (cx === undefined || cy === undefined || !payload || payload.score === undefined) {
+                  return <g />;
+                }
+
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={payload.active ? 5.5 : 3.5}
+                    fill={lineColor}
+                    stroke={payload.active ? '#111827' : '#ffffff'}
+                    strokeWidth={payload.active ? 2 : 1.5}
+                  />
+                );
+              }}
+              activeDot={{ r: 6, fill: '#111827', stroke: lineColor, strokeWidth: 2 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function formatScoreBand(score: number) {
+  if (score >= 850) return '850+';
+  if (score >= 750) return '750-845';
+  if (score >= 650) return '650-745';
+  if (score >= 550) return '550-645';
+  return '< 550';
 }
