@@ -9,9 +9,11 @@ import { DataVaultPanel } from '@/components/DataVaultPanel';
 import { DebugForm } from '@/components/DebugForm';
 import { LapTimer } from '@/components/LapTimer';
 import { LocaleToggle } from '@/components/LocaleToggle';
+import { ScoreEstimatorPanel } from '@/components/ScoreEstimatorPanel';
 import { SprintDashboard } from '@/components/SprintDashboard';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { TimeWaterfallChart } from '@/components/TimeWaterfallChart';
+import { UnfinishedTrackerPanel } from '@/components/UnfinishedTrackerPanel';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatHotspot, formatSessionTitle, formatWorstPart, getCopy, translateStatus } from '@/lib/i18n';
 import { sumMistakes } from '@/lib/toeic';
@@ -38,6 +40,7 @@ export default function Home() {
   const liveCount = sessions.filter((session) => session.status === 'in-progress').length;
   const overtimeCount = sessions.filter((session) => session.timerSummary?.timedOut).length;
   const totalMistakeLoad = sessions.reduce((sum, session) => sum + sumMistakes(session), 0);
+  const unfinishedTotal = sessions.reduce((sum, session) => sum + (session.timerSummary?.unfinishedQuestions ?? 0), 0);
   const completionPct = Math.round((debuggedCount / sessions.length) * 100);
 
   if (!activeSession) {
@@ -133,6 +136,22 @@ export default function Home() {
                         hint={copy.averageErrorRateBottleneck}
                         icon={<AlertTriangle className="size-3.5" />}
                       />
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-zinc-200/80 bg-white/72 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/55">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                            {copy.unfinishedTrackerTitle}
+                          </div>
+                          <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                            {copy.unfinishedTrackerDescription}
+                          </div>
+                        </div>
+                        <div className="rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-red-600 dark:text-red-300">
+                          {copy.unfinished(unfinishedTotal)}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -279,10 +298,17 @@ export default function Home() {
             </Card>
           </div>
         </section>
-        <SectionLabel index="03" label={copy.analyticsTitle} />
+
+        <SectionLabel index="03" label={copy.unfinishedTrackerTitle} />
+        <UnfinishedTrackerPanel />
+
+        <SectionLabel index="04" label={copy.analyticsTitle} />
         <AnalyticsDashboard />
 
-        <SectionLabel index="04" label={copy.dataVaultTitle} />
+        <SectionLabel index="05" label={copy.scoreEstimatorTitle} />
+        <ScoreEstimatorPanel />
+
+        <SectionLabel index="06" label={copy.dataVaultTitle} />
         <DataVaultPanel />
       </div>
     </main>

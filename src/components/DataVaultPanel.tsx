@@ -92,23 +92,23 @@ export function DataVaultPanel() {
 						{copy.dataVaultDescription}
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="grid gap-4 p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_0.9fr]">
+				<CardContent className="grid gap-4 p-6 xl:grid-cols-3">
 					<ActionPanel
-						icon={<Download className="size-4" />}
+						icon={<Download className="size-5" />}
 						title={copy.exportTitle}
 						body={copy.exportBody}
 						actionLabel={copy.exportAction}
 						onAction={handleExport}
 					/>
 					<ActionPanel
-						icon={<Upload className="size-4" />}
+						icon={<Upload className="size-5" />}
 						title={copy.importTitle}
 						body={copy.importBody}
 						actionLabel={copy.importAction}
 						onAction={handleImportClick}
 					/>
 					<ActionPanel
-						icon={<RotateCcw className="size-4" />}
+						icon={<RotateCcw className="size-5" />}
 						title={copy.resetTitle}
 						body={copy.resetBody}
 						actionLabel={copy.resetAction}
@@ -116,24 +116,24 @@ export function DataVaultPanel() {
 						danger
 					/>
 
-					<div className="xl:col-span-3 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-						<div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+					<div className="xl:col-span-3 grid gap-4 xl:grid-cols-[2fr_1fr]">
+						<div className="flex flex-col justify-center rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
 							<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
 								<Database className="size-3.5" />
 								{copy.dataVaultNotes}
 							</div>
-							<div className="mt-3 grid gap-2 text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+							<div className="mt-4 flex flex-col gap-2 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
 								<p>{copy.dataVaultNoteExport}</p>
 								<p>{copy.dataVaultNoteImport}</p>
 								<p>{copy.dataVaultNoteReset}</p>
 							</div>
 						</div>
 
-						<div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+						<div className="flex flex-col rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
 							<div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
 								{copy.lastOperation}
 							</div>
-							<div className={`mt-3 rounded-2xl border px-4 py-3 text-sm leading-6 ${feedbackClassName(feedback?.tone)}`}>
+							<div className={`mt-4 flex flex-1 items-center rounded-xl border px-4 py-3 text-sm leading-tight ${feedbackClassName(feedback?.tone)}`}>
 								{feedback?.text ?? copy.dataVaultIdle}
 							</div>
 						</div>
@@ -192,17 +192,17 @@ function ActionPanel({
 	danger?: boolean;
 }) {
 	return (
-		<div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-			<div className={`flex size-9 items-center justify-center rounded-2xl ${danger ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/12 text-amber-700 dark:text-amber-300'}`}>
+		<div className="flex flex-col rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+			<div className={`flex size-10 items-center justify-center rounded-2xl ${danger ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/12 text-amber-700 dark:text-amber-300'}`}>
 				{icon}
 			</div>
-			<div className="mt-4 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{title}</div>
-			<p className="mt-2 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{body}</p>
+			<div className="mt-5 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{title}</div>
+			<p className="mt-2 mb-6 flex-1 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{body}</p>
 			<Button
-				size="sm"
+				size="default"
 				variant={danger ? 'destructive' : 'outline'}
 				onClick={onAction}
-				className="mt-4 w-full font-mono text-[11px] uppercase tracking-[0.22em]"
+				className="w-full font-mono text-[12px] uppercase tracking-[0.1em]"
 			>
 				{actionLabel}
 			</Button>

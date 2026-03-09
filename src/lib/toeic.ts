@@ -35,6 +35,11 @@ export type SessionRecord = SessionBlueprint & {
 	updatedAt?: string;
 };
 
+type ScoreCheckpoint = {
+	raw: number;
+	scaled: number;
+};
+
 export const LISTENING_PARTS: ListeningPartKey[] = [
 	"Part 1",
 	"Part 2",
@@ -80,6 +85,54 @@ export const PART_QUESTION_COUNTS: Record<MistakeKey, number> = {
 	"Part 7 Single": 29,
 	"Part 7 Multiple": 25,
 };
+
+const LISTENING_SCORE_CHECKPOINTS: ScoreCheckpoint[] = [
+	{ raw: 0, scaled: 5 },
+	{ raw: 5, scaled: 25 },
+	{ raw: 10, scaled: 50 },
+	{ raw: 15, scaled: 75 },
+	{ raw: 20, scaled: 105 },
+	{ raw: 25, scaled: 135 },
+	{ raw: 30, scaled: 170 },
+	{ raw: 35, scaled: 205 },
+	{ raw: 40, scaled: 240 },
+	{ raw: 45, scaled: 270 },
+	{ raw: 50, scaled: 300 },
+	{ raw: 55, scaled: 330 },
+	{ raw: 60, scaled: 355 },
+	{ raw: 65, scaled: 380 },
+	{ raw: 70, scaled: 405 },
+	{ raw: 75, scaled: 425 },
+	{ raw: 80, scaled: 445 },
+	{ raw: 85, scaled: 460 },
+	{ raw: 90, scaled: 475 },
+	{ raw: 95, scaled: 490 },
+	{ raw: 100, scaled: 495 },
+];
+
+const READING_SCORE_CHECKPOINTS: ScoreCheckpoint[] = [
+	{ raw: 0, scaled: 5 },
+	{ raw: 5, scaled: 15 },
+	{ raw: 10, scaled: 35 },
+	{ raw: 15, scaled: 55 },
+	{ raw: 20, scaled: 80 },
+	{ raw: 25, scaled: 110 },
+	{ raw: 30, scaled: 140 },
+	{ raw: 35, scaled: 170 },
+	{ raw: 40, scaled: 200 },
+	{ raw: 45, scaled: 230 },
+	{ raw: 50, scaled: 260 },
+	{ raw: 55, scaled: 290 },
+	{ raw: 60, scaled: 320 },
+	{ raw: 65, scaled: 350 },
+	{ raw: 70, scaled: 380 },
+	{ raw: 75, scaled: 405 },
+	{ raw: 80, scaled: 430 },
+	{ raw: 85, scaled: 450 },
+	{ raw: 90, scaled: 470 },
+	{ raw: 95, scaled: 485 },
+	{ raw: 100, scaled: 495 },
+];
 
 export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
 	{ length: 10 },
@@ -129,6 +182,13 @@ export function getPartsForType(type: SessionType) {
 	return type === "L" ? LISTENING_PARTS : READING_PARTS;
 }
 
+export function getQuestionCountForType(type: SessionType) {
+	return getPartsForType(type).reduce(
+		(sum, part) => sum + PART_QUESTION_COUNTS[part],
+		0
+	);
+}
+
 export function getReasonsForType(type: SessionType) {
 	return type === "L" ? LISTENING_TAGS : READING_TAGS;
 }
@@ -152,6 +212,49 @@ export function formatMinutes(ms?: number) {
 
 export function sumMistakes(record: SessionRecord) {
 	return Object.values(record.mistakes).reduce((sum, value) => sum + (value ?? 0), 0);
+}
+
+export function getCorrectAnswers(record: SessionRecord) {
+	const totalQuestions = getQuestionCountForType(record.type);
+	const mistakeCount = getPartsForType(record.type).reduce(
+		(sum, part) => sum + (record.mistakes[part] ?? 0),
+		0
+	);
+
+	return Math.min(totalQuestions, Math.max(totalQuestions - mistakeCount, 0));
+}
+
+export function hasRecordedSessionData(record: SessionRecord) {
+	return (
+		record.status !== "not-started" ||
+		sumMistakes(record) > 0 ||
+		Boolean(record.timerSummary) ||
+		Object.keys(record.readingLapTimes).length > 0 ||
+		record.reasons.length > 0
+	);
+}
+
+export function estimateToeicScaledScore(rawCorrect: number, type: SessionType) {
+	const totalQuestions = getQuestionCountForType(type);
+	const safeRaw = Math.min(totalQuestions, Math.max(rawCorrect, 0));
+	const checkpoints = type === "L" ? LISTENING_SCORE_CHECKPOINTS : READING_SCORE_CHECKPOINTS;
+
+	if (safeRaw <= checkpoints[0].raw) {
+		return checkpoints[0].scaled;
+	}
+
+	for (let index = 1; index < checkpoints.length; index += 1) {
+		const previous = checkpoints[index - 1];
+		const current = checkpoints[index];
+
+		if (safeRaw <= current.raw) {
+			const progress = (safeRaw - previous.raw) / (current.raw - previous.raw);
+			const scaled = previous.scaled + progress * (current.scaled - previous.scaled);
+			return Math.min(495, Math.max(5, Math.round(scaled / 5) * 5));
+		}
+	}
+
+	return 495;
 }
 
 export function sumReadingLapTimes(record: SessionRecord) {
