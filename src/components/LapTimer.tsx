@@ -110,13 +110,13 @@ export function LapTimer({ day, type }: { day: number, type: 'L' | 'R' }) {
   const progressPercent = ((totalTimeMs - timeLeft) / totalTimeMs) * 100;
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50 backdrop-blur-xl mb-6">
-      <CardHeader className="pb-4 border-b border-zinc-800">
+    <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-xl mb-6 shadow-sm transition-colors">
+      <CardHeader className="pb-4 border-b border-zinc-100 dark:border-zinc-800">
         <CardTitle className="text-xl flex items-center justify-between font-mono">
-          <span className="text-zinc-400 font-sans text-sm tracking-wider uppercase">
+          <span className="text-zinc-500 dark:text-zinc-400 font-sans text-sm tracking-wider uppercase">
             {isListening ? 'Strict Listening Mode' : 'Paced Reading Mode'}
           </span>
-          <span className={`${isWarning ? 'text-red-500 animate-pulse' : 'text-amber-400'} text-3xl font-bold tracking-tighter`}>
+          <span className={`${isWarning ? 'text-red-500 animate-pulse' : 'text-amber-500 dark:text-amber-400'} text-3xl font-bold tracking-tighter transition-colors`}>
             {formatTime(timeLeft)}
           </span>
         </CardTitle>
@@ -126,19 +126,19 @@ export function LapTimer({ day, type }: { day: number, type: 'L' | 'R' }) {
       <CardContent className="pt-6">
         <div className="flex gap-4 mb-6">
           {!isRunning && !isFinished && (
-            <Button onClick={startTimer} className="flex-1 bg-amber-400 hover:bg-amber-500 text-zinc-950 font-bold">
+            <Button onClick={startTimer} className="flex-1 bg-amber-400 hover:bg-amber-500 text-zinc-900 font-bold transition-colors">
               <Play className="mr-2 h-4 w-4" fill="currentColor" /> 开始冲刺
             </Button>
           )}
           
           {!isListening && isRunning && currentLapIndex < READING_LAPS.length && (
-            <Button onClick={recordLapTime} variant="outline" className="flex-1 border-amber-400/50 text-amber-400 hover:bg-amber-400/10">
+            <Button onClick={recordLapTime} variant="outline" className="flex-1 border-amber-400 bg-amber-50 dark:bg-transparent dark:border-amber-400/50 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-400/10 transition-colors">
               <Flag className="mr-2 h-4 w-4" /> 打点 ({READING_LAPS[currentLapIndex].partName.split(' ')[0]} 完成)
             </Button>
           )}
 
           {isRunning && (
-            <Button onClick={finishExam} variant="destructive" className="flex-1 bg-red-900/40 text-red-400 hover:bg-red-900/60 border border-red-900/50">
+            <Button onClick={finishExam} variant="destructive" className="flex-1 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-900/50 transition-colors">
               <Square className="mr-2 h-4 w-4" fill="currentColor" /> 强制交卷
             </Button>
           )}
@@ -146,16 +146,16 @@ export function LapTimer({ day, type }: { day: number, type: 'L' | 'R' }) {
 
         {!isListening && (
           <div className="space-y-3">
-            <h4 className="text-sm text-zinc-500 font-mono uppercase tracking-wider mb-2">Pacing Tracker</h4>
+            <h4 className="text-sm text-zinc-500 dark:text-zinc-500 font-mono uppercase tracking-wider mb-2">Pacing Tracker</h4>
             <div className="grid grid-cols-4 gap-2">
               {READING_LAPS.map((lap, i) => {
                 const isPassed = i < currentLapIndex;
                 const isCurrent = i === currentLapIndex && isRunning;
                 return (
-                  <div key={i} className={`p-2 rounded border text-xs text-center flex flex-col justify-center
-                    ${isPassed ? 'border-zinc-800 bg-zinc-800/50 text-zinc-400' : 
-                      isCurrent ? 'border-amber-400/50 bg-amber-400/10 text-amber-400' : 
-                      'border-zinc-800/50 text-zinc-600'}`}>
+                  <div key={i} className={`p-2 rounded border text-xs text-center flex flex-col justify-center transition-colors
+                    ${isPassed ? 'border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400' : 
+                      isCurrent ? 'border-amber-400 dark:border-amber-400/50 bg-amber-50 dark:bg-amber-400/10 text-amber-600 dark:text-amber-400' : 
+                      'border-zinc-100 dark:border-zinc-800/50 text-zinc-400 dark:text-zinc-600 bg-transparent'}`}>
                     <span className="font-bold truncate" title={lap.partName}>{lap.partName.split(' ')[0] + ' ' + (lap.partName.split(' ')[1] || '')}</span>
                     <span className="text-[10px] opacity-70 mt-1">{lap.expectedTimeMs / 60000}m</span>
                   </div>

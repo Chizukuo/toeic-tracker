@@ -20,6 +20,9 @@ export type DayRecord = {
 
 interface AppState {
   records: DayRecord[];
+  activeDay: number;
+  activeType: 'L' | 'R';
+  setActiveSession: (day: number, type: 'L' | 'R') => void;
   updateRecord: (day: number, type: 'L' | 'R', data: Partial<DayRecord>) => void;
   initRecords: () => void;
 }
@@ -28,6 +31,9 @@ export const useStore = create<AppState>()(
   persist(
     (set) => ({
       records: [],
+      activeDay: 1,
+      activeType: 'L',
+      setActiveSession: (day, type) => set({ activeDay: day, activeType: type }),
       updateRecord: (day, type, data) =>
         set((state) => {
           const newRecords = [...state.records];
