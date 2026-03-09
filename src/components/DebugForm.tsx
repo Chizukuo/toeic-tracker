@@ -30,11 +30,16 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
   const [reasons, setReasons] = useState<string[]>(activeSession.reasons);
   const [saved, setSaved] = useState(false);
 
+  const totalMistakes = useMemo(
+    () => sumMistakes({ ...activeSession, mistakes }),
+    [activeSession, mistakes]
+  );
+
   const updateMistake = (part: MistakeKey, value: string) => {
     const parsed = Number(value);
     setMistakes((current) => ({
       ...current,
-      [part]: Number.isNaN(parsed) ? 0 : parsed,
+      [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
     }));
   };
 
@@ -71,7 +76,7 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <QuickInfoCard label={copy.session} value={activeSession.label} helper={activeSession.type === 'L' ? copy.listeningDiagnosis : copy.readingDiagnosis} />
           <QuickInfoCard label={copy.target} value={`${activeSession.targetMinutes}m`} helper={copy.officialSprintTime} />
-          <QuickInfoCard label={copy.currentMistakes} value={`${sumMistakes({ ...activeSession, mistakes })}`} helper={copy.liveTotalInForm} />
+          <QuickInfoCard label={copy.currentMistakes} value={`${totalMistakes}`} helper={copy.liveTotalInForm} />
           <QuickInfoCard
             label={copy.forcedSubmit}
             value={activeSession.timerSummary?.forcedSubmit ? copy.yes : copy.no}
@@ -168,7 +173,7 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
           <div className="mb-3 flex items-center justify-between gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
             <span>{locale === 'zh' ? '保存后会把当前套题标记为已 Debug。' : 'Saving will mark this set as debugged.'}</span>
-            <span className="font-mono uppercase tracking-[0.2em]">{sumMistakes({ ...activeSession, mistakes })}</span>
+            <span className="font-mono uppercase tracking-[0.2em]">{totalMistakes}</span>
           </div>
           <Button size="sm" onClick={handleSave} className="w-full bg-zinc-950 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200">
             {saved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}

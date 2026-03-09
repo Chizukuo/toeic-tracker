@@ -91,7 +91,7 @@ export function SprintDashboard() {
                     <div>
                       <div className="font-mono text-base font-bold leading-none tracking-tight">{session.id}</div>
                       <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">
-                        {locale === 'zh' ? `Day ${String(session.sprintDay).padStart(2, '0')}` : `Day ${String(session.sprintDay).padStart(2, '0')}`}
+                        Day {String(session.sprintDay).padStart(2, '0')}
                       </div>
                     </div>
 
@@ -121,7 +121,7 @@ export function SprintDashboard() {
                       </div>
                     ) : (
                       <div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-50">
-                        {locale === 'zh' ? 'Clean' : 'Clean'}
+                          Clean
                       </div>
                     )}
                   </div>

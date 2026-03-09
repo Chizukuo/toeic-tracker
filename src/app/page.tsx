@@ -36,12 +36,22 @@ export default function Home() {
     [activeSessionId, sessions]
   );
 
-  const debuggedCount = sessions.filter((session) => session.status === 'debugged').length;
-  const liveCount = sessions.filter((session) => session.status === 'in-progress').length;
-  const overtimeCount = sessions.filter((session) => session.timerSummary?.timedOut).length;
-  const totalMistakeLoad = sessions.reduce((sum, session) => sum + sumMistakes(session), 0);
-  const unfinishedTotal = sessions.reduce((sum, session) => sum + (session.timerSummary?.unfinishedQuestions ?? 0), 0);
-  const completionPct = Math.round((debuggedCount / sessions.length) * 100);
+  const { debuggedCount, liveCount, overtimeCount, totalMistakeLoad, unfinishedTotal } = useMemo(() => {
+    let debuggedCount = 0;
+    let liveCount = 0;
+    let overtimeCount = 0;
+    let totalMistakeLoad = 0;
+    let unfinishedTotal = 0;
+    for (const session of sessions) {
+      if (session.status === 'debugged') debuggedCount++;
+      else if (session.status === 'in-progress') liveCount++;
+      if (session.timerSummary?.timedOut) overtimeCount++;
+      totalMistakeLoad += sumMistakes(session);
+      unfinishedTotal += session.timerSummary?.unfinishedQuestions ?? 0;
+    }
+    return { debuggedCount, liveCount, overtimeCount, totalMistakeLoad, unfinishedTotal };
+  }, [sessions]);
+  const completionPct = sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0;
 
   if (!activeSession) {
     return null;
@@ -52,9 +62,9 @@ export default function Home() {
   return (
     <main className="dashboard-grid relative min-h-screen overflow-x-hidden px-4 py-0 text-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.14),transparent_28%),linear-gradient(180deg,transparent,rgba(9,9,11,0.08))] dark:bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.12),transparent_28%),linear-gradient(180deg,transparent,rgba(0,0,0,0.34))]" />
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/80 to-transparent" />
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-amber-300/80 to-transparent" />
 
-      <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-8 pb-16">
+      <div className="relative mx-auto flex w-full max-w-370 flex-col gap-8 pb-16">
         <header className="reveal-fade pt-6 sm:pt-8">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -159,7 +169,7 @@ export default function Home() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-amber-700 dark:text-amber-400">
-                          {locale === 'zh' ? 'LIVE SESSION' : 'LIVE SESSION'}
+                          LIVE SESSION
                         </div>
                         <div className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                           {formatSessionTitle(locale, activeSession)}
@@ -190,7 +200,7 @@ export default function Home() {
                     <div className="mt-5 rounded-2xl border border-zinc-200/70 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                          {locale === 'zh' ? 'SPRINT LOADOUT' : 'SPRINT LOADOUT'}
+                          SPRINT LOADOUT
                         </div>
                         <span className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400">{completionPct}%</span>
                       </div>
@@ -215,7 +225,7 @@ export default function Home() {
             <Card className="glass-panel panel-sheen overflow-hidden rounded-[28px] border border-zinc-200/70 shadow-[0_20px_60px_-32px_rgba(0,0,0,0.2)] dark:border-zinc-800/80 dark:shadow-[0_20px_70px_-36px_rgba(0,0,0,0.6)]">
               <CardHeader className="border-b border-zinc-200/70 bg-zinc-50/75 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-950/65">
                 <CardTitle className="font-mono text-[11px] uppercase tracking-[0.32em] text-amber-700 dark:text-amber-400">
-                  {locale === 'zh' ? 'Sprint Doctrine' : 'Sprint Doctrine'}
+                  Sprint Doctrine
                 </CardTitle>
                 <CardDescription className="text-xs leading-6">
                   {locale === 'zh'
@@ -260,7 +270,7 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? 'Active Workbench' : 'Active Workbench'}
+                      Active Workbench
                   </div>
                   <CardTitle className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-xl">
                     {activeSession.label}
@@ -325,7 +335,7 @@ function SectionLabel({ index, label }: { index: string; label: string }) {
       <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-700 dark:text-zinc-300">
         {label}
       </span>
-      <div className="h-px flex-1 bg-gradient-to-r from-zinc-300 to-transparent dark:from-zinc-700" />
+      <div className="h-px flex-1 bg-linear-to-r from-zinc-300 to-transparent dark:from-zinc-700" />
     </div>
   );
 }

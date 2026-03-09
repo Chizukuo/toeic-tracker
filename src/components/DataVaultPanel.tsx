@@ -202,7 +202,7 @@ function ActionPanel({
 				size="default"
 				variant={danger ? 'destructive' : 'outline'}
 				onClick={onAction}
-				className="w-full font-mono text-[12px] uppercase tracking-[0.1em]"
+				className="w-full font-mono text-[12px] uppercase tracking-widest"
 			>
 				{actionLabel}
 			</Button>

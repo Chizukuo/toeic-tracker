@@ -187,11 +187,9 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       <div className={cn(
         'relative overflow-hidden rounded-[26px] border p-5 transition-all duration-300 sm:p-6',
         isRunning && (warning ? 'timer-glow-red' : 'timer-glow-amber'),
-        isListening
+        warning
           ? 'border-red-500/25 bg-red-500/5 dark:bg-red-500/8'
-          : warning
-            ? 'border-red-500/25 bg-red-500/5 dark:bg-red-500/8'
-            : 'border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/8'
+          : 'border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/8'
       )}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
@@ -203,7 +201,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full border border-zinc-200/70 bg-white/70 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400">
-              {locale === 'zh' ? 'No Pause' : 'No Pause'}
+                No Pause
             </span>
             {isRunning && (
               <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
