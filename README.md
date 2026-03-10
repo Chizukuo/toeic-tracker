@@ -57,17 +57,114 @@ npx serve out
 
 ### 4. 代码检查
 
+```bash
+npm run lint
+```
 
 ### 5. PEASEA 估分算法说明
 
-- 输入维度为 8 个 Part 的错题向量：Part 1、Part 2、Part 3、Part 4、Part 5、Part 6、Part 7 Single、Part 7 Multiple。
-- 阅读未完成题会按 Part 7 Multiple → Part 7 Single → Part 6 → Part 5 的顺序并入失分，用来近似真实考场中的时间崩盘影响。
-- 算法先计算基础层与高阶层的错题率差值，若出现“基础题错很多、高难题反而对很多”的异常答题模式，则按 PEASEA 的分布惩罚函数下调原始分。
-- 修正后的原始分不会直接线性换算，而是通过非线性锚点矩阵做分段插值，分别得到听力和阅读的标准分估计。
-- 最终输出包括听力分、阅读分、总分、SEM 区间、CEFR 等级，以及基于薄弱 Part 的简要诊断信息。
+PEASEA 是这个项目里的经验型估分引擎，用来把单次 session 的错题分布、阅读未完成题和异常答题模式，映射为更接近真实 TOEIC 观感的分数区间。它不是官方换算表，也不试图复刻 ETS 的打分细节；它的目标是让训练阶段的“趋势判断”比简单扣分法更稳。
 
-### 6. 数据保险箱（Data Vault）
-- `npm run build`: 生成静态导出（`out` 目录）
+#### 5.1 输入向量
+
+算法始终从 8 维 Part 失分向量开始：
+
+- Listening: Part 1、Part 2、Part 3、Part 4
+- Reading: Part 5、Part 6、Part 7 Single、Part 7 Multiple
+
+每个维度记录该 Part 的失分数量，而不是只看整套总错题。这样做的原因是 TOEIC 不同 Part 的难度、题量和时间压力不同，单看总错题会把很多结构性问题抹平。
+
+#### 5.2 阅读未完成题并入失分
+
+阅读部分的未完成题不会被单独悬空保存，而是直接并入 Part 级失分向量，分配顺序为：
+
+1. Part 7 Multiple
+2. Part 7 Single
+3. Part 6
+4. Part 5
+
+这代表一种现实假设：真正因为时间崩盘而没做完的题，通常先堆积在后段长篇阅读。这样处理后，趋势图、雷达图和估分面板会使用同一套失分口径。
+
+#### 5.3 原始正确题数
+
+对单科来说：
+
+- 总题量固定为 100
+- 原始正确题数 = 100 - Part 失分总和
+- 结果会被限制在 0 到 100 之间
+
+这一步得到的是最基础的 raw correct，但 PEASEA 不会直接把它线性换成标准分。
+
+#### 5.4 异常答题模式惩罚
+
+算法会把题目分成“基础层”和“高阶层”，再比较两层错误率差异：
+
+- Listening 基础层：Part 1、Part 2
+- Listening 高阶层：Part 3、Part 4
+- Reading 基础层：Part 5
+- Reading 高阶层：Part 6、Part 7 Single、Part 7 Multiple
+
+如果出现“基础层错很多，但高阶层错误率反而更低”的异常分布，系统会认为这份答题模式不够稳定，于是对原始正确题数施加惩罚。代码里的核心逻辑可以概括为：
+
+```text
+deltaRaw = alpha * min(0, advancedErrorRate - basicErrorRate) * 100
+adjustedRawCorrect = clamp(rawCorrect + deltaRaw, 0, 100)
+```
+
+其中：
+
+- Listening 的 alpha = 0.12
+- Reading 的 alpha = 0.18
+- 当高阶层错误率高于基础层时，不额外奖励，只是不触发惩罚
+- 当基础层明显更差时，adjusted raw 会低于 raw correct
+
+这种处理避免了一个常见问题：只看总对题数时，某些“基础题漏得很多、难题反而蒙对不少”的记录会被高估。
+
+#### 5.5 非线性锚点插值
+
+adjusted raw 仍然不会直接按比例映射到 5-495 分，而是进入分段锚点插值。Listening 和 Reading 各自有一套锚点矩阵，例如：
+
+- Listening: 60 raw 对应 295，80 raw 对应 420，95 raw 对应 495
+- Reading: 60 raw 对应 250，80 raw 对应 360，95 raw 对应 470
+
+算法会在相邻锚点之间做线性插值，再把结果四舍五入到最接近的 5 分。这样得到的曲线是非线性的，能体现 TOEIC 原始题数和标准分之间并不均匀的换算关系。
+
+#### 5.6 总分、区间与等级
+
+当听力和阅读都可用时：
+
+- 总分 = 听力标准分 + 阅读标准分
+- 单科 SEM 固定为 25
+- 总分 SEM 按两科平方和开根后再四舍五入到 5 分档
+- 最终输出区间为 score ± SEM
+
+同时系统会给出 CEFR 级别：
+
+- A1 / A2 / B1 / B2 / C1
+- 若未达到最低阈值，则显示 Below A1
+
+#### 5.7 诊断输出
+
+除了分数本身，PEASEA 还会生成诊断型信息：
+
+- weakestPart / strongestPart
+- unfinishedPenalty
+- responsePattern（normal 或 aberrant）
+- 各 Part error rate 与 share of loss
+
+这也是为什么估分面板和分析看板会同时展示趋势、雷达图和分项诊断，而不是只给一个总分数字。
+
+#### 5.8 与官方成绩的关系
+
+PEASEA 适合做下面这些事情：
+
+- 观察自己在 20 天冲刺中的趋势变化
+- 比较不同 session 的结构性差异
+- 识别“时间问题”还是“能力问题”在拖分
+
+它不适合被当成官方查分前的精确替代，因为真实 TOEIC 成绩还会受题本难度、等值处理和官方量尺影响。
+
+## Cloudflare Pages 部署
 
 ### 1. 连接仓库
 
@@ -127,11 +224,9 @@ npx serve out
 
 ### 5. PEASEA 估分算法说明
 
-- 输入为 8 个 Part 的错题向量：Part 1、Part 2、Part 3、Part 4、Part 5、Part 6、Part 7 Single、Part 7 Multiple。
-- 阅读未完成题会按 Part 7 Multiple → Part 7 Single → Part 6 → Part 5 的顺序并入失分，用来近似真实考场中的时间管理失误。
-- 算法会比较基础层与高阶层错题率；若出现异常答题模式，会先对原始分施加 PEASEA 分布惩罚。
-- 修正后的原始分再通过非线性锚点矩阵做分段插值，分别估算听力和阅读标准分。
-- 输出结果包含听力、阅读、总分、SEM 区间、CEFR 等级，以及基于薄弱 Part 的简要诊断。
+- 核心实现位于 `src/lib/toeic.ts`。
+- 详细流程见上方“PEASEA 估分算法说明”章节。
+- 分析看板中的雷达图、趋势图和估分面板共用同一套 Part 级失分口径。
 
 ### 6. 数据保险箱（Data Vault）
 

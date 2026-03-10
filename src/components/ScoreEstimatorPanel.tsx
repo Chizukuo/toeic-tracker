@@ -36,6 +36,8 @@ import { getCopy, translatePart } from '@/lib/i18n';
 import {
   estimateToeicCombinedScore,
   estimateToeicSessionScore,
+  getCombinedEstimateBand,
+  getSectionEstimateBand,
   type SessionRecord,
   type ToeicCefrLevel,
   type ToeicCombinedEstimate,
@@ -541,7 +543,7 @@ function buildSectionSummary({
     adjustedRawCorrect: estimate.adjustedRawCorrect,
     mistakes: 100 - estimate.rawCorrect,
     accuracy: Number(((estimate.rawCorrect / 100) * 100).toFixed(1)),
-    band: formatScoreBand(estimate.scaled),
+    band: getSectionEstimateBand(estimate.scaled),
     interval: formatInterval(estimate.interval.min, estimate.interval.max),
     cefr: formatCefr(estimate.cefr),
     available: estimate.available,
@@ -606,7 +608,7 @@ function buildTotalSummary({
     adjustedRawCorrect: estimate.adjustedRawCorrect,
     mistakes: estimate.totalMistakes,
     accuracy: estimate.accuracy,
-    band: formatScoreBand(estimate.total),
+    band: getCombinedEstimateBand(estimate.total),
     interval: formatInterval(estimate.interval.min, estimate.interval.max),
     cefr: formatCefr(estimate.cefr),
     available: estimate.available,
@@ -1095,15 +1097,6 @@ function ScoreMetric({ label, value, compact }: { label: string; value: string; 
       </div>
     </div>
   );
-}
-
-function formatScoreBand(score: number) {
-  if (score >= 900) return '900+';
-  if (score >= 800) return '800-895';
-  if (score >= 700) return '700-795';
-  if (score >= 600) return '600-695';
-  if (score >= 500) return '500-595';
-  return '<500';
 }
 
 function formatInterval(min: number, max: number) {

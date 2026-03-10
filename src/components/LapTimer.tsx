@@ -52,13 +52,14 @@ export function LapTimer({ session }: { session: SessionRecord }) {
   const persistAttempt = useCallback(
     (options: PendingSubmit & { unfinishedCount: number }) => {
       const elapsed = startedAtRef.current ? Date.now() - startedAtRef.current : totalDurationMs - timeLeft;
+      const shouldMarkTimedOut = options.timedOut && options.unfinishedCount > 0;
       patchSession(session.id, {
         status: 'in-progress',
         readingLapTimes: isListening ? session.readingLapTimes : readingLapTimes,
         timerSummary: {
           totalElapsedMs: Math.min(totalDurationMs, Math.max(elapsed, 0)),
           forcedSubmit: options.forcedSubmit,
-          timedOut: options.timedOut,
+          timedOut: shouldMarkTimedOut,
           unfinishedQuestions: options.unfinishedCount,
           completedAt: new Date().toISOString(),
         },

@@ -404,6 +404,10 @@ function buildPartMistakeMap(record: SessionRecord) {
 	return mistakes;
 }
 
+export function getSessionPartLossMap(record: SessionRecord) {
+	return buildPartMistakeMap(record);
+}
+
 function interpolateScaledScore(rawCorrect: number, anchors: readonly ScoreCheckpoint[]) {
 	if (rawCorrect <= anchors[0].raw) {
 		return anchors[0].scaled;
@@ -450,6 +454,32 @@ function getSectionCefrLevel(score: number): ToeicCefrLevel {
 	}
 
 	return "Below A1";
+}
+
+function formatEstimateBandFromThresholds(
+	score: number,
+	thresholds: ReadonlyArray<{ minimum: number }>,
+	minimumScore: number,
+	maximumScore: number
+) {
+	for (let index = 0; index < thresholds.length; index += 1) {
+		const current = thresholds[index];
+		if (score >= current.minimum) {
+			const upper = index === 0 ? maximumScore : thresholds[index - 1].minimum - 5;
+			return `${current.minimum}-${upper}`;
+		}
+	}
+
+	const floorUpper = thresholds[thresholds.length - 1].minimum - 5;
+	return `${minimumScore}-${floorUpper}`;
+}
+
+export function getSectionEstimateBand(score: number) {
+	return formatEstimateBandFromThresholds(score, SECTION_CEFR_THRESHOLDS, 5, 495);
+}
+
+export function getCombinedEstimateBand(score: number) {
+	return formatEstimateBandFromThresholds(score, CEFR_THRESHOLDS.map((threshold) => ({ minimum: threshold.total })), 10, 990);
 }
 
 export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEstimate {
