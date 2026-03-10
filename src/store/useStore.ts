@@ -21,9 +21,21 @@ type LegacyRecord = {
   reasons?: string[];
 };
 
+const SNAPSHOT_APP = 'Cheese-TOEIC-Tracker';
+const SNAPSHOT_VERSION = 2;
+const STORAGE_VERSION = 6;
+
+type SnapshotMeta = {
+  schema: 'cheese-toeic-snapshot';
+  snapshotVersion: number;
+  exportedFromStorageVersion: number;
+  minimumReaderVersion: number;
+};
+
 export type SprintSnapshot = {
-  app: 'Cheese-TOEIC-Tracker';
-  version: 1;
+  app: typeof SNAPSHOT_APP;
+  version: number;
+  meta: SnapshotMeta;
   exportedAt: string;
   data: {
     sessions: SessionRecord[];
@@ -32,6 +44,13 @@ export type SprintSnapshot = {
     examDate: string;
     historicalScores: HistoricalScoreRecord[];
   };
+};
+
+export type ImportSnapshotResult = {
+  source: 'snapshot' | 'state' | 'persisted-state' | 'legacy-records';
+  importedVersion: number | 'legacy';
+  migrated: boolean;
+  futureVersion: boolean;
 };
 
 export type HistoricalScoreSource = 'manual' | 'estimated';
@@ -47,18 +66,40 @@ export type HistoricalScoreRecord = {
 };
 
 type SnapshotLike = {
+  app?: string;
+  version?: number;
+  meta?: Partial<SnapshotMeta>;
   data?: {
     sessions?: unknown;
     activeSessionId?: string;
     locale?: AppLocale;
     examDate?: string;
     historicalScores?: unknown;
+    records?: LegacyRecord[];
+  };
+  state?: {
+    sessions?: unknown;
+    activeSessionId?: string;
+    locale?: AppLocale;
+    examDate?: string;
+    historicalScores?: unknown;
+    records?: LegacyRecord[];
   };
   sessions?: unknown;
   activeSessionId?: string;
   locale?: AppLocale;
   examDate?: string;
   historicalScores?: unknown;
+  records?: LegacyRecord[];
+};
+
+type ParsedImportSnapshot = {
+  sessions: SessionRecord[];
+  activeSessionId: string;
+  locale: AppLocale;
+  examDate: string;
+  historicalScores: HistoricalScoreRecord[];
+  result: ImportSnapshotResult;
 };
 
 const DEFAULT_EXAM_DATE = '2026-05-24';
@@ -93,8 +134,12 @@ interface AppState {
     }
   ) => void;
   exportSnapshot: () => SprintSnapshot;
-  importSnapshot: (snapshot: unknown) => void;
+  importSnapshot: (snapshot: unknown) => ImportSnapshotResult;
   resetProgress: () => void;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function isLocale(value: unknown): value is AppLocale {
@@ -130,6 +175,10 @@ function normalizeHistoricalScores(incoming: unknown): HistoricalScoreRecord[] {
 
 function clampScore(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(value / 5) * 5));
+}
+
+function normalizeExamDate(value: unknown) {
+  return typeof value === 'string' && EXAM_DATE_PATTERN.test(value) ? value : DEFAULT_EXAM_DATE;
 }
 
 function normalizeSessions(incoming: unknown): SessionRecord[] {
@@ -207,17 +256,51 @@ function migrateLegacyRecords(records: LegacyRecord[] | undefined) {
 }
 
 function parseImportSnapshot(snapshot: unknown) {
-  if (typeof snapshot !== 'object' || snapshot === null) {
+  if (!isObjectRecord(snapshot)) {
     throw new Error('Invalid snapshot payload');
   }
 
   const candidate = snapshot as SnapshotLike;
-  const source = candidate.data ?? candidate;
-  const sessions = normalizeSessions(source.sessions);
+  const source = isObjectRecord(candidate.data)
+    ? candidate.data
+    : isObjectRecord(candidate.state)
+      ? candidate.state
+      : candidate;
+  const snapshotVersion =
+    typeof candidate.version === 'number'
+      ? candidate.version
+      : typeof candidate.meta?.snapshotVersion === 'number'
+        ? candidate.meta.snapshotVersion
+        : undefined;
+  const futureVersion = typeof snapshotVersion === 'number' && snapshotVersion > SNAPSHOT_VERSION;
+
+  if (Array.isArray(source.records) || Array.isArray(candidate.records)) {
+    const sessions = migrateLegacyRecords((source.records ?? candidate.records) as LegacyRecord[]);
+    const activeSessionId =
+      typeof source.activeSessionId === 'string' && sessions.some((session) => session.id === source.activeSessionId)
+        ? source.activeSessionId
+        : 'L1';
+
+    return {
+      sessions,
+      activeSessionId,
+      locale: isLocale(source.locale) ? source.locale : 'zh',
+      examDate: normalizeExamDate(source.examDate),
+      historicalScores: normalizeHistoricalScores(source.historicalScores),
+      result: {
+        source: 'legacy-records',
+        importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
+        migrated: true,
+        futureVersion,
+      },
+    } satisfies ParsedImportSnapshot;
+  }
 
   if (!Array.isArray(source.sessions)) {
     throw new Error('Snapshot does not contain session data');
   }
+
+  const sessions = normalizeSessions(source.sessions);
 
   const activeSessionId =
     typeof source.activeSessionId === 'string' && sessions.some((session) => session.id === source.activeSessionId)
@@ -228,9 +311,19 @@ function parseImportSnapshot(snapshot: unknown) {
     sessions,
     activeSessionId,
     locale: isLocale(source.locale) ? source.locale : 'zh',
-    examDate: typeof source.examDate === 'string' && source.examDate ? source.examDate : DEFAULT_EXAM_DATE,
+    examDate: normalizeExamDate(source.examDate),
     historicalScores: normalizeHistoricalScores(source.historicalScores),
-  };
+    result: {
+      source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',
+      importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
+      migrated:
+        Boolean(isObjectRecord(candidate.state)) ||
+        !isObjectRecord(candidate.data) ||
+        !candidate.meta ||
+        (typeof snapshotVersion === 'number' && snapshotVersion < SNAPSHOT_VERSION),
+      futureVersion,
+    },
+  } satisfies ParsedImportSnapshot;
 }
 
 export const useStore = create<AppState>()(
@@ -322,8 +415,14 @@ export const useStore = create<AppState>()(
         const state = get();
 
         return {
-          app: 'Cheese-TOEIC-Tracker',
-          version: 1,
+          app: SNAPSHOT_APP,
+          version: SNAPSHOT_VERSION,
+          meta: {
+            schema: 'cheese-toeic-snapshot',
+            snapshotVersion: SNAPSHOT_VERSION,
+            exportedFromStorageVersion: STORAGE_VERSION,
+            minimumReaderVersion: 1,
+          },
           exportedAt: new Date().toISOString(),
           data: {
             sessions: state.sessions,
@@ -336,20 +435,27 @@ export const useStore = create<AppState>()(
       },
       importSnapshot: (snapshot) => {
         const next = parseImportSnapshot(snapshot);
-        set(next);
+        set({
+          sessions: next.sessions,
+          activeSessionId: next.activeSessionId,
+          locale: next.locale,
+          examDate: next.examDate,
+          historicalScores: next.historicalScores,
+        });
+        return next.result;
       },
       resetProgress: () =>
         set((state) => ({
           sessions: createInitialSessions(),
           activeSessionId: 'L1',
           locale: state.locale,
-          examDate: state.examDate || DEFAULT_EXAM_DATE,
-          historicalScores: state.historicalScores,
+          examDate: DEFAULT_EXAM_DATE,
+          historicalScores: [],
         })),
     }),
     {
       name: 'cheese-toeic-storage',
-      version: 6,
+      version: STORAGE_VERSION,
       partialize: (state) => ({
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,

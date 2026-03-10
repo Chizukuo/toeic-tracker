@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getCopy, translateStatus } from '@/lib/i18n';
 import { getIncorrectAnswers } from '@/lib/toeic';
@@ -7,13 +9,43 @@ import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
 export function SprintDashboard() {
-  const { sessions, activeSessionId, selectSession, locale } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const selectSession = useStore((state) => state.selectSession);
+  const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
 
-  const notStartedCount = sessions.filter((s) => s.status === 'not-started').length;
-  const inProgressCount = sessions.filter((s) => s.status === 'in-progress').length;
-  const debuggedCount = sessions.filter((s) => s.status === 'debugged').length;
-  const progressPct = Math.round((debuggedCount / sessions.length) * 100);
+  const { cards, debuggedCount, inProgressCount, notStartedCount, progressPct } = useMemo(() => {
+    let nextNotStartedCount = 0;
+    let nextInProgressCount = 0;
+    let nextDebuggedCount = 0;
+
+    const nextCards = sessions.map((session) => {
+      if (session.status === 'debugged') {
+        nextDebuggedCount++;
+      } else if (session.status === 'in-progress') {
+        nextInProgressCount++;
+      } else {
+        nextNotStartedCount++;
+      }
+
+      const mistakes = getIncorrectAnswers(session);
+
+      return {
+        session,
+        mistakes,
+        hasMistakes: mistakes > 0 && session.status !== 'not-started',
+      };
+    });
+
+    return {
+      cards: nextCards,
+      notStartedCount: nextNotStartedCount,
+      inProgressCount: nextInProgressCount,
+      debuggedCount: nextDebuggedCount,
+      progressPct: sessions.length > 0 ? Math.round((nextDebuggedCount / sessions.length) * 100) : 0,
+    };
+  }, [sessions]);
 
   return (
     <section>
@@ -61,10 +93,8 @@ export function SprintDashboard() {
 
         <CardContent className="p-4 sm:p-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
-            {sessions.map((session) => {
+            {cards.map(({ session, mistakes, hasMistakes }) => {
               const isActive = session.id === activeSessionId;
-              const mistakes = getIncorrectAnswers(session);
-              const hasMistakes = mistakes > 0 && session.status !== 'not-started';
 
               const baseCls =
                 session.status === 'debugged'

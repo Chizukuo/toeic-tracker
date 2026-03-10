@@ -39,6 +39,22 @@ export function AnalyticsDashboard() {
 
   const { trendData, radarData, reasonData } = useMemo(() => {
     const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+    const partMistakes = new Map<string, number>();
+    const partAttempts = new Map<string, number>();
+    const reasonCounts = new Map<string, number>();
+
+    for (const session of sessions) {
+      if (session.status !== 'not-started') {
+        for (const part of getPartsForType(session.type)) {
+          partAttempts.set(part, (partAttempts.get(part) ?? 0) + 1);
+          partMistakes.set(part, (partMistakes.get(part) ?? 0) + (session.mistakes[part] ?? 0));
+        }
+      }
+
+      for (const reason of session.reasons) {
+        reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+      }
+    }
 
     const trendData = Array.from({ length: 10 }, (_, index) => {
       const setNumber = index + 1;
@@ -53,11 +69,9 @@ export function AnalyticsDashboard() {
     });
 
     const radarData = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
-      const matchingSessions = sessions.filter(
-        (session) => session.status !== 'not-started' && getPartsForType(session.type).includes(part as never)
-      );
-      const totalMistakes = matchingSessions.reduce((sum, session) => sum + (session.mistakes[part] ?? 0), 0);
-      const totalQuestions = PART_QUESTION_COUNTS[part] * Math.max(matchingSessions.length, 1);
+      const totalMistakes = partMistakes.get(part) ?? 0;
+      const attempts = partAttempts.get(part) ?? 0;
+      const totalQuestions = PART_QUESTION_COUNTS[part] * Math.max(attempts, 1);
       const errorRate = totalQuestions > 0 ? Number(((totalMistakes / totalQuestions) * 100).toFixed(1)) : 0;
 
       return {
@@ -66,13 +80,6 @@ export function AnalyticsDashboard() {
         baseline: 100,
       };
     });
-
-    const reasonCounts = new Map<string, number>();
-    for (const session of sessions) {
-      for (const reason of session.reasons) {
-        reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
-      }
-    }
 
     const reasonData = [...reasonCounts.entries()]
       .map(([reason, count]) => ({ reason: translateReason(locale, reason), count }))

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -70,9 +70,6 @@ export function ScoreEstimatorPanel() {
   const removeHistoricalScore = useStore((state) => state.removeHistoricalScore);
   const copy = getCopy(locale);
 
-  const listeningSessions = sessions.filter((session) => session.type === 'L');
-  const readingSessions = sessions.filter((session) => session.type === 'R');
-
   const [mode, setMode] = useState<ScoreMode>('L');
   const [selectedListeningId, setSelectedListeningId] = useState('L1');
   const [selectedReadingId, setSelectedReadingId] = useState('R1');
@@ -81,8 +78,17 @@ export function ScoreEstimatorPanel() {
   const [historyListening, setHistoryListening] = useState('350');
   const [historyReading, setHistoryReading] = useState('330');
 
-  const sessionMap = new Map(sessions.map((session) => [session.id, session]));
-  const estimateMap = new Map(sessions.map((session) => [session.id, buildEstimate(session)]));
+  const { estimateMap, listeningSessions, readingSessions, sessionMap } = useMemo(() => {
+    const nextSessionMap = new Map(sessions.map((session) => [session.id, session]));
+    const nextEstimateMap = new Map(sessions.map((session) => [session.id, buildEstimate(session)]));
+
+    return {
+      sessionMap: nextSessionMap,
+      estimateMap: nextEstimateMap,
+      listeningSessions: sessions.filter((session) => session.type === 'L'),
+      readingSessions: sessions.filter((session) => session.type === 'R'),
+    };
+  }, [sessions]);
 
   const selectedListening = sessionMap.get(selectedListeningId) ?? listeningSessions[0];
   const selectedReading = sessionMap.get(selectedReadingId) ?? readingSessions[0];
@@ -97,7 +103,7 @@ export function ScoreEstimatorPanel() {
   const pairAvailable = Boolean(pairListeningEstimate?.available && pairReadingEstimate?.available);
   const totalScore = pairAvailable ? (pairListeningEstimate?.scaled ?? 0) + (pairReadingEstimate?.scaled ?? 0) : 0;
 
-  const listeningTrend = listeningSessions.map((session) => {
+  const listeningTrend = useMemo(() => listeningSessions.map((session) => {
     const estimate = estimateMap.get(session.id);
     return {
       label: session.label,
@@ -105,9 +111,9 @@ export function ScoreEstimatorPanel() {
       rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
       active: session.id === selectedListeningId,
     };
-  });
+  }), [estimateMap, listeningSessions, selectedListeningId]);
 
-  const readingTrend = readingSessions.map((session) => {
+  const readingTrend = useMemo(() => readingSessions.map((session) => {
     const estimate = estimateMap.get(session.id);
     return {
       label: session.label,
@@ -115,9 +121,9 @@ export function ScoreEstimatorPanel() {
       rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
       active: session.id === selectedReadingId,
     };
-  });
+  }), [estimateMap, readingSessions, selectedReadingId]);
 
-  const totalTrend = Array.from({ length: 10 }, (_, index) => {
+  const totalTrend = useMemo(() => Array.from({ length: 10 }, (_, index) => {
     const pair = `${index + 1}`;
     const listening = sessionMap.get(`L${pair}`);
     const reading = sessionMap.get(`R${pair}`);
@@ -131,7 +137,7 @@ export function ScoreEstimatorPanel() {
       rawCorrect: available ? (listeningProjection?.rawCorrect ?? 0) + (readingProjection?.rawCorrect ?? 0) : undefined,
       active: selectedPair === pair,
     };
-  });
+  }), [estimateMap, selectedPair, sessionMap]);
 
   const historicalTrend = useMemo<HistoricalTrendPoint[]>(() => {
     return historicalScores.map((item) => ({
@@ -504,7 +510,7 @@ function PairSelect({ value, onValueChange, placeholder }: { value: string; onVa
   );
 }
 
-function ProjectionTrendChart({ data, lineColor, lineLabel }: { data: ScoreTrendPoint[]; lineColor: string; lineLabel: string }) {
+const ProjectionTrendChart = memo(function ProjectionTrendChart({ data, lineColor, lineLabel }: { data: ScoreTrendPoint[]; lineColor: string; lineLabel: string }) {
   const locale = useStore((state) => state.locale);
   const availablePoints = data.filter((point) => point.score !== undefined);
   const latest = availablePoints[availablePoints.length - 1];
@@ -590,9 +596,9 @@ function ProjectionTrendChart({ data, lineColor, lineLabel }: { data: ScoreTrend
       </div>
     </div>
   );
-}
+});
 
-function HistoricalScoreChart({ data, locale }: { data: HistoricalTrendPoint[]; locale: 'zh' | 'en' }) {
+const HistoricalScoreChart = memo(function HistoricalScoreChart({ data, locale }: { data: HistoricalTrendPoint[]; locale: 'zh' | 'en' }) {
   if (data.length === 0) {
     return (
       <div className="deck-empty flex min-h-80 flex-col items-center justify-center px-6 text-center">
@@ -648,7 +654,7 @@ function HistoricalScoreChart({ data, locale }: { data: HistoricalTrendPoint[]; 
       </div>
     </div>
   );
-}
+});
 
 function EstimatePlaceholder() {
   const locale = useStore((state) => state.locale);

@@ -1,21 +1,19 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+
+import type { ComponentType, ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
 } from 'lucide-react';
 
-import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
-import { DataVaultPanel } from '@/components/DataVaultPanel';
 import { DebugForm } from '@/components/DebugForm';
 import { LapTimer } from '@/components/LapTimer';
 import { LocaleToggle } from '@/components/LocaleToggle';
-import { ScoreEstimatorPanel } from '@/components/ScoreEstimatorPanel';
 import { SprintDashboard } from '@/components/SprintDashboard';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { TimeWaterfallChart } from '@/components/TimeWaterfallChart';
-import { UnfinishedTrackerPanel } from '@/components/UnfinishedTrackerPanel';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatHotspot, formatSessionTitle, formatWorstPart, getCopy, translateStatus } from '@/lib/i18n';
@@ -23,15 +21,28 @@ import { getIncorrectAnswers } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
+const AnalyticsDashboard = dynamic(() => import('@/components/AnalyticsDashboard').then((module) => module.AnalyticsDashboard), {
+  loading: () => <DeferredPanelPlaceholder />,
+});
+
+const DataVaultPanel = dynamic(() => import('@/components/DataVaultPanel').then((module) => module.DataVaultPanel), {
+  loading: () => <DeferredPanelPlaceholder />,
+});
+
+const ScoreEstimatorPanel = dynamic(() => import('@/components/ScoreEstimatorPanel').then((module) => module.ScoreEstimatorPanel), {
+  loading: () => <DeferredPanelPlaceholder />,
+});
+
+const UnfinishedTrackerPanel = dynamic(() => import('@/components/UnfinishedTrackerPanel').then((module) => module.UnfinishedTrackerPanel), {
+  loading: () => <DeferredPanelPlaceholder />,
+});
+
 export default function Home() {
   const sessions = useStore((state) => state.sessions);
   const ensureInitialized = useStore((state) => state.ensureInitialized);
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
-  const examDate = useStore((state) => state.examDate);
-  const setExamDate = useStore((state) => state.setExamDate);
   const copy = getCopy(locale);
-  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     ensureInitialized();
@@ -41,65 +52,53 @@ export default function Home() {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
   }, [locale]);
 
-  useEffect(() => {
-    const kickoff = window.setTimeout(() => setNow(Date.now()), 0);
-    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+  const homeMetrics = useMemo(() => {
+    const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+    let debuggedCount = 0;
+    let liveCount = 0;
+    let overtimeCount = 0;
+    let totalMistakeLoad = 0;
+    let unfinishedTotal = 0;
+    let unfinishedSessionsCount = 0;
 
-    return () => {
-      window.clearTimeout(kickoff);
-      window.clearInterval(timer);
-    };
-  }, []);
+    for (const session of sessions) {
+      if (session.status === 'debugged') debuggedCount++;
+      else if (session.status === 'in-progress') liveCount++;
 
-  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+      if (session.timerSummary?.timedOut) {
+        overtimeCount++;
+      }
 
-  let debuggedCount = 0;
-  let liveCount = 0;
-  let overtimeCount = 0;
-  let totalMistakeLoad = 0;
-  let unfinishedTotal = 0;
-  let unfinishedSessionsCount = 0;
+      totalMistakeLoad += getIncorrectAnswers(session);
 
-  for (const session of sessions) {
-    if (session.status === 'debugged') debuggedCount++;
-    else if (session.status === 'in-progress') liveCount++;
-    if (session.timerSummary?.timedOut) overtimeCount++;
-
-    totalMistakeLoad += getIncorrectAnswers(session);
-
-    if (session.type === 'R') {
-      const unfinished = session.timerSummary?.unfinishedQuestions ?? 0;
-      unfinishedTotal += unfinished;
-      if (unfinished > 0) unfinishedSessionsCount++;
+      if (session.type === 'R') {
+        const unfinished = session.timerSummary?.unfinishedQuestions ?? 0;
+        unfinishedTotal += unfinished;
+        if (unfinished > 0) {
+          unfinishedSessionsCount++;
+        }
+      }
     }
-  }
 
-  const completionPct = sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0;
-  const timedOutFlag = Boolean(activeSession?.timerSummary?.timedOut);
+    return {
+      activeSession,
+      debuggedCount,
+      liveCount,
+      overtimeCount,
+      totalMistakeLoad,
+      unfinishedTotal,
+      unfinishedSessionsCount,
+      completionPct: sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0,
+    };
+  }, [activeSessionId, sessions]);
 
-  const countdown = now
-    ? (() => {
-        const target = new Date(`${examDate}T09:00:00`);
-        const diff = target.getTime() - now;
-        const safeDiff = Math.max(diff, 0);
-
-        return {
-          isReady: diff <= 0,
-          days: Math.floor(safeDiff / (24 * 60 * 60 * 1000)),
-          hours: Math.floor(safeDiff / (60 * 60 * 1000)),
-          formattedDate: new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            weekday: 'short',
-          }).format(target),
-        };
-      })()
-    : null;
+  const activeSession = homeMetrics.activeSession;
 
   if (!activeSession) {
     return null;
   }
+
+  const timedOutFlag = Boolean(activeSession.timerSummary?.timedOut);
 
   const focusSignals = [
     {
@@ -128,11 +127,11 @@ export default function Home() {
     },
     {
       label: copy.unfinishedTrackerTitle,
-      value: copy.unfinished(unfinishedTotal),
+      value: copy.unfinished(homeMetrics.unfinishedTotal),
       helper:
         locale === 'zh'
-          ? `涉及 ${unfinishedSessionsCount} 个 session`
-          : `${unfinishedSessionsCount} sessions affected`,
+          ? `涉及 ${homeMetrics.unfinishedSessionsCount} 个 session`
+          : `${homeMetrics.unfinishedSessionsCount} sessions affected`,
     },
     {
       label: copy.hotRootCause,
@@ -147,25 +146,25 @@ export default function Home() {
   const overviewSignals = [
     {
       label: copy.summaryDebugged,
-      value: `${debuggedCount}/20`,
+      value: `${homeMetrics.debuggedCount}/20`,
       detail: copy.summaryDebuggedHelper,
       tone: 'amber' as const,
     },
     {
       label: copy.summaryInProgress,
-      value: `${liveCount}`,
+      value: `${homeMetrics.liveCount}`,
       detail: copy.summaryInProgressHelper,
       tone: 'slate' as const,
     },
     {
       label: copy.summaryTimeout,
-      value: `${overtimeCount}`,
+      value: `${homeMetrics.overtimeCount}`,
       detail: copy.summaryTimeoutHelper,
       tone: 'coral' as const,
     },
     {
       label: copy.summaryMistakes,
-      value: `${totalMistakeLoad}`,
+      value: `${homeMetrics.totalMistakeLoad}`,
       detail: copy.summaryMistakesHelper,
       tone: 'cyan' as const,
     },
@@ -251,51 +250,7 @@ export default function Home() {
             </section>
 
             <aside className="grid gap-4">
-              <Card className="glass-panel rounded-[34px] border border-white/65 shadow-[0_28px_100px_-54px_rgba(15,23,42,0.35)] dark:border-white/10">
-                <CardHeader className="border-b border-zinc-200/70 px-6 py-5 dark:border-white/8">
-                  <CardTitle className="font-mono text-[11px] uppercase tracking-[0.32em] text-amber-700 dark:text-amber-300">
-                    {copy.examCountdownTitle}
-                  </CardTitle>
-                  <CardDescription className="text-xs leading-6">
-                    {copy.examCountdownDescription}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  <div className="rounded-[24px] border border-zinc-200/80 bg-white/80 p-4 dark:border-white/8 dark:bg-zinc-950/84">
-                    <label className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
-                      {copy.examCountdownLabel}
-                    </label>
-                    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-zinc-200/70 bg-zinc-50/85 px-3 dark:border-zinc-800 dark:bg-zinc-900/70">
-                      <CalendarDays className="size-4 text-zinc-400 dark:text-zinc-500" />
-                      <Input
-                        id="toeic-exam-date"
-                        type="date"
-                        value={examDate}
-                        onChange={(event) => setExamDate(event.target.value)}
-                        className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                      />
-                    </div>
-                    <div className="mt-3 text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-                      {countdown?.formattedDate ?? examDate}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <CountdownCard
-                      label={copy.examCountdownDays}
-                      value={countdown?.isReady ? '0' : `${countdown?.days ?? '--'}`}
-                      helper={countdown?.isReady ? copy.examCountdownReady : locale === 'zh' ? '按天安排训练' : 'Plan by day'}
-                      tone="amber"
-                    />
-                    <CountdownCard
-                      label={copy.examCountdownHours}
-                      value={countdown?.isReady ? '0' : `${countdown?.hours ?? '--'}`}
-                      helper={locale === 'zh' ? '折算为总训练时数' : 'Total training hours left'}
-                      tone="cyan"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              <ExamCountdownPanel locale={locale} />
 
               <div className="mission-orbit rounded-[34px] border border-zinc-200/80 bg-[linear-gradient(180deg,rgba(255,247,230,0.9),rgba(255,255,255,0.62))] p-6 dark:border-white/8 dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.08),rgba(16,18,24,0.94))] dark:shadow-[0_28px_90px_-56px_rgba(0,0,0,0.82)]">
                 <div className="flex items-end justify-between gap-3">
@@ -304,20 +259,20 @@ export default function Home() {
                       {locale === 'zh' ? '总进度' : 'Progress'}
                     </div>
                     <div className="mt-3 font-mono text-5xl font-semibold tracking-[-0.06em] text-zinc-950 dark:text-zinc-50">
-                      {completionPct}
+                      {homeMetrics.completionPct}
                       <span className="text-2xl text-zinc-400">%</span>
                     </div>
                   </div>
 
                   <div className="text-right text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? `${debuggedCount}/20 已完成复盘` : `${debuggedCount}/20 reviewed`}
+                    {locale === 'zh' ? `${homeMetrics.debuggedCount}/20 已完成复盘` : `${homeMetrics.debuggedCount}/20 reviewed`}
                   </div>
                 </div>
 
                 <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
                   <div
                     className="h-full rounded-full bg-[linear-gradient(90deg,#ffcc57_0%,#ff8f56_52%,#54d4ff_100%)] transition-all duration-700"
-                    style={{ width: `${completionPct}%` }}
+                    style={{ width: `${homeMetrics.completionPct}%` }}
                   />
                 </div>
 
@@ -332,9 +287,9 @@ export default function Home() {
                 </div>
 
                 <div className="mt-5 space-y-3">
-                  <ProgressLine label={copy.summaryDebugged} value={debuggedCount} max={20} tone="amber" />
-                  <ProgressLine label={copy.summaryInProgress} value={liveCount} max={20} tone="slate" />
-                  <ProgressLine label={copy.summaryTimeout} value={overtimeCount} max={20} tone="coral" />
+                  <ProgressLine label={copy.summaryDebugged} value={homeMetrics.debuggedCount} max={20} tone="amber" />
+                  <ProgressLine label={copy.summaryInProgress} value={homeMetrics.liveCount} max={20} tone="slate" />
+                  <ProgressLine label={copy.summaryTimeout} value={homeMetrics.overtimeCount} max={20} tone="coral" />
                 </div>
               </div>
             </aside>
@@ -402,7 +357,7 @@ export default function Home() {
           title={copy.unfinishedTrackerTitle}
           description={locale === 'zh' ? '集中处理超时后遗留的题目。' : 'Handle leftover questions from timed runs.'}
         >
-          <UnfinishedTrackerPanel />
+          <DeferredSection component={UnfinishedTrackerPanel} />
         </SectionShell>
 
         <SectionShell
@@ -410,7 +365,7 @@ export default function Home() {
           title={copy.analyticsTitle}
           description={locale === 'zh' ? '查看趋势、短板和高频错因。' : 'Review trend, weak spots, and root causes.'}
         >
-          <AnalyticsDashboard />
+          <DeferredSection component={AnalyticsDashboard} />
         </SectionShell>
 
         <SectionShell
@@ -418,7 +373,7 @@ export default function Home() {
           title={copy.scoreEstimatorTitle}
           description={locale === 'zh' ? '按套次查看听力、阅读和总分估算。' : 'View listening, reading, and total estimates.'}
         >
-          <ScoreEstimatorPanel />
+          <DeferredSection component={ScoreEstimatorPanel} />
         </SectionShell>
 
         <SectionShell
@@ -426,7 +381,7 @@ export default function Home() {
           title={copy.dataVaultTitle}
           description={locale === 'zh' ? '备份、恢复或重置本地数据。' : 'Backup, restore, or reset local data.'}
         >
-          <DataVaultPanel />
+          <DeferredSection component={DataVaultPanel} />
         </SectionShell>
       </div>
     </main>
@@ -463,6 +418,132 @@ function SectionShell({
 
       <div>{children}</div>
     </section>
+  );
+}
+
+const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale: 'zh' | 'en' }) {
+  const examDate = useStore((state) => state.examDate);
+  const setExamDate = useStore((state) => state.setExamDate);
+  const copy = getCopy(locale);
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    const kickoff = window.setTimeout(() => setNow(Date.now()), 0);
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+
+    return () => {
+      window.clearTimeout(kickoff);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const countdown = useMemo(() => {
+    if (!now) {
+      return null;
+    }
+
+    const target = new Date(`${examDate}T09:00:00`);
+    const diff = target.getTime() - now;
+    const safeDiff = Math.max(diff, 0);
+
+    return {
+      isReady: diff <= 0,
+      days: Math.floor(safeDiff / (24 * 60 * 60 * 1000)),
+      hours: Math.floor(safeDiff / (60 * 60 * 1000)),
+      formattedDate: new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        weekday: 'short',
+      }).format(target),
+    };
+  }, [examDate, locale, now]);
+
+  return (
+    <Card className="glass-panel rounded-[34px] border border-white/65 shadow-[0_28px_100px_-54px_rgba(15,23,42,0.35)] dark:border-white/10">
+      <CardHeader className="border-b border-zinc-200/70 px-6 py-5 dark:border-white/8">
+        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.32em] text-amber-700 dark:text-amber-300">
+          {copy.examCountdownTitle}
+        </CardTitle>
+        <CardDescription className="text-xs leading-6">
+          {copy.examCountdownDescription}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 p-6">
+        <div className="rounded-[24px] border border-zinc-200/80 bg-white/80 p-4 dark:border-white/8 dark:bg-zinc-950/84">
+          <label className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
+            {copy.examCountdownLabel}
+          </label>
+          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-zinc-200/70 bg-zinc-50/85 px-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+            <CalendarDays className="size-4 text-zinc-400 dark:text-zinc-500" />
+            <Input
+              id="toeic-exam-date"
+              type="date"
+              value={examDate}
+              onChange={(event) => setExamDate(event.target.value)}
+              className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+          <div className="mt-3 text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+            {countdown?.formattedDate ?? examDate}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CountdownCard
+            label={copy.examCountdownDays}
+            value={countdown?.isReady ? '0' : `${countdown?.days ?? '--'}`}
+            helper={countdown?.isReady ? copy.examCountdownReady : locale === 'zh' ? '按天安排训练' : 'Plan by day'}
+            tone="amber"
+          />
+          <CountdownCard
+            label={copy.examCountdownHours}
+            value={countdown?.isReady ? '0' : `${countdown?.hours ?? '--'}`}
+            helper={locale === 'zh' ? '折算为总训练时数' : 'Total training hours left'}
+            tone="cyan"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
+function DeferredSection({ component: Component }: { component: ComponentType }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isVisible || !hostRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '240px 0px' }
+    );
+
+    observer.observe(hostRef.current);
+
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  return <div ref={hostRef}>{isVisible ? <Component /> : <DeferredPanelPlaceholder />}</div>;
+}
+
+function DeferredPanelPlaceholder() {
+  return (
+    <div className="deck-card overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
+      <div className="h-14 border-b border-zinc-200/70 bg-white/55 px-6 py-5 dark:border-white/8 dark:bg-zinc-950/80" />
+      <div className="grid gap-4 p-6">
+        <div className="h-24 animate-pulse rounded-[24px] bg-zinc-200/60 dark:bg-zinc-800/60" />
+        <div className="h-56 animate-pulse rounded-[28px] bg-zinc-200/50 dark:bg-zinc-800/50" />
+      </div>
+    </div>
   );
 }
 

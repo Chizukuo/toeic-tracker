@@ -100,7 +100,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
         lapStartedAtRef.current = null;
         requestSubmit({ forcedSubmit: true, timedOut: true });
       }
-    }, 250);
+    }, 1000);
 
     return () => window.clearInterval(intervalId);
   }, [isRunning, requestSubmit, totalDurationMs]);

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -12,7 +13,7 @@ import {
 } from 'recharts';
 import { ClipboardList, Orbit, TimerReset } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCopy } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -28,40 +29,60 @@ type UnfinishedPoint = {
 };
 
 export function UnfinishedTrackerPanel() {
-  const { sessions, activeSessionId, locale, selectSession } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const locale = useStore((state) => state.locale);
+  const selectSession = useStore((state) => state.selectSession);
   const copy = getCopy(locale);
 
-  const readingSessions = sessions.filter((session) => session.type === 'R');
+  const { chartData, currentUnfinished, latestUnfinished, totalUnfinished, unfinishedSessions } = useMemo(() => {
+    const readingSessions = sessions.filter((session) => session.type === 'R');
 
-  const chartData: UnfinishedPoint[] = readingSessions.map((session) => ({
-    id: session.id,
-    label: session.label,
-    count: session.timerSummary?.unfinishedQuestions ?? 0,
-    active: session.id === activeSessionId,
-    hasBacklog: (session.timerSummary?.unfinishedQuestions ?? 0) > 0,
-    tag: session.timerSummary?.timedOut
-      ? locale === 'zh'
-        ? '超时'
-        : 'Timeout'
-      : session.timerSummary?.forcedSubmit
-        ? locale === 'zh'
-          ? '强制交卷'
-          : 'Forced'
-        : locale === 'zh'
-          ? '正常交卷'
-          : 'Saved',
-  }));
+    const nextChartData: UnfinishedPoint[] = readingSessions.map((session) => {
+      const count = session.timerSummary?.unfinishedQuestions ?? 0;
 
-  const unfinishedSessions = chartData.filter((session) => session.hasBacklog);
-  const totalUnfinished = unfinishedSessions.reduce((sum, session) => sum + session.count, 0);
-  const currentUnfinished = chartData.find((session) => session.id === activeSessionId)?.count ?? 0;
-  const latestUnfinished = [...readingSessions]
-    .filter((session) => (session.timerSummary?.unfinishedQuestions ?? 0) > 0)
-    .sort(
-      (a, b) =>
-        new Date(b.timerSummary?.completedAt ?? 0).getTime() -
-        new Date(a.timerSummary?.completedAt ?? 0).getTime()
-    )[0];
+      return {
+        id: session.id,
+        label: session.label,
+        count,
+        active: session.id === activeSessionId,
+        hasBacklog: count > 0,
+        tag: session.timerSummary?.timedOut
+          ? locale === 'zh'
+            ? '超时'
+            : 'Timeout'
+          : session.timerSummary?.forcedSubmit
+            ? locale === 'zh'
+              ? '强制交卷'
+              : 'Forced'
+            : locale === 'zh'
+              ? '正常交卷'
+              : 'Saved',
+      };
+    });
+
+    const nextUnfinishedSessions = nextChartData.filter((session) => session.hasBacklog);
+    const nextLatestUnfinished = readingSessions.reduce<(typeof readingSessions)[number] | undefined>((latest, session) => {
+      const count = session.timerSummary?.unfinishedQuestions ?? 0;
+
+      if (count <= 0) {
+        return latest;
+      }
+
+      const completedAt = new Date(session.timerSummary?.completedAt ?? 0).getTime();
+      const latestCompletedAt = new Date(latest?.timerSummary?.completedAt ?? 0).getTime();
+
+      return !latest || completedAt > latestCompletedAt ? session : latest;
+    }, undefined);
+
+    return {
+      chartData: nextChartData,
+      unfinishedSessions: nextUnfinishedSessions,
+      totalUnfinished: nextUnfinishedSessions.reduce((sum, session) => sum + session.count, 0),
+      currentUnfinished: nextChartData.find((session) => session.id === activeSessionId)?.count ?? 0,
+      latestUnfinished: nextLatestUnfinished,
+    };
+  }, [activeSessionId, locale, sessions]);
 
   return (
     <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 shadow-[0_24px_80px_-46px_rgba(15,23,42,0.22)] dark:border-white/10">
@@ -154,14 +175,17 @@ export function UnfinishedTrackerPanel() {
                       stroke="#f59e0b"
                       strokeWidth={2.5}
                       dot={(props) => {
-                        const { cx, cy, payload } = props;
+                        const { cx, cy, payload, index } = props;
 
                         if (cx === undefined || cy === undefined || !payload) {
-                          return <g />;
+                          return <g key={`unfinished-dot-empty-${index ?? 0}`} />;
                         }
+
+                        const dotKey = `unfinished-dot-${payload.id ?? payload.label ?? index ?? 0}`;
 
                         return (
                           <circle
+                            key={dotKey}
                             cx={cx}
                             cy={cy}
                             r={payload.active ? 6 : payload.hasBacklog ? 4.5 : 3}
@@ -225,14 +249,16 @@ export function UnfinishedTrackerPanel() {
                       </div>
                     </div>
 
-                    <Button
-                      type="button"
-                      variant={session.active ? 'default' : 'outline'}
-                      size="sm"
-                      className={session.active ? 'shrink-0 bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200' : 'shrink-0'}
+                    <span
+                      className={cn(
+                        buttonVariants({ variant: session.active ? 'default' : 'outline', size: 'sm' }),
+                        session.active
+                          ? 'shrink-0 bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200'
+                          : 'shrink-0'
+                      )}
                     >
                       {copy.openSession}
-                    </Button>
+                    </span>
                   </button>
                 ))
               )}
