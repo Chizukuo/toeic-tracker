@@ -282,7 +282,7 @@ export function sumReadingLapTimes(record: SessionRecord) {
 export function getSessionStatusLabel(status: SessionStatus) {
 	switch (status) {
 		case "debugged":
-			return "已 Debug";
+			return "已完成复盘";
 		case "in-progress":
 			return "进行中";
 		default:

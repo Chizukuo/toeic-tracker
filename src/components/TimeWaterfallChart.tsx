@@ -64,8 +64,8 @@ export function TimeWaterfallChart({ session }: { session: SessionRecord }) {
   const totalDelta = Number((totalActual - totalBaseline).toFixed(1));
 
   return (
-    <Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
-      <CardHeader className="border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+    <Card className="deck-card">
+      <CardHeader className="deck-card-header px-6 py-4">
         <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
           {copy.readingTimeProfiling}
         </CardTitle>
@@ -127,7 +127,7 @@ export function TimeWaterfallChart({ session }: { session: SessionRecord }) {
 
         <div className="mt-4 grid gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
           {data.map((entry) => (
-            <div key={entry.name} className="flex items-center justify-between rounded-lg border border-zinc-200/70 bg-zinc-50/70 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div key={entry.name} className="deck-surface-soft flex items-center justify-between rounded-lg px-3 py-2">
               <span className="font-mono text-[11px] uppercase tracking-[0.2em]">{entry.label}</span>
               <span className={`font-mono font-medium ${entry.delta > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                 {entry.delta > 0 ? '+' : ''}{entry.delta.toFixed(1)}m
@@ -153,13 +153,13 @@ function PlaceholderCard({
   placeholder: string;
 }) {
   return (
-    <Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
-      <CardHeader className="border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+    <Card className="deck-card">
+      <CardHeader className="deck-card-header px-6 py-4">
         <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-400 dark:text-zinc-500">{title}</CardTitle>
         <CardDescription className="text-xs">{body}</CardDescription>
       </CardHeader>
       <CardContent className="p-6">
-        <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-6 text-center text-xs leading-6 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+        <div className="deck-empty flex h-44 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
           {placeholder}
         </div>
       </CardContent>
@@ -177,7 +177,7 @@ function ProfilingStat({
   danger?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+    <div className="deck-surface-soft rounded-2xl p-3">
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">{label}</div>
       <div className={`mt-1.5 font-mono text-xl font-semibold tracking-tight ${danger ? 'text-red-500' : 'text-zinc-900 dark:text-zinc-50'}`}>{value}</div>
     </div>

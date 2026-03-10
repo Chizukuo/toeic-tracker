@@ -13,7 +13,7 @@ export function LocaleToggle() {
   const copy = getCopy(locale);
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-zinc-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+    <div className="control-shell inline-flex items-center gap-1 p-1">
       <div className="flex items-center gap-2 px-2 text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
         <Languages className="size-3.5" />
         <span className="hidden sm:inline">{copy.languageLabel}</span>
@@ -30,8 +30,8 @@ export function LocaleToggle() {
             className={cn(
               'rounded-full px-3 font-mono text-[11px] uppercase tracking-[0.22em] transition-all',
               active
-                ? 'bg-amber-400 text-zinc-950 shadow-sm hover:bg-amber-400'
-                : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                ? 'bg-[linear-gradient(135deg,#ffd971_0%,#ff8f56_100%)] text-zinc-950 shadow-[0_14px_26px_-16px_rgba(245,158,11,0.9)] hover:text-zinc-950'
+                : 'text-zinc-500 hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-100'
             )}
             aria-pressed={active}
           >

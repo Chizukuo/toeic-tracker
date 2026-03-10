@@ -166,7 +166,7 @@ export function AnalyticsDashboard() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/80 px-6 text-center text-xs leading-6 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-500">
+          <div className="deck-empty flex h-44 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
             {copy.saveDebugToUnlock}
           </div>
         )}
@@ -185,8 +185,8 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
-      <CardHeader className="border-b border-zinc-100 bg-zinc-50/70 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+    <Card className="deck-card">
+      <CardHeader className="deck-card-header px-6 py-4">
         <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
         <CardDescription className="text-xs leading-6">{description}</CardDescription>
       </CardHeader>

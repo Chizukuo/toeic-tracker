@@ -15,8 +15,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cheese-TOEIC-Tracker",
-  description: "A minimalist TOEIC sprint dashboard for tracking mistakes, pacing, and debug loops across a 20-day plan.",
+  title: "Cheese TOEIC Command Deck",
+  description: "A designed TOEIC sprint workspace for timing drills, review logging, unfinished tracking, and score projection across a 20-session plan.",
 };
 
 export default function RootLayout({
@@ -33,7 +33,6 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="dark"
           enableSystem
-          disableTransitionOnChange
         >
           {children}
         </ThemeProvider>

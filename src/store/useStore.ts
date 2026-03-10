@@ -30,7 +30,20 @@ export type SprintSnapshot = {
     activeSessionId: string;
     locale: AppLocale;
     examDate: string;
+    historicalScores: HistoricalScoreRecord[];
   };
+};
+
+export type HistoricalScoreSource = 'manual' | 'estimated';
+
+export type HistoricalScoreRecord = {
+  id: string;
+  date: string;
+  listening: number;
+  reading: number;
+  total: number;
+  source: HistoricalScoreSource;
+  note?: string;
 };
 
 type SnapshotLike = {
@@ -39,11 +52,13 @@ type SnapshotLike = {
     activeSessionId?: string;
     locale?: AppLocale;
     examDate?: string;
+    historicalScores?: unknown;
   };
   sessions?: unknown;
   activeSessionId?: string;
   locale?: AppLocale;
   examDate?: string;
+  historicalScores?: unknown;
 };
 
 const DEFAULT_EXAM_DATE = '2026-05-24';
@@ -54,10 +69,20 @@ interface AppState {
   activeSessionId: string;
   locale: AppLocale;
   examDate: string;
+  historicalScores: HistoricalScoreRecord[];
   ensureInitialized: () => void;
   selectSession: (sessionId: string) => void;
   setLocale: (locale: AppLocale) => void;
   setExamDate: (examDate: string) => void;
+  addHistoricalScore: (payload: {
+    date: string;
+    listening: number;
+    reading: number;
+    total?: number;
+    source?: HistoricalScoreSource;
+    note?: string;
+  }) => void;
+  removeHistoricalScore: (id: string) => void;
   patchSession: (sessionId: string, data: Partial<SessionRecord>) => void;
   saveDiagnostics: (
     sessionId: string,
@@ -74,6 +99,37 @@ interface AppState {
 
 function isLocale(value: unknown): value is AppLocale {
   return value === 'zh' || value === 'en';
+}
+
+function normalizeHistoricalScores(incoming: unknown): HistoricalScoreRecord[] {
+  if (!Array.isArray(incoming)) {
+    return [];
+  }
+
+  return incoming
+    .filter((item): item is Partial<HistoricalScoreRecord> => typeof item === 'object' && item !== null)
+    .map((item, index) => {
+      const listening = typeof item.listening === 'number' ? clampScore(item.listening, 5, 495) : 5;
+      const reading = typeof item.reading === 'number' ? clampScore(item.reading, 5, 495) : 5;
+      const total = typeof item.total === 'number' ? clampScore(item.total, 10, 990) : clampScore(listening + reading, 10, 990);
+      const source: HistoricalScoreSource = item.source === 'estimated' ? 'estimated' : 'manual';
+      const note = typeof item.note === 'string' && item.note.trim() ? item.note.trim() : undefined;
+
+      return {
+        id: typeof item.id === 'string' && item.id ? item.id : `score-${index}-${Date.now()}`,
+        date: typeof item.date === 'string' && EXAM_DATE_PATTERN.test(item.date) ? item.date : DEFAULT_EXAM_DATE,
+        listening,
+        reading,
+        total,
+        source,
+        note,
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function clampScore(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(value / 5) * 5));
 }
 
 function normalizeSessions(incoming: unknown): SessionRecord[] {
@@ -173,6 +229,7 @@ function parseImportSnapshot(snapshot: unknown) {
     activeSessionId,
     locale: isLocale(source.locale) ? source.locale : 'zh',
     examDate: typeof source.examDate === 'string' && source.examDate ? source.examDate : DEFAULT_EXAM_DATE,
+    historicalScores: normalizeHistoricalScores(source.historicalScores),
   };
 }
 
@@ -183,6 +240,7 @@ export const useStore = create<AppState>()(
       activeSessionId: 'L1',
       locale: 'zh',
       examDate: DEFAULT_EXAM_DATE,
+      historicalScores: [],
       ensureInitialized: () =>
         set((state) => {
           const sessions = normalizeSessions(state.sessions);
@@ -192,6 +250,7 @@ export const useStore = create<AppState>()(
               ? state.activeSessionId
               : 'L1',
             examDate: state.examDate || DEFAULT_EXAM_DATE,
+            historicalScores: normalizeHistoricalScores(state.historicalScores),
           };
         }),
       selectSession: (sessionId) =>
@@ -202,6 +261,33 @@ export const useStore = create<AppState>()(
       setExamDate: (examDate) =>
         set((state) => ({
           examDate: EXAM_DATE_PATTERN.test(examDate) ? examDate : state.examDate,
+        })),
+      addHistoricalScore: (payload) =>
+        set((state) => {
+          const listening = clampScore(payload.listening, 5, 495);
+          const reading = clampScore(payload.reading, 5, 495);
+          const total = payload.total !== undefined ? clampScore(payload.total, 10, 990) : clampScore(listening + reading, 10, 990);
+          const source: HistoricalScoreSource = payload.source === 'estimated' ? 'estimated' : 'manual';
+          const note = typeof payload.note === 'string' && payload.note.trim() ? payload.note.trim() : undefined;
+
+          return {
+            historicalScores: [
+              ...state.historicalScores,
+              {
+                id: `score-${Date.now()}`,
+                date: EXAM_DATE_PATTERN.test(payload.date) ? payload.date : DEFAULT_EXAM_DATE,
+                listening,
+                reading,
+                total,
+                source,
+                note,
+              },
+            ].sort((a, b) => a.date.localeCompare(b.date)),
+          };
+        }),
+      removeHistoricalScore: (id) =>
+        set((state) => ({
+          historicalScores: state.historicalScores.filter((item) => item.id !== id),
         })),
       patchSession: (sessionId, data) =>
         set((state) => ({
@@ -244,6 +330,7 @@ export const useStore = create<AppState>()(
             activeSessionId: state.activeSessionId,
             locale: state.locale,
             examDate: state.examDate,
+            historicalScores: state.historicalScores,
           },
         };
       },
@@ -257,16 +344,18 @@ export const useStore = create<AppState>()(
           activeSessionId: 'L1',
           locale: state.locale,
           examDate: state.examDate || DEFAULT_EXAM_DATE,
+          historicalScores: state.historicalScores,
         })),
     }),
     {
       name: 'cheese-toeic-storage',
-      version: 4,
+      version: 6,
       partialize: (state) => ({
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
         locale: state.locale,
         examDate: state.examDate,
+        historicalScores: state.historicalScores,
       }),
       migrate: (persistedState: unknown, version) => {
         const persisted = persistedState as {
@@ -274,6 +363,7 @@ export const useStore = create<AppState>()(
           activeSessionId?: string;
           locale?: AppLocale;
           examDate?: string;
+          historicalScores?: unknown;
           records?: LegacyRecord[];
           activeDay?: number;
           activeType?: 'L' | 'R';
@@ -290,6 +380,7 @@ export const useStore = create<AppState>()(
             activeSessionId,
             locale: 'zh' as AppLocale,
             examDate: DEFAULT_EXAM_DATE,
+            historicalScores: [],
           };
         }
 
@@ -298,6 +389,7 @@ export const useStore = create<AppState>()(
           activeSessionId: persisted?.activeSessionId ?? 'L1',
           locale: persisted?.locale ?? 'zh',
           examDate: persisted?.examDate ?? DEFAULT_EXAM_DATE,
+          historicalScores: normalizeHistoricalScores(persisted?.historicalScores),
         };
       },
     }

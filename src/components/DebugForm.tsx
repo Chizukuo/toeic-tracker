@@ -60,10 +60,10 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
   };
 
   return (
-    <Card className="glass-panel overflow-hidden rounded-[26px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
-      <CardHeader className="border-b border-zinc-100 bg-zinc-50/70 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-950/60">
+    <Card className="deck-card rounded-[26px]">
+      <CardHeader className="deck-card-header px-6 py-5">
         <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
-          {activeSession.type === 'L' ? 'LISTENING DEBUG' : 'READING DEBUG'}
+          {activeSession.type === 'L' ? 'LISTENING REVIEW' : 'READING REVIEW'}
         </div>
         <CardTitle className="mt-1 text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-base">
           {copy.dataEntryTitle}
@@ -89,20 +89,20 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         </div>
 
         {activeSession.type === 'R' && (
-          <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="deck-surface-soft p-4">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.lapSync}</div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {READING_LAP_SEGMENTS.map((segment) => {
                 const actual = activeSession.readingLapTimes[segment.key];
                 const delta = actual !== undefined ? actual / 60000 - segment.baselineMinutes : undefined;
                 return (
-                  <div key={segment.key} className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/70">
+                  <div key={segment.key} className="deck-surface-strong rounded-xl p-3">
                     <div className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
                     <div className="mt-1.5 font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                       {actual !== undefined ? formatMinutes(actual) : '--'}
                     </div>
                     <div className={`mt-0.5 font-mono text-[10px] ${delta !== undefined && delta > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                      {delta !== undefined ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}m vs ${segment.baselineMinutes}m` : `base ${segment.baselineMinutes}m`}
+                      {delta !== undefined ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}m vs ${segment.baselineMinutes}m` : `${locale === 'zh' ? '基准' : 'Base'} ${segment.baselineMinutes}m`}
                     </div>
                   </div>
                 );
@@ -115,12 +115,12 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.mistakesByPart}</div>
             <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-              {locale === 'zh' ? '输入错题数' : 'Enter misses'}
+              {locale === 'zh' ? '录入错题数' : 'Enter mistake count'}
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {parts.map((part) => (
-              <label key={part} className="rounded-2xl border border-zinc-200/70 bg-zinc-50/60 p-3 transition-colors hover:border-amber-300/60 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <label key={part} className="deck-surface-soft p-3 transition-colors hover:border-amber-300/60 dark:hover:border-amber-300/25">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
@@ -159,7 +159,7 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
                     'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                     active
                       ? 'border-amber-400/40 bg-amber-400/10 text-amber-700 shadow-sm dark:text-amber-300'
-                      : 'border-zinc-200 bg-white text-zinc-500 hover:border-amber-300 hover:text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400'
+                      : 'border-zinc-200/80 bg-white/80 text-zinc-500 hover:border-amber-300 hover:text-zinc-800 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400'
                   )}
                   aria-pressed={active}
                 >
@@ -170,9 +170,9 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+        <div className="deck-surface-strong p-3">
           <div className="mb-3 flex items-center justify-between gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
-            <span>{locale === 'zh' ? '保存后会把当前套题标记为已 Debug。' : 'Saving will mark this set as debugged.'}</span>
+            <span>{locale === 'zh' ? '保存后会将当前套题标记为已完成复盘。' : 'Saving will mark this set as reviewed.'}</span>
             <span className="font-mono uppercase tracking-[0.2em]">{totalMistakes}</span>
           </div>
           <Button size="sm" onClick={handleSave} className="w-full bg-zinc-950 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200">
@@ -195,7 +195,7 @@ function QuickInfoCard({
   helper: string;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+    <div className="deck-surface-soft rounded-2xl p-3">
       <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{label}</div>
       <div className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{value}</div>
       <div className="mt-0.5 text-[11px] leading-5 text-zinc-400 dark:text-zinc-500">{helper}</div>

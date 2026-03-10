@@ -200,7 +200,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
             {isListening ? copy.strictListeningMode : copy.strictReadingMode}
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full border border-zinc-200/70 bg-white/70 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400">
+            <span className="deck-pill px-2 py-0.5 text-[9px] tracking-[0.2em]">
                 No Pause
             </span>
             {isRunning && (
@@ -230,7 +230,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
           <p className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
             {isListening ? copy.listeningTimerBody : copy.readingTimerBody}
           </p>
-          <div className="rounded-2xl border border-zinc-200/70 bg-white/75 p-3 text-left dark:border-zinc-800 dark:bg-zinc-950/60 sm:text-right">
+          <div className="deck-surface-strong p-3 text-left sm:text-right">
             <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{copy.latestCapture}</div>
             <div className="mt-0.5 font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300">{lastAttemptText}</div>
             <div className="mt-1 text-[11px] leading-5 text-zinc-400 dark:text-zinc-500">
@@ -289,7 +289,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       </div>
 
       {!isListening && (
-        <div className="rounded-[24px] border border-zinc-200/70 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <div className="deck-surface-soft p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
               {copy.readingLapSequence}
@@ -316,7 +316,7 @@ export function LapTimer({ session }: { session: SessionRecord }) {
                       ? 'border-emerald-500/30 bg-emerald-500/8'
                       : active
                         ? 'border-amber-400/40 bg-amber-400/8'
-                        : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/70'
+                        : 'border-zinc-200/80 bg-white/80 dark:border-white/8 dark:bg-zinc-950/78'
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">

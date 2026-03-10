@@ -83,8 +83,8 @@ export function DataVaultPanel() {
 
 	return (
 		<>
-			<Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-sm dark:border-zinc-800">
-				<CardHeader className="border-b border-zinc-100 bg-zinc-50/70 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-950/60">
+			<Card className="deck-card">
+				<CardHeader className="deck-card-header px-6 py-5">
 					<CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
 						{copy.dataVaultTitle}
 					</CardTitle>
@@ -117,7 +117,7 @@ export function DataVaultPanel() {
 					/>
 
 					<div className="xl:col-span-3 grid gap-4 xl:grid-cols-[2fr_1fr]">
-						<div className="flex flex-col justify-center rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+						<div className="deck-surface-soft flex flex-col justify-center p-5">
 							<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
 								<Database className="size-3.5" />
 								{copy.dataVaultNotes}
@@ -129,7 +129,7 @@ export function DataVaultPanel() {
 							</div>
 						</div>
 
-						<div className="flex flex-col rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+						<div className="deck-surface-strong flex flex-col p-5">
 							<div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
 								{copy.lastOperation}
 							</div>
@@ -150,7 +150,7 @@ export function DataVaultPanel() {
 			</Card>
 
 			<Dialog open={resetOpen} onOpenChange={setResetOpen}>
-				<DialogContent className="max-w-lg rounded-[28px] border border-zinc-200/70 bg-white/95 p-0 dark:border-zinc-800 dark:bg-zinc-950/95">
+				<DialogContent className="deck-card max-w-lg border border-white/65 bg-white/92 p-0 dark:border-white/10 dark:bg-zinc-950/92">
 					<DialogHeader className="px-6 pt-6">
 						<div className="mb-3 flex size-10 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
 							<ShieldAlert className="size-5" />
@@ -162,7 +162,7 @@ export function DataVaultPanel() {
 							{copy.resetDialogBody}
 						</DialogDescription>
 					</DialogHeader>
-					<DialogFooter className="rounded-b-[28px] border-zinc-200/70 bg-zinc-50/85 dark:border-zinc-800 dark:bg-zinc-900/70">
+					<DialogFooter className="rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04]">
 						<Button variant="outline" onClick={() => setResetOpen(false)}>
 							{copy.cancelAction}
 						</Button>
@@ -192,7 +192,7 @@ function ActionPanel({
 	danger?: boolean;
 }) {
 	return (
-		<div className="flex flex-col rounded-[24px] border border-zinc-200/70 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+		<div className="deck-surface flex flex-col p-5">
 			<div className={`flex size-10 items-center justify-center rounded-2xl ${danger ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/12 text-amber-700 dark:text-amber-300'}`}>
 				{icon}
 			</div>
@@ -223,5 +223,5 @@ function feedbackClassName(tone?: FeedbackTone) {
 		return 'border-amber-400/25 bg-amber-400/8 text-amber-700 dark:text-amber-300';
 	}
 
-	return 'border-zinc-200/70 bg-white/75 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400';
+	return 'border-zinc-200/70 bg-white/80 text-zinc-500 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400';
 }

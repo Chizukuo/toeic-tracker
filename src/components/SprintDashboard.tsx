@@ -17,8 +17,8 @@ export function SprintDashboard() {
 
   return (
     <section>
-      <Card className="glass-panel overflow-hidden rounded-[28px] border-zinc-200/70 shadow-[0_18px_48px_-30px_rgba(0,0,0,0.18)] dark:border-zinc-800 dark:shadow-[0_18px_56px_-34px_rgba(0,0,0,0.55)]">
-        <CardHeader className="border-b border-zinc-100 bg-zinc-50/80 px-6 py-5 dark:border-zinc-800 dark:bg-zinc-950/60">
+      <Card className="deck-card rounded-[28px]">
+        <CardHeader className="deck-card-header px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative h-11 w-11 shrink-0">
@@ -71,7 +71,7 @@ export function SprintDashboard() {
                   ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300 dark:bg-emerald-500/10'
                   : session.status === 'in-progress'
                     ? 'border-amber-400/50 bg-amber-400/10 text-amber-700 dark:text-amber-300'
-                    : 'border-zinc-200 bg-zinc-50/80 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-500';
+                    : 'border-zinc-200/80 bg-white/70 text-zinc-500 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400';
 
               return (
                 <button
@@ -108,11 +108,11 @@ export function SprintDashboard() {
                     <div className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
                       {session.type === 'L'
                         ? locale === 'zh'
-                          ? '45 分钟听力压测'
-                          : '45-minute listening pressure'
+                          ? '45 分钟听力计时'
+                          : '45-minute listening timer'
                         : locale === 'zh'
-                          ? '75 分钟阅读打点'
-                          : '75-minute reading laps'}
+                          ? '75 分钟阅读分段计时'
+                          : '75-minute segmented reading timer'}
                     </div>
 
                     {hasMistakes ? (
@@ -121,7 +121,7 @@ export function SprintDashboard() {
                       </div>
                     ) : (
                       <div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-50">
-                          Clean
+                          {locale === 'zh' ? '无错题' : 'No misses'}
                       </div>
                     )}
                   </div>
@@ -156,7 +156,7 @@ function StatusPill({
       ? 'border-amber-400/30 bg-amber-400/8 text-amber-700 dark:text-amber-300'
       : tone === 'green'
         ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
-        : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400';
+        : 'border-zinc-200/80 bg-white/72 text-zinc-500 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400';
 
   return (
     <div className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em]', cls)}>
