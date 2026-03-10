@@ -40,6 +40,59 @@ type ScoreCheckpoint = {
 	scaled: number;
 };
 
+type ScoreInterval = {
+	min: number;
+	max: number;
+};
+
+type SectionPartStat<TPart extends MistakeKey> = {
+	part: TPart;
+	questionCount: number;
+	mistakes: number;
+	errorRate: number;
+	correct: number;
+	shareOfLoss: number;
+};
+
+type SectionBiasProfile = {
+	basicErrorRate: number;
+	advancedErrorRate: number;
+	anomalyGap: number;
+	penaltyRaw: number;
+};
+
+export type ToeicSectionEstimate = {
+	available: boolean;
+	type: SessionType;
+	rawCorrect: number;
+	adjustedRawCorrect: number;
+	scaled: number;
+	interval: ScoreInterval;
+	cefr: ToeicCefrLevel;
+	sem: number;
+	bias: SectionBiasProfile;
+	partStats: SectionPartStat<MistakeKey>[];
+	strongestPart?: MistakeKey;
+	weakestPart?: MistakeKey;
+	unfinishedPenalty: number;
+};
+
+export type ToeicCombinedEstimate = {
+	available: boolean;
+	listening?: ToeicSectionEstimate;
+	reading?: ToeicSectionEstimate;
+	total: number;
+	interval: ScoreInterval;
+	cefr: ToeicCefrLevel;
+	rawCorrect: number;
+	adjustedRawCorrect: number;
+	totalMistakes: number;
+	accuracy: number;
+	sem: number;
+};
+
+export type ToeicCefrLevel = "Below A1" | "A1" | "A2" | "B1" | "B2" | "C1";
+
 export const LISTENING_PARTS: ListeningPartKey[] = [
 	"Part 1",
 	"Part 2",
@@ -132,6 +185,63 @@ const READING_SCORE_CHECKPOINTS: ScoreCheckpoint[] = [
 	{ raw: 90, scaled: 470 },
 	{ raw: 95, scaled: 485 },
 	{ raw: 100, scaled: 495 },
+];
+
+const PEASEA_SECTION_CONFIG = {
+	L: {
+		anchors: [
+			{ raw: 0, scaled: 5 },
+			{ raw: 17, scaled: 5 },
+			{ raw: 20, scaled: 20 },
+			{ raw: 30, scaled: 80 },
+			{ raw: 40, scaled: 150 },
+			{ raw: 50, scaled: 225 },
+			{ raw: 60, scaled: 295 },
+			{ raw: 70, scaled: 355 },
+			{ raw: 80, scaled: 420 },
+			{ raw: 85, scaled: 445 },
+			{ raw: 90, scaled: 480 },
+			{ raw: 95, scaled: 495 },
+			{ raw: 98, scaled: 495 },
+			{ raw: 100, scaled: 495 },
+		],
+		basicParts: ["Part 1", "Part 2"] as const,
+		advancedParts: ["Part 3", "Part 4"] as const,
+		sem: 25,
+	},
+	R: {
+		anchors: [
+			{ raw: 0, scaled: 5 },
+			{ raw: 19, scaled: 5 },
+			{ raw: 30, scaled: 55 },
+			{ raw: 40, scaled: 115 },
+			{ raw: 50, scaled: 175 },
+			{ raw: 60, scaled: 250 },
+			{ raw: 70, scaled: 300 },
+			{ raw: 80, scaled: 360 },
+			{ raw: 85, scaled: 395 },
+			{ raw: 90, scaled: 435 },
+			{ raw: 95, scaled: 470 },
+			{ raw: 98, scaled: 485 },
+			{ raw: 100, scaled: 495 },
+		],
+		basicParts: ["Part 5"] as const,
+		advancedParts: ["Part 6", "Part 7 Single", "Part 7 Multiple"] as const,
+		sem: 25,
+	},
+} as const;
+
+const CEFR_THRESHOLDS: Array<{
+	level: Exclude<ToeicCefrLevel, "Below A1">;
+	listening: number;
+	reading: number;
+	total: number;
+}> = [
+	{ level: "C1", listening: 490, reading: 455, total: 945 },
+	{ level: "B2", listening: 400, reading: 385, total: 785 },
+	{ level: "B1", listening: 275, reading: 275, total: 550 },
+	{ level: "A2", listening: 110, reading: 115, total: 225 },
+	{ level: "A1", listening: 60, reading: 60, total: 120 },
 ];
 
 export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
@@ -286,6 +396,203 @@ export function estimateToeicScaledScore(rawCorrect: number, type: SessionType) 
 	}
 
 	return 495;
+}
+
+function clampRawScore(value: number, type: SessionType) {
+	const totalQuestions = getQuestionCountForType(type);
+	return Math.min(totalQuestions, Math.max(value, 0));
+}
+
+function roundToNearestFive(value: number, min: number, max: number) {
+	return Math.min(max, Math.max(min, Math.round(value / 5) * 5));
+}
+
+function buildPartMistakeMap(record: SessionRecord) {
+	const parts = getPartsForType(record.type);
+	const mistakes = Object.fromEntries(
+		parts.map((part) => [part, Math.max(0, record.mistakes[part] ?? 0)])
+	) as Record<MistakeKey, number>;
+
+	if (record.type === "R") {
+		let remainingUnfinished = Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
+		const fallbackOrder: ReadingPartKey[] = [
+			"Part 7 Multiple",
+			"Part 7 Single",
+			"Part 6",
+			"Part 5",
+		];
+
+		for (const part of fallbackOrder) {
+			if (remainingUnfinished <= 0) {
+				break;
+			}
+
+			const capacity = PART_QUESTION_COUNTS[part] - mistakes[part];
+			if (capacity <= 0) {
+				continue;
+			}
+
+			const assigned = Math.min(capacity, remainingUnfinished);
+			mistakes[part] += assigned;
+			remainingUnfinished -= assigned;
+		}
+	}
+
+	return mistakes;
+}
+
+function interpolateScaledScore(rawCorrect: number, anchors: readonly ScoreCheckpoint[]) {
+	if (rawCorrect <= anchors[0].raw) {
+		return anchors[0].scaled;
+	}
+
+	for (let index = 1; index < anchors.length; index += 1) {
+		const previous = anchors[index - 1];
+		const current = anchors[index];
+
+		if (rawCorrect <= current.raw) {
+			const span = current.raw - previous.raw;
+			if (span <= 0) {
+				return current.scaled;
+			}
+
+			const progress = (rawCorrect - previous.raw) / span;
+			const scaled = previous.scaled + progress * (current.scaled - previous.scaled);
+			return roundToNearestFive(scaled, 5, 495);
+		}
+	}
+
+	return 495;
+}
+
+function getCefrLevelFromScores(listening: number, reading: number, total: number): ToeicCefrLevel {
+	for (const threshold of CEFR_THRESHOLDS) {
+		if (
+			listening >= threshold.listening &&
+			reading >= threshold.reading &&
+			total >= threshold.total
+		) {
+			return threshold.level;
+		}
+	}
+
+	return "Below A1";
+}
+
+export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEstimate {
+	const parts = getPartsForType(record.type);
+	const totalQuestions = getQuestionCountForType(record.type);
+	const config = PEASEA_SECTION_CONFIG[record.type];
+	const partMistakes = buildPartMistakeMap(record);
+	const totalMistakes = parts.reduce((sum, part) => sum + partMistakes[part], 0);
+	const rawCorrect = Math.max(totalQuestions - totalMistakes, 0);
+	const basicMistakes = config.basicParts.reduce((sum, part) => sum + partMistakes[part], 0);
+	const advancedMistakes = config.advancedParts.reduce((sum, part) => sum + partMistakes[part], 0);
+	const basicQuestionCount = config.basicParts.reduce(
+		(sum, part) => sum + PART_QUESTION_COUNTS[part],
+		0
+	);
+	const advancedQuestionCount = config.advancedParts.reduce(
+		(sum, part) => sum + PART_QUESTION_COUNTS[part],
+		0
+	);
+	const basicErrorRate = basicQuestionCount > 0 ? basicMistakes / basicQuestionCount : 0;
+	const advancedErrorRate = advancedQuestionCount > 0 ? advancedMistakes / advancedQuestionCount : 0;
+	const anomalyGap = Math.max(0, basicErrorRate - advancedErrorRate);
+	const penaltyRaw = Number((anomalyGap * 8).toFixed(1));
+	const adjustedRawCorrect = clampRawScore(rawCorrect - penaltyRaw, record.type);
+	const scaled = interpolateScaledScore(adjustedRawCorrect, config.anchors);
+	const partStats = parts
+		.map((part) => {
+			const mistakes = Math.min(PART_QUESTION_COUNTS[part], partMistakes[part]);
+			const questionCount = PART_QUESTION_COUNTS[part];
+			return {
+				part,
+				questionCount,
+				mistakes,
+				correct: Math.max(questionCount - mistakes, 0),
+				errorRate: questionCount > 0 ? mistakes / questionCount : 0,
+				shareOfLoss: totalMistakes > 0 ? mistakes / totalMistakes : 0,
+			};
+		})
+		.sort((left, right) => right.errorRate - left.errorRate);
+	const weakestPart = partStats[0]?.part;
+	const strongestPart = [...partStats].sort((left, right) => left.errorRate - right.errorRate)[0]?.part;
+	const available = hasRecordedSessionData(record);
+	const interval = {
+		min: roundToNearestFive(scaled - config.sem, 5, 495),
+		max: roundToNearestFive(scaled + config.sem, 5, 495),
+	};
+
+	return {
+		available,
+		type: record.type,
+		rawCorrect,
+		adjustedRawCorrect: Number(adjustedRawCorrect.toFixed(1)),
+		scaled,
+		interval,
+		cefr:
+			record.type === "L"
+				? getCefrLevelFromScores(scaled, 495, scaled + 495)
+				: getCefrLevelFromScores(495, scaled, 495 + scaled),
+		sem: config.sem,
+		bias: {
+			basicErrorRate,
+			advancedErrorRate,
+			anomalyGap,
+			penaltyRaw,
+		},
+		partStats,
+		strongestPart,
+		weakestPart,
+		unfinishedPenalty: record.type === "R" ? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0) : 0,
+	};
+}
+
+export function estimateToeicCombinedScore(
+	listeningRecord?: SessionRecord,
+	readingRecord?: SessionRecord
+): ToeicCombinedEstimate {
+	const listening = listeningRecord ? estimateToeicSessionScore(listeningRecord) : undefined;
+	const reading = readingRecord ? estimateToeicSessionScore(readingRecord) : undefined;
+	const available = Boolean(listening?.available && reading?.available);
+	const total = available ? (listening?.scaled ?? 0) + (reading?.scaled ?? 0) : 0;
+	const sem = roundToNearestFive(
+		Math.sqrt(
+			Math.pow(listening?.sem ?? 0, 2) + Math.pow(reading?.sem ?? 0, 2)
+		),
+		0,
+		100
+	);
+
+	return {
+		available,
+		listening,
+		reading,
+		total,
+		interval: {
+			min: roundToNearestFive(total - sem, 10, 990),
+			max: roundToNearestFive(total + sem, 10, 990),
+		},
+		cefr: available
+			? getCefrLevelFromScores(listening?.scaled ?? 0, reading?.scaled ?? 0, total)
+			: "Below A1",
+		rawCorrect: (listening?.rawCorrect ?? 0) + (reading?.rawCorrect ?? 0),
+		adjustedRawCorrect: Number(
+			((listening?.adjustedRawCorrect ?? 0) + (reading?.adjustedRawCorrect ?? 0)).toFixed(1)
+		),
+		totalMistakes:
+			(listening ? totalQuestionsFromEstimate(listening) - listening.rawCorrect : 0) +
+			(reading ? totalQuestionsFromEstimate(reading) - reading.rawCorrect : 0),
+		accuracy: available
+			? Number(((((listening?.rawCorrect ?? 0) + (reading?.rawCorrect ?? 0)) / 200) * 100).toFixed(1))
+			: 0,
+		sem,
+	};
+}
+
+function totalQuestionsFromEstimate(estimate: ToeicSectionEstimate) {
+	return estimate.type === "L" ? 100 : 100;
 }
 
 export function sumReadingLapTimes(record: SessionRecord) {

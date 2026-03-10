@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -11,7 +11,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Calculator, CircleGauge, Headphones, LibraryBig, Plus, Sigma, Trash2 } from 'lucide-react';
+import {
+  Calculator,
+  CircleGauge,
+  Headphones,
+  LibraryBig,
+  Plus,
+  Sigma,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,31 +32,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getCopy } from '@/lib/i18n';
+import { getCopy, translatePart } from '@/lib/i18n';
 import {
-  estimateToeicScaledScore,
-  getCorrectAnswers,
-  getIncorrectAnswers,
-  hasRecordedSessionData,
+  estimateToeicCombinedScore,
+  estimateToeicSessionScore,
   type SessionRecord,
+  type ToeicCefrLevel,
+  type ToeicCombinedEstimate,
+  type ToeicSectionEstimate,
 } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
 type ScoreMode = 'L' | 'R' | 'T';
 
-type SectionEstimate = {
-  available: boolean;
-  rawCorrect: number;
-  mistakes: number;
-  scaled: number;
-  accuracy: number;
-};
-
 type ScoreTrendPoint = {
   label: string;
   score?: number;
   rawCorrect?: number;
+  adjustedRaw?: number;
   active: boolean;
 };
 
@@ -60,6 +63,38 @@ type HistoricalTrendPoint = {
   fullDate: string;
   source: 'manual' | 'estimated';
   note?: string;
+};
+
+type PartBreakdownItem = {
+  label: string;
+  mistakes: number;
+  rate: number;
+  share: number;
+};
+
+type ActiveSummary = {
+  title: string;
+  score: number;
+  rawCorrect: number;
+  adjustedRawCorrect: number;
+  mistakes: number;
+  accuracy: number;
+  band: string;
+  interval: string;
+  cefr: string;
+  available: boolean;
+  chart: ScoreTrendPoint[];
+  color: string;
+  scaleLabel: string;
+  penaltyRaw: number;
+  insights: string[];
+  partBreakdown: PartBreakdownItem[];
+  breakdownCards: Array<{
+    label: string;
+    score: number;
+    interval: string;
+    cefr: string;
+  }>;
 };
 
 export function ScoreEstimatorPanel() {
@@ -80,7 +115,7 @@ export function ScoreEstimatorPanel() {
 
   const { estimateMap, listeningSessions, readingSessions, sessionMap } = useMemo(() => {
     const nextSessionMap = new Map(sessions.map((session) => [session.id, session]));
-    const nextEstimateMap = new Map(sessions.map((session) => [session.id, buildEstimate(session)]));
+    const nextEstimateMap = new Map(sessions.map((session) => [session.id, estimateToeicSessionScore(session)]));
 
     return {
       sessionMap: nextSessionMap,
@@ -97,47 +132,59 @@ export function ScoreEstimatorPanel() {
 
   const listeningEstimate = selectedListening ? estimateMap.get(selectedListening.id) : undefined;
   const readingEstimate = selectedReading ? estimateMap.get(selectedReading.id) : undefined;
-  const pairListeningEstimate = selectedPairListening ? estimateMap.get(selectedPairListening.id) : undefined;
-  const pairReadingEstimate = selectedPairReading ? estimateMap.get(selectedPairReading.id) : undefined;
+  const pairEstimate = useMemo(
+    () => estimateToeicCombinedScore(selectedPairListening, selectedPairReading),
+    [selectedPairListening, selectedPairReading]
+  );
 
-  const pairAvailable = Boolean(pairListeningEstimate?.available && pairReadingEstimate?.available);
-  const totalScore = pairAvailable ? (pairListeningEstimate?.scaled ?? 0) + (pairReadingEstimate?.scaled ?? 0) : 0;
+  const listeningTrend = useMemo(
+    () =>
+      listeningSessions.map((session) => {
+        const estimate = estimateMap.get(session.id);
+        return {
+          label: session.label,
+          score: estimate?.available ? estimate.scaled : undefined,
+          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
+          adjustedRaw: estimate?.available ? estimate.adjustedRawCorrect : undefined,
+          active: session.id === selectedListeningId,
+        };
+      }),
+    [estimateMap, listeningSessions, selectedListeningId]
+  );
 
-  const listeningTrend = useMemo(() => listeningSessions.map((session) => {
-    const estimate = estimateMap.get(session.id);
-    return {
-      label: session.label,
-      score: estimate?.available ? estimate.scaled : undefined,
-      rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
-      active: session.id === selectedListeningId,
-    };
-  }), [estimateMap, listeningSessions, selectedListeningId]);
+  const readingTrend = useMemo(
+    () =>
+      readingSessions.map((session) => {
+        const estimate = estimateMap.get(session.id);
+        return {
+          label: session.label,
+          score: estimate?.available ? estimate.scaled : undefined,
+          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
+          adjustedRaw: estimate?.available ? estimate.adjustedRawCorrect : undefined,
+          active: session.id === selectedReadingId,
+        };
+      }),
+    [estimateMap, readingSessions, selectedReadingId]
+  );
 
-  const readingTrend = useMemo(() => readingSessions.map((session) => {
-    const estimate = estimateMap.get(session.id);
-    return {
-      label: session.label,
-      score: estimate?.available ? estimate.scaled : undefined,
-      rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
-      active: session.id === selectedReadingId,
-    };
-  }), [estimateMap, readingSessions, selectedReadingId]);
+  const totalTrend = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, index) => {
+        const pair = `${index + 1}`;
+        const listening = sessionMap.get(`L${pair}`);
+        const reading = sessionMap.get(`R${pair}`);
+        const estimate = estimateToeicCombinedScore(listening, reading);
 
-  const totalTrend = useMemo(() => Array.from({ length: 10 }, (_, index) => {
-    const pair = `${index + 1}`;
-    const listening = sessionMap.get(`L${pair}`);
-    const reading = sessionMap.get(`R${pair}`);
-    const listeningProjection = listening ? estimateMap.get(listening.id) : undefined;
-    const readingProjection = reading ? estimateMap.get(reading.id) : undefined;
-    const available = Boolean(listeningProjection?.available && readingProjection?.available);
-
-    return {
-      label: `S${pair}`,
-      score: available ? (listeningProjection?.scaled ?? 0) + (readingProjection?.scaled ?? 0) : undefined,
-      rawCorrect: available ? (listeningProjection?.rawCorrect ?? 0) + (readingProjection?.rawCorrect ?? 0) : undefined,
-      active: selectedPair === pair,
-    };
-  }), [estimateMap, selectedPair, sessionMap]);
+        return {
+          label: `S${pair}`,
+          score: estimate.available ? estimate.total : undefined,
+          rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
+          adjustedRaw: estimate.available ? estimate.adjustedRawCorrect : undefined,
+          active: selectedPair === pair,
+        };
+      }),
+    [selectedPair, sessionMap]
+  );
 
   const historicalTrend = useMemo<HistoricalTrendPoint[]>(() => {
     return historicalScores.map((item) => ({
@@ -155,48 +202,58 @@ export function ScoreEstimatorPanel() {
   const latestHistorical = historicalScores[historicalScores.length - 1];
   const manualTotalPreview = safeNumber(historyListening) + safeNumber(historyReading);
 
-  const activeSummary =
-    mode === 'L'
-      ? selectedListening && listeningEstimate
-        ? {
-            title: `${copy.scoreListeningLabel} · ${selectedListening.label}`,
-            score: listeningEstimate.scaled,
-            rawCorrect: listeningEstimate.rawCorrect,
-            accuracy: listeningEstimate.accuracy,
-            mistakes: listeningEstimate.mistakes,
-            band: formatScoreBand(listeningEstimate.scaled),
-            available: listeningEstimate.available,
-            chart: listeningTrend,
-            color: '#f59e0b',
-          }
-        : null
-      : mode === 'R'
-        ? selectedReading && readingEstimate
-          ? {
-              title: `${copy.scoreReadingLabel} · ${selectedReading.label}`,
-              score: readingEstimate.scaled,
-              rawCorrect: readingEstimate.rawCorrect,
-              accuracy: readingEstimate.accuracy,
-              mistakes: readingEstimate.mistakes,
-              band: formatScoreBand(readingEstimate.scaled),
-              available: readingEstimate.available,
-              chart: readingTrend,
-              color: '#38bdf8',
-            }
-          : null
-        : selectedPairListening && selectedPairReading && pairListeningEstimate && pairReadingEstimate
-          ? {
-              title: `${selectedPairListening.label} + ${selectedPairReading.label}`,
-              score: totalScore,
-              rawCorrect: (pairListeningEstimate.rawCorrect ?? 0) + (pairReadingEstimate.rawCorrect ?? 0),
-              accuracy: Number((((pairListeningEstimate.rawCorrect + pairReadingEstimate.rawCorrect) / 200) * 100).toFixed(1)),
-              mistakes: (pairListeningEstimate.mistakes ?? 0) + (pairReadingEstimate.mistakes ?? 0),
-              band: formatScoreBand(totalScore),
-              available: pairAvailable,
-              chart: totalTrend,
-              color: '#f97316',
-            }
-          : null;
+  const activeSummary = useMemo<ActiveSummary | null>(() => {
+    if (mode === 'L' && selectedListening && listeningEstimate) {
+      return buildSectionSummary({
+        estimate: listeningEstimate,
+        locale,
+        title: `${copy.scoreListeningLabel} · ${selectedListening.label}`,
+        chart: listeningTrend,
+        color: '#f59e0b',
+        label: copy.scoreListeningLabel,
+      });
+    }
+
+    if (mode === 'R' && selectedReading && readingEstimate) {
+      return buildSectionSummary({
+        estimate: readingEstimate,
+        locale,
+        title: `${copy.scoreReadingLabel} · ${selectedReading.label}`,
+        chart: readingTrend,
+        color: '#38bdf8',
+        label: copy.scoreReadingLabel,
+      });
+    }
+
+    if (selectedPairListening && selectedPairReading) {
+      return buildTotalSummary({
+        estimate: pairEstimate,
+        locale,
+        title: `${selectedPairListening.label} + ${selectedPairReading.label}`,
+        chart: totalTrend,
+        color: '#f97316',
+        label: copy.scoreTotalLabel,
+      });
+    }
+
+    return null;
+  }, [
+    copy.scoreListeningLabel,
+    copy.scoreReadingLabel,
+    copy.scoreTotalLabel,
+    listeningEstimate,
+    listeningTrend,
+    locale,
+    mode,
+    pairEstimate,
+    readingEstimate,
+    readingTrend,
+    selectedListening,
+    selectedPairListening,
+    selectedPairReading,
+    selectedReading,
+    totalTrend,
+  ]);
 
   function handleAddHistoricalScore() {
     if (!historyDate) {
@@ -215,15 +272,15 @@ export function ScoreEstimatorPanel() {
   }
 
   function handleAutoAddEstimatedScore() {
-    if (!pairAvailable || !selectedPairListening || !selectedPairReading || !pairListeningEstimate || !pairReadingEstimate) {
+    if (!pairEstimate.available || !pairEstimate.listening || !pairEstimate.reading) {
       return;
     }
 
     addHistoricalScore({
       date: historyDate || getTodayDateLocal(),
-      listening: pairListeningEstimate.scaled,
-      reading: pairReadingEstimate.scaled,
-      total: totalScore,
+      listening: pairEstimate.listening.scaled,
+      reading: pairEstimate.reading.scaled,
+      total: pairEstimate.total,
       source: 'estimated',
       note: `${selectedPairListening.label} + ${selectedPairReading.label}`,
     });
@@ -231,7 +288,7 @@ export function ScoreEstimatorPanel() {
     setHistoryDate('');
   }
 
-  const canAutoRecordEstimate = mode === 'T' && pairAvailable;
+  const canAutoRecordEstimate = mode === 'T' && pairEstimate.available;
 
   return (
     <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 shadow-[0_24px_80px_-46px_rgba(15,23,42,0.22)] dark:border-white/10">
@@ -240,7 +297,9 @@ export function ScoreEstimatorPanel() {
           {copy.scoreEstimatorTitle}
         </CardTitle>
         <CardDescription className="max-w-3xl text-xs leading-6">
-          {copy.scoreEstimatorDescription}
+          {locale === 'zh'
+            ? '新版估分使用 Part 错题分布修正、非线性锚点插值和 SEM 区间，不再只按总正确数线性换算。'
+            : 'The estimator now uses part-distribution adjustment, nonlinear anchor interpolation, and SEM ranges instead of a simple raw-score line.'}
         </CardDescription>
       </CardHeader>
 
@@ -266,7 +325,11 @@ export function ScoreEstimatorPanel() {
                   <PairSelect value={selectedPair} onValueChange={setSelectedPair} placeholder={copy.scoreSelectPair} />
                 )}
               </div>
-              <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{copy.scoreEstimatorNote}</p>
+              <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                {locale === 'zh'
+                  ? '模型会优先识别基础层与高阶层错题是否失衡，并对异常分布做原始分惩罚。'
+                  : 'The model first checks whether foundational and advanced parts are imbalanced, then penalizes abnormal distributions in raw-score space.'}
+              </p>
             </div>
           </div>
 
@@ -280,7 +343,9 @@ export function ScoreEstimatorPanel() {
                   {locale === 'zh' ? '历史成绩录入' : 'Historical Scores'}
                 </div>
                 <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  {locale === 'zh' ? '补录模考、正式成绩，或把当前总分估算直接写入历史曲线。' : 'Add mock or official scores, or write the current total estimate directly into the history trend.'}
+                  {locale === 'zh'
+                    ? '补录模考、正式成绩，或把当前总分估算写入历史曲线。'
+                    : 'Add mock or official scores, or write the current projected total into the trend.'}
                 </div>
               </div>
             </div>
@@ -319,11 +384,11 @@ export function ScoreEstimatorPanel() {
               <div className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
                 {canAutoRecordEstimate
                   ? locale === 'zh'
-                    ? `将 ${selectedPairListening.label} + ${selectedPairReading.label} 的估分写入历史曲线，日期默认使用${historyDate ? '当前输入值' : '今天'}。`
+                    ? `将 ${selectedPairListening.label} + ${selectedPairReading.label} 的总分估算写入历史曲线，日期默认使用${historyDate ? '当前输入值' : '今天'}。`
                     : `Write the estimate from ${selectedPairListening.label} + ${selectedPairReading.label} into history. The date uses ${historyDate ? 'the current input' : 'today'} by default.`
                   : locale === 'zh'
-                    ? '自动录入仅在“总分估算”模式下可用，并且需要当前套次的听力与阅读都已有估分。'
-                    : 'Auto record is available only in Total mode after both listening and reading estimates exist for the selected pair.'}
+                    ? '自动录入仅在“总分估算”模式下可用，并且当前套次的听力与阅读都必须已有可用估分。'
+                    : 'Auto record is available only in Total mode after both listening and reading estimates are available for the selected pair.'}
               </div>
             </div>
           </div>
@@ -344,15 +409,19 @@ export function ScoreEstimatorPanel() {
                       {activeSummary.score}
                     </div>
                     <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                      {copy.scoreScaled}
+                      {activeSummary.scaleLabel}
                     </div>
                     <div className="deck-pill mb-2 text-[10px] tracking-[0.18em]">
                       {activeSummary.band}
                     </div>
+                    <div className="deck-pill mb-2 text-[10px] tracking-[0.18em]">
+                      CEFR {activeSummary.cefr}
+                    </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-5 grid gap-3 sm:grid-cols-4">
                     <ScoreMetric label={copy.scoreRawCorrect} value={`${activeSummary.rawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
+                    <ScoreMetric label={locale === 'zh' ? '修正原始分' : 'Adjusted Raw'} value={`${activeSummary.adjustedRawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
                     <ScoreMetric label={copy.scoreMistakes} value={`${activeSummary.mistakes}`} />
                     <ScoreMetric label={copy.scoreAccuracy} value={`${activeSummary.accuracy}%`} />
                   </div>
@@ -363,24 +432,35 @@ export function ScoreEstimatorPanel() {
                     <Calculator className="size-4.5" />
                   </div>
                   <div className="mt-4 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {locale === 'zh' ? '当前预测摘要' : 'Current Projection'}
+                    {locale === 'zh' ? '预测摘要' : 'Projection Snapshot'}
                   </div>
                   <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? '把当前练习结果转成更接近考试理解方式的分数视图。' : 'Translate the active practice result into a score view that reads more like the real exam.'}
+                    {locale === 'zh'
+                      ? '同时查看 CEFR、SEM 区间和错题分布惩罚，避免把偶然对题当成稳定能力。'
+                      : 'View CEFR, SEM range, and distribution penalty together so lucky hits are not mistaken for stable ability.'}
                   </p>
                   <div className="mt-4 grid gap-3">
-                    <ScoreMetric label={locale === 'zh' ? '当前模式' : 'Current Mode'} value={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel} />
-                    <ScoreMetric label={locale === 'zh' ? '预测区间' : 'Projected Band'} value={activeSummary.band} />
-                    <ScoreMetric label={locale === 'zh' ? '最近历史' : 'Latest History'} value={latestHistorical ? `${latestHistorical.total}` : '--'} />
+                    <ScoreMetric label={locale === 'zh' ? '预测区间' : 'SEM Range'} value={activeSummary.interval} compact />
+                    <ScoreMetric label={locale === 'zh' ? '分布惩罚' : 'Distribution Penalty'} value={`-${activeSummary.penaltyRaw}`} compact />
+                    <ScoreMetric label={locale === 'zh' ? '最近历史' : 'Latest History'} value={latestHistorical ? `${latestHistorical.total}` : '--'} compact />
                   </div>
                 </div>
               </div>
 
-              <ProjectionTrendChart
-                data={activeSummary.chart}
-                lineColor={activeSummary.color}
-                lineLabel={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
-              />
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <InsightCard locale={locale} insights={activeSummary.insights} />
+                <BreakdownCard locale={locale} title={locale === 'zh' ? '分项映射' : 'Section Mapping'} items={activeSummary.breakdownCards} />
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <ProjectionTrendChart
+                  data={activeSummary.chart}
+                  lineColor={activeSummary.color}
+                  lineLabel={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
+                  locale={locale}
+                />
+                <PartBreakdownCard locale={locale} items={activeSummary.partBreakdown} />
+              </div>
             </>
           )}
 
@@ -441,26 +521,230 @@ export function ScoreEstimatorPanel() {
   );
 }
 
-function buildEstimate(session: SessionRecord): SectionEstimate {
-  const rawCorrect = getCorrectAnswers(session);
-  const mistakes = getIncorrectAnswers(session);
-  const scaled = estimateToeicScaledScore(rawCorrect, session.type);
-  const accuracy = Number(((rawCorrect / 100) * 100).toFixed(1));
-  const hasMistakeEntries = Object.keys(session.mistakes).length > 0;
-  const hasEffectiveData = hasRecordedSessionData(session) && (
-    mistakes > 0 ||
-    hasMistakeEntries ||
-    Boolean(session.timerSummary) ||
-    session.reasons.length > 0
-  );
+function buildSectionSummary({
+  estimate,
+  locale,
+  title,
+  chart,
+  color,
+  label,
+}: {
+  estimate: ToeicSectionEstimate;
+  locale: 'zh' | 'en';
+  title: string;
+  chart: ScoreTrendPoint[];
+  color: string;
+  label: string;
+}): ActiveSummary {
+  return {
+    title,
+    score: estimate.scaled,
+    rawCorrect: estimate.rawCorrect,
+    adjustedRawCorrect: estimate.adjustedRawCorrect,
+    mistakes: 100 - estimate.rawCorrect,
+    accuracy: Number(((estimate.rawCorrect / 100) * 100).toFixed(1)),
+    band: formatScoreBand(estimate.scaled),
+    interval: formatInterval(estimate.interval.min, estimate.interval.max),
+    cefr: formatCefr(estimate.cefr),
+    available: estimate.available,
+    chart,
+    color,
+    scaleLabel: label,
+    penaltyRaw: estimate.bias.penaltyRaw,
+    insights: buildSectionInsights(estimate, locale),
+    partBreakdown: estimate.partStats.slice(0, 4).map((item) => ({
+      label: translatePart(locale, item.part),
+      mistakes: item.mistakes,
+      rate: item.errorRate,
+      share: item.shareOfLoss,
+    })),
+    breakdownCards: [
+      {
+        label,
+        score: estimate.scaled,
+        interval: formatInterval(estimate.interval.min, estimate.interval.max),
+        cefr: formatCefr(estimate.cefr),
+      },
+    ],
+  };
+}
+
+function buildTotalSummary({
+  estimate,
+  locale,
+  title,
+  chart,
+  color,
+  label,
+}: {
+  estimate: ToeicCombinedEstimate;
+  locale: 'zh' | 'en';
+  title: string;
+  chart: ScoreTrendPoint[];
+  color: string;
+  label: string;
+}): ActiveSummary {
+  const partBreakdown = [
+    ...(estimate.listening?.partStats ?? []).map((item) => ({
+      label: `${locale === 'zh' ? '听力' : 'L'} · ${translatePart(locale, item.part)}`,
+      mistakes: item.mistakes,
+      rate: item.errorRate,
+      share: item.shareOfLoss,
+    })),
+    ...(estimate.reading?.partStats ?? []).map((item) => ({
+      label: `${locale === 'zh' ? '阅读' : 'R'} · ${translatePart(locale, item.part)}`,
+      mistakes: item.mistakes,
+      rate: item.errorRate,
+      share: item.shareOfLoss,
+    })),
+  ]
+    .sort((left, right) => right.rate - left.rate)
+    .slice(0, 5);
 
   return {
-    available: hasEffectiveData,
-    rawCorrect,
-    mistakes,
-    scaled,
-    accuracy,
+    title,
+    score: estimate.total,
+    rawCorrect: estimate.rawCorrect,
+    adjustedRawCorrect: estimate.adjustedRawCorrect,
+    mistakes: estimate.totalMistakes,
+    accuracy: estimate.accuracy,
+    band: formatScoreBand(estimate.total),
+    interval: formatInterval(estimate.interval.min, estimate.interval.max),
+    cefr: formatCefr(estimate.cefr),
+    available: estimate.available,
+    chart,
+    color,
+    scaleLabel: label,
+    penaltyRaw: Number(
+      (((estimate.listening?.bias.penaltyRaw ?? 0) + (estimate.reading?.bias.penaltyRaw ?? 0)).toFixed(1))
+    ),
+    insights: buildTotalInsights(estimate, locale),
+    partBreakdown,
+    breakdownCards: [
+      {
+        label: locale === 'zh' ? '听力' : 'Listening',
+        score: estimate.listening?.scaled ?? 0,
+        interval: estimate.listening ? formatInterval(estimate.listening.interval.min, estimate.listening.interval.max) : '--',
+        cefr: estimate.listening ? formatCefr(estimate.listening.cefr) : '--',
+      },
+      {
+        label: locale === 'zh' ? '阅读' : 'Reading',
+        score: estimate.reading?.scaled ?? 0,
+        interval: estimate.reading ? formatInterval(estimate.reading.interval.min, estimate.reading.interval.max) : '--',
+        cefr: estimate.reading ? formatCefr(estimate.reading.cefr) : '--',
+      },
+      {
+        label: locale === 'zh' ? '总分' : 'Total',
+        score: estimate.total,
+        interval: formatInterval(estimate.interval.min, estimate.interval.max),
+        cefr: formatCefr(estimate.cefr),
+      },
+    ],
   };
+}
+
+function buildSectionInsights(estimate: ToeicSectionEstimate, locale: 'zh' | 'en') {
+  const insights: string[] = [];
+
+  if (estimate.bias.penaltyRaw >= 1) {
+    insights.push(
+      locale === 'zh'
+        ? `基础层错题率 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 明显高于高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%，模型下调 ${estimate.bias.penaltyRaw} 个原始分以压缩水分。`
+        : `Foundational-part error rate ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% is materially higher than the advanced-layer ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%, so the model subtracts ${estimate.bias.penaltyRaw} raw points.`
+    );
+  } else {
+    insights.push(
+      locale === 'zh'
+        ? `错题分布基本正常，基础层 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 与高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% 的失衡不明显。`
+        : `The error distribution looks normal. The gap between foundational ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% and advanced ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% layers is limited.`
+    );
+  }
+
+  if (estimate.weakestPart) {
+    insights.push(getPartWeaknessNarrative(estimate.weakestPart, locale));
+  }
+
+  if (estimate.type === 'R' && estimate.unfinishedPenalty > 0) {
+    insights.push(
+      locale === 'zh'
+        ? `检测到 ${estimate.unfinishedPenalty} 道未完成题，系统按 Part 7 Multiple → Part 7 Single → Part 6 → Part 5 的顺序并入失分。`
+        : `${estimate.unfinishedPenalty} unfinished reading items were detected and assigned in the order Part 7 Multiple → Part 7 Single → Part 6 → Part 5.`
+    );
+  }
+
+  return insights.slice(0, 3);
+}
+
+function buildTotalInsights(estimate: ToeicCombinedEstimate, locale: 'zh' | 'en') {
+  const insights: string[] = [];
+
+  if (estimate.listening && estimate.reading) {
+    insights.push(
+      locale === 'zh'
+        ? `听力 ${estimate.listening.scaled} / 阅读 ${estimate.reading.scaled}，按木桶原则综合评级为 ${formatCefr(estimate.cefr)}。`
+        : `Listening ${estimate.listening.scaled} / Reading ${estimate.reading.scaled}; the combined CEFR settles at ${formatCefr(estimate.cefr)} under the weaker-side rule.`
+    );
+
+    const weaker = estimate.listening.scaled >= estimate.reading.scaled ? 'reading' : 'listening';
+    insights.push(
+      locale === 'zh'
+        ? weaker === 'reading'
+          ? '当前总分的主要拖累来自阅读侧，尤其要关注长文本与跨文本整合效率。'
+          : '当前总分的主要拖累来自听力侧，尤其要关注对话追踪与说明文信息保持。'
+        : weaker === 'reading'
+          ? 'Reading is the current cap on the total score, especially long-form and cross-text integration.'
+          : 'Listening is the current cap on the total score, especially conversation tracking and talk retention.'
+    );
+  }
+
+  if (estimate.sem > 0) {
+    insights.push(
+      locale === 'zh'
+        ? `总分采用约 ±${estimate.sem} 分的测量误差带，因此应把 ${formatInterval(estimate.interval.min, estimate.interval.max)} 视为更稳妥的预测区间。`
+        : `The combined estimate uses an SEM band of about ±${estimate.sem}, so ${formatInterval(estimate.interval.min, estimate.interval.max)} is the more stable range to read.`
+    );
+  }
+
+  return insights.slice(0, 3);
+}
+
+function getPartWeaknessNarrative(part: ToeicSectionEstimate['weakestPart'], locale: 'zh' | 'en') {
+  switch (part) {
+    case 'Part 1':
+      return locale === 'zh'
+        ? 'Part 1 为最弱点，说明具象词汇和动作状态的基础听辨还不稳。'
+        : 'Part 1 is the weakest area, pointing to instability in concrete vocabulary and action-state listening.';
+    case 'Part 2':
+      return locale === 'zh'
+        ? 'Part 2 为最弱点，说明功能句型识别和瞬时反应速度仍是瓶颈。'
+        : 'Part 2 is the weakest area, suggesting a bottleneck in functional expressions and rapid response mapping.';
+    case 'Part 3':
+      return locale === 'zh'
+        ? 'Part 3 为最弱点，说明多方对话追踪和隐含意图判断还不够稳定。'
+        : 'Part 3 is the weakest area, indicating instability in multi-speaker tracking and implied-meaning judgment.';
+    case 'Part 4':
+      return locale === 'zh'
+        ? 'Part 4 为最弱点，说明长段独白的信息保持、结构提取和细节回收能力不足。'
+        : 'Part 4 is the weakest area, indicating weaker retention and structure extraction in longer talks.';
+    case 'Part 5':
+      return locale === 'zh'
+        ? 'Part 5 为最弱点，底层词汇语法还不够稳，后续长文分数会被一起拖累。'
+        : 'Part 5 is the weakest area, so vocabulary and grammar foundations are likely dragging later reading performance.';
+    case 'Part 6':
+      return locale === 'zh'
+        ? 'Part 6 为最弱点，篇章衔接和句子嵌入判断是当前短板。'
+        : 'Part 6 is the weakest area, so discourse cohesion and sentence insertion remain the short board.';
+    case 'Part 7 Single':
+      return locale === 'zh'
+        ? 'Part 7 单篇为最弱点，长文本扫读定位和细节回收效率不足。'
+        : 'Part 7 Single is the weakest area, pointing to slower long-passage scanning and detail retrieval.';
+    case 'Part 7 Multiple':
+      return locale === 'zh'
+        ? 'Part 7 多篇为最弱点，跨文本信息连接与深层推断是目前最主要的失分源。'
+        : 'Part 7 Multiple is the weakest area, making cross-text integration and deeper inference the main loss source.';
+    default:
+      return locale === 'zh' ? '当前错题分布已生成，但仍需要更多样本来稳定诊断。' : 'The distribution is available, but more samples would stabilize the diagnosis.';
+  }
 }
 
 function SessionSelect({
@@ -510,8 +794,17 @@ function PairSelect({ value, onValueChange, placeholder }: { value: string; onVa
   );
 }
 
-const ProjectionTrendChart = memo(function ProjectionTrendChart({ data, lineColor, lineLabel }: { data: ScoreTrendPoint[]; lineColor: string; lineLabel: string }) {
-  const locale = useStore((state) => state.locale);
+const ProjectionTrendChart = memo(function ProjectionTrendChart({
+  data,
+  lineColor,
+  lineLabel,
+  locale,
+}: {
+  data: ScoreTrendPoint[];
+  lineColor: string;
+  lineLabel: string;
+  locale: 'zh' | 'en';
+}) {
   const availablePoints = data.filter((point) => point.score !== undefined);
   const latest = availablePoints[availablePoints.length - 1];
   const best = [...availablePoints].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
@@ -528,7 +821,7 @@ const ProjectionTrendChart = memo(function ProjectionTrendChart({ data, lineColo
             {locale === 'zh' ? '估分走势' : 'Projection Trend'}
           </div>
           <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {locale === 'zh' ? '观察当前训练结果在各套次中的分数变化。' : 'Track how projected scores move across the sprint sets.'}
+            {locale === 'zh' ? '按套次查看非线性估分如何变化。' : 'See how the nonlinear score estimate moves across sets.'}
           </div>
         </div>
 
@@ -559,7 +852,11 @@ const ProjectionTrendChart = memo(function ProjectionTrendChart({ data, lineColo
               }}
               formatter={(value: number, _name, item) => [
                 `${Number(value)} ${lineLabel}`,
-                item?.payload?.rawCorrect !== undefined ? `Raw ${item.payload.rawCorrect}` : lineLabel,
+                item?.payload?.adjustedRaw !== undefined
+                  ? locale === 'zh'
+                    ? `修正原始分 ${item.payload.adjustedRaw}`
+                    : `Adjusted raw ${item.payload.adjustedRaw}`
+                  : lineLabel,
               ]}
             />
             <Line
@@ -656,6 +953,102 @@ const HistoricalScoreChart = memo(function HistoricalScoreChart({ data, locale }
   );
 });
 
+function InsightCard({ locale, insights }: { locale: 'zh' | 'en'; insights: string[] }) {
+  return (
+    <div className="deck-surface p-5">
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-2xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950">
+          <Sparkles className="size-4" />
+        </div>
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? '诊断摘要' : 'Diagnostic Summary'}
+          </div>
+          <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? '按错题分布解释这次估分为什么会落在当前区间。' : 'Explain why this estimate lands in the current band based on the error distribution.'}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {insights.map((item, index) => (
+          <div key={`${item}-${index}`} className="deck-surface-soft rounded-[20px] p-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BreakdownCard({
+  locale,
+  title,
+  items,
+}: {
+  locale: 'zh' | 'en';
+  title: string;
+  items: ActiveSummary['breakdownCards'];
+}) {
+  return (
+    <div className="deck-surface-strong rounded-[28px] p-5">
+      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{title}</div>
+      <div className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+        {locale === 'zh' ? '单项与总分分别保留独立的等值化区间。' : 'Each section keeps its own equated range before rolling into the total.'}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <div key={`${item.label}-${item.score}`} className="deck-surface-soft rounded-[20px] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{item.label}</div>
+                <div className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">{item.score}</div>
+              </div>
+              <div className="deck-pill text-[10px] tracking-[0.18em]">CEFR {item.cefr}</div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <ScoreMetric label={locale === 'zh' ? '区间' : 'Range'} value={item.interval} compact />
+              <ScoreMetric label="CEFR" value={item.cefr} compact />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PartBreakdownCard({ locale, items }: { locale: 'zh' | 'en'; items: PartBreakdownItem[] }) {
+  return (
+    <div className="deck-surface-strong rounded-[28px] p-5">
+      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+        {locale === 'zh' ? '错题分布' : 'Loss Distribution'}
+      </div>
+      <div className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+        {locale === 'zh' ? '按错误率排序，帮助定位真正拉低能力估计的 Part。' : 'Sorted by error rate to show which parts are actually pulling the ability estimate down.'}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <div key={item.label} className="deck-surface-soft rounded-[20px] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-zinc-950 dark:text-zinc-50">{item.label}</div>
+              <div className="font-mono text-sm text-zinc-500 dark:text-zinc-400">{(item.rate * 100).toFixed(1)}%</div>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200/70 dark:bg-zinc-800/80">
+              <div className="bg-linear-to-r h-full rounded-full from-amber-400 via-orange-400 to-sky-400" style={{ width: `${Math.max(item.rate * 100, 4)}%` }} />
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span>{locale === 'zh' ? `失分 ${item.mistakes}` : `Loss ${item.mistakes}`}</span>
+              <span>{locale === 'zh' ? `占本组失分 ${(item.share * 100).toFixed(1)}%` : `${(item.share * 100).toFixed(1)}% of this section's loss`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EstimatePlaceholder() {
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
@@ -669,13 +1062,15 @@ function EstimatePlaceholder() {
         {copy.scoreUnavailable}
       </div>
       <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-        {copy.scoreUnavailableBody}
+        {locale === 'zh'
+          ? '先完成一次计时或至少保存按 Part 的错题数据，模型才会输出有效的区间与诊断。'
+          : 'Finish a timed run or save part-level mistake data first for a meaningful estimate, range, and diagnosis.'}
       </p>
     </div>
   );
 }
 
-function ModeButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
+function ModeButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -711,6 +1106,14 @@ function formatScoreBand(score: number) {
   if (score >= 600) return '600-695';
   if (score >= 500) return '500-595';
   return '<500';
+}
+
+function formatInterval(min: number, max: number) {
+  return `${min}-${max}`;
+}
+
+function formatCefr(level: ToeicCefrLevel) {
+  return level === 'Below A1' ? '<A1' : level;
 }
 
 function formatShortDate(value: string, locale: 'zh' | 'en') {
