@@ -19,7 +19,7 @@ import { UnfinishedTrackerPanel } from '@/components/UnfinishedTrackerPanel';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatHotspot, formatSessionTitle, formatWorstPart, getCopy, translateStatus } from '@/lib/i18n';
-import { sumMistakes } from '@/lib/toeic';
+import { getIncorrectAnswers } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
@@ -65,11 +65,13 @@ export default function Home() {
     else if (session.status === 'in-progress') liveCount++;
     if (session.timerSummary?.timedOut) overtimeCount++;
 
-    totalMistakeLoad += sumMistakes(session);
+    totalMistakeLoad += getIncorrectAnswers(session);
 
-    const unfinished = session.timerSummary?.unfinishedQuestions ?? 0;
-    unfinishedTotal += unfinished;
-    if (unfinished > 0) unfinishedSessionsCount++;
+    if (session.type === 'R') {
+      const unfinished = session.timerSummary?.unfinishedQuestions ?? 0;
+      unfinishedTotal += unfinished;
+      if (unfinished > 0) unfinishedSessionsCount++;
+    }
   }
 
   const completionPct = sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0;

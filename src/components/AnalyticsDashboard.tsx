@@ -23,11 +23,11 @@ import {
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  getIncorrectAnswers,
   getPartsForType,
   LISTENING_PARTS,
   PART_QUESTION_COUNTS,
   READING_PARTS,
-  sumMistakes,
 } from '@/lib/toeic';
 import { useStore } from '@/store/useStore';
 import { getCopy, translatePart, translateReason } from '@/lib/i18n';
@@ -47,8 +47,8 @@ export function AnalyticsDashboard() {
 
       return {
         set: `S${setNumber}`,
-        Listening: listening && listening.status !== 'not-started' ? sumMistakes(listening) : undefined,
-        Reading: reading && reading.status !== 'not-started' ? sumMistakes(reading) : undefined,
+        Listening: listening && listening.status !== 'not-started' ? getIncorrectAnswers(listening) : undefined,
+        Reading: reading && reading.status !== 'not-started' ? getIncorrectAnswers(reading) : undefined,
       };
     });
 

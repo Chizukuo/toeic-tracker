@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getCopy, translateStatus } from '@/lib/i18n';
-import { sumMistakes } from '@/lib/toeic';
+import { getIncorrectAnswers } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
@@ -63,7 +63,7 @@ export function SprintDashboard() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
             {sessions.map((session) => {
               const isActive = session.id === activeSessionId;
-              const mistakes = sumMistakes(session);
+              const mistakes = getIncorrectAnswers(session);
               const hasMistakes = mistakes > 0 && session.status !== 'not-started';
 
               const baseCls =
@@ -121,7 +121,7 @@ export function SprintDashboard() {
                       </div>
                     ) : (
                       <div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-50">
-                          {locale === 'zh' ? '无错题' : 'No misses'}
+                          {locale === 'zh' ? '无失分' : 'No loss'}
                       </div>
                     )}
                   </div>

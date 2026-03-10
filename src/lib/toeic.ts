@@ -235,8 +235,24 @@ export function getCorrectAnswers(record: SessionRecord) {
 		(sum, part) => sum + (record.mistakes[part] ?? 0),
 		0
 	);
+	const unfinishedPenalty = getUnfinishedPenalty(record);
 
-	return Math.min(totalQuestions, Math.max(totalQuestions - mistakeCount, 0));
+	return Math.min(totalQuestions, Math.max(totalQuestions - mistakeCount - unfinishedPenalty, 0));
+}
+
+export function getUnfinishedPenalty(record: SessionRecord) {
+	if (record.type !== "R") {
+		return 0;
+	}
+
+	return Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
+}
+
+export function getIncorrectAnswers(record: SessionRecord) {
+	const totalQuestions = getQuestionCountForType(record.type);
+	const rawCorrect = getCorrectAnswers(record);
+
+	return Math.max(totalQuestions - rawCorrect, 0);
 }
 
 export function hasRecordedSessionData(record: SessionRecord) {

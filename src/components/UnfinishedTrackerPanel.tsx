@@ -31,7 +31,9 @@ export function UnfinishedTrackerPanel() {
   const { sessions, activeSessionId, locale, selectSession } = useStore();
   const copy = getCopy(locale);
 
-  const chartData: UnfinishedPoint[] = sessions.map((session) => ({
+  const readingSessions = sessions.filter((session) => session.type === 'R');
+
+  const chartData: UnfinishedPoint[] = readingSessions.map((session) => ({
     id: session.id,
     label: session.label,
     count: session.timerSummary?.unfinishedQuestions ?? 0,
@@ -53,7 +55,7 @@ export function UnfinishedTrackerPanel() {
   const unfinishedSessions = chartData.filter((session) => session.hasBacklog);
   const totalUnfinished = unfinishedSessions.reduce((sum, session) => sum + session.count, 0);
   const currentUnfinished = chartData.find((session) => session.id === activeSessionId)?.count ?? 0;
-  const latestUnfinished = [...sessions]
+  const latestUnfinished = [...readingSessions]
     .filter((session) => (session.timerSummary?.unfinishedQuestions ?? 0) > 0)
     .sort(
       (a, b) =>

@@ -27,8 +27,8 @@ import { getCopy } from '@/lib/i18n';
 import {
   estimateToeicScaledScore,
   getCorrectAnswers,
+  getIncorrectAnswers,
   hasRecordedSessionData,
-  sumMistakes,
   type SessionRecord,
 } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
@@ -437,7 +437,7 @@ export function ScoreEstimatorPanel() {
 
 function buildEstimate(session: SessionRecord): SectionEstimate {
   const rawCorrect = getCorrectAnswers(session);
-  const mistakes = sumMistakes(session);
+  const mistakes = getIncorrectAnswers(session);
   const scaled = estimateToeicScaledScore(rawCorrect, session.type);
   const accuracy = Number(((rawCorrect / 100) * 100).toFixed(1));
   const hasMistakeEntries = Object.keys(session.mistakes).length > 0;
@@ -564,14 +564,16 @@ function ProjectionTrendChart({ data, lineColor, lineLabel }: { data: ScoreTrend
               strokeWidth={2.5}
               connectNulls
               dot={(props) => {
-                const { cx, cy, payload } = props;
+                const { cx, cy, payload, index } = props;
+                const dotKey = `projection-dot-${payload?.label ?? index ?? 'empty'}`;
 
                 if (cx === undefined || cy === undefined || !payload || payload.score === undefined) {
-                  return <g />;
+                  return <g key={dotKey} />;
                 }
 
                 return (
                   <circle
+                    key={dotKey}
                     cx={cx}
                     cy={cy}
                     r={payload.active ? 5.5 : 3.5}
