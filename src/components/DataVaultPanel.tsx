@@ -185,7 +185,10 @@ export function DataVaultPanel() {
 			</Card>
 
 			<Dialog open={resetOpen} onOpenChange={setResetOpen}>
-				<DialogContent showCloseButton={false} className="deck-card max-w-lg border border-white/65 bg-white/92 p-0 dark:border-white/10 dark:bg-zinc-950/92">
+				<DialogContent
+        showCloseButton={false}
+        className="max-w-lg border border-white/65 bg-white/92 p-0 dark:border-white/10 dark:bg-zinc-950/92 rounded-[32px] shadow-[0_24px_90px_-50px_rgba(15,23,42,0.3)] overflow-visible"
+      >
 					<DialogHeader className="px-6 pt-6">
 						<div className="mb-3 flex size-10 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
 							<ShieldAlert className="size-5" />
@@ -197,7 +200,7 @@ export function DataVaultPanel() {
 							{copy.resetDialogBody}
 						</DialogDescription>
 					</DialogHeader>
-					<DialogFooter className="rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04]">
+					<DialogFooter className="!mx-0 !mb-0 rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04]">
 						<Button variant="outline" onClick={() => setResetOpen(false)}>
 							{copy.cancelAction}
 						</Button>
