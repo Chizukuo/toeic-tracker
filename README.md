@@ -57,17 +57,17 @@ npx serve out
 
 ### 4. 代码检查
 
-```bash
-npm run lint
-```
 
-## NPM Scripts
+### 5. PEASEA 估分算法说明
 
-- `npm run dev`: 启动本地开发服务器
+- 输入维度为 8 个 Part 的错题向量：Part 1、Part 2、Part 3、Part 4、Part 5、Part 6、Part 7 Single、Part 7 Multiple。
+- 阅读未完成题会按 Part 7 Multiple → Part 7 Single → Part 6 → Part 5 的顺序并入失分，用来近似真实考场中的时间崩盘影响。
+- 算法先计算基础层与高阶层的错题率差值，若出现“基础题错很多、高难题反而对很多”的异常答题模式，则按 PEASEA 的分布惩罚函数下调原始分。
+- 修正后的原始分不会直接线性换算，而是通过非线性锚点矩阵做分段插值，分别得到听力和阅读的标准分估计。
+- 最终输出包括听力分、阅读分、总分、SEM 区间、CEFR 等级，以及基于薄弱 Part 的简要诊断信息。
+
+### 6. 数据保险箱（Data Vault）
 - `npm run build`: 生成静态导出（`out` 目录）
-- `npm run lint`: 运行 ESLint
-
-## 部署到 Cloudflare Pages
 
 ### 1. 连接仓库
 
@@ -125,7 +125,15 @@ npm run lint
 - 未完成题队列可视化
 - 三维估分面板（听力/阅读/总分）
 
-### 5. 数据保险箱（Data Vault）
+### 5. PEASEA 估分算法说明
+
+- 输入为 8 个 Part 的错题向量：Part 1、Part 2、Part 3、Part 4、Part 5、Part 6、Part 7 Single、Part 7 Multiple。
+- 阅读未完成题会按 Part 7 Multiple → Part 7 Single → Part 6 → Part 5 的顺序并入失分，用来近似真实考场中的时间管理失误。
+- 算法会比较基础层与高阶层错题率；若出现异常答题模式，会先对原始分施加 PEASEA 分布惩罚。
+- 修正后的原始分再通过非线性锚点矩阵做分段插值，分别估算听力和阅读标准分。
+- 输出结果包含听力、阅读、总分、SEM 区间、CEFR 等级，以及基于薄弱 Part 的简要诊断。
+
+### 6. 数据保险箱（Data Vault）
 
 - JSON 格式快照导出
 - 快照导入与恢复

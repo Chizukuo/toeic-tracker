@@ -297,9 +297,7 @@ export function ScoreEstimatorPanel() {
           {copy.scoreEstimatorTitle}
         </CardTitle>
         <CardDescription className="max-w-3xl text-xs leading-6">
-          {locale === 'zh'
-            ? '新版估分使用 Part 错题分布修正、非线性锚点插值和 SEM 区间，不再只按总正确数线性换算。'
-            : 'The estimator now uses part-distribution adjustment, nonlinear anchor interpolation, and SEM ranges instead of a simple raw-score line.'}
+          {locale === 'zh' ? 'PEASEA 估分' : 'PEASEA Estimator'}
         </CardDescription>
       </CardHeader>
 
@@ -649,14 +647,14 @@ function buildSectionInsights(estimate: ToeicSectionEstimate, locale: 'zh' | 'en
   if (estimate.bias.penaltyRaw >= 1) {
     insights.push(
       locale === 'zh'
-        ? `基础层错题率 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 明显高于高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%，模型下调 ${estimate.bias.penaltyRaw} 个原始分以压缩水分。`
-        : `Foundational-part error rate ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% is materially higher than the advanced-layer ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%, so the model subtracts ${estimate.bias.penaltyRaw} raw points.`
+        ? `检测到异常答题模式：基础层错题率 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 明显高于高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%。模型按 Δ = α × min(0, Padv - Pbasic) × 100 计算，并以 α=${estimate.bias.alpha.toFixed(2)} 下调 ${estimate.bias.penaltyRaw} 个原始分。`
+        : `An aberrant response pattern was detected: foundational-part error rate ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% is materially higher than the advanced layer ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}%. The model applies Δ = α × min(0, Padv - Pbasic) × 100 with α=${estimate.bias.alpha.toFixed(2)}, reducing the raw score by ${estimate.bias.penaltyRaw}.`
     );
   } else {
     insights.push(
       locale === 'zh'
-        ? `错题分布基本正常，基础层 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 与高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% 的失衡不明显。`
-        : `The error distribution looks normal. The gap between foundational ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% and advanced ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% layers is limited.`
+        ? `错题分布基本正常，基础层 ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% 与高阶层 ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% 的失衡不明显，因此未触发异常分布惩罚。`
+        : `The error distribution looks normal. The gap between foundational ${(estimate.bias.basicErrorRate * 100).toFixed(1)}% and advanced ${(estimate.bias.advancedErrorRate * 100).toFixed(1)}% layers is limited, so no aberrant-distribution penalty is applied.`
     );
   }
 
@@ -681,8 +679,8 @@ function buildTotalInsights(estimate: ToeicCombinedEstimate, locale: 'zh' | 'en'
   if (estimate.listening && estimate.reading) {
     insights.push(
       locale === 'zh'
-        ? `听力 ${estimate.listening.scaled} / 阅读 ${estimate.reading.scaled}，按木桶原则综合评级为 ${formatCefr(estimate.cefr)}。`
-        : `Listening ${estimate.listening.scaled} / Reading ${estimate.reading.scaled}; the combined CEFR settles at ${formatCefr(estimate.cefr)} under the weaker-side rule.`
+        ? `听力 ${estimate.listening.scaled} / 阅读 ${estimate.reading.scaled}；单项 CEFR 分别为 ${formatCefr(estimate.listening.cefr)} 和 ${formatCefr(estimate.reading.cefr)}，综合评级再按木桶原则收敛到 ${formatCefr(estimate.cefr)}。`
+        : `Listening ${estimate.listening.scaled} / Reading ${estimate.reading.scaled}; section CEFR bands are ${formatCefr(estimate.listening.cefr)} and ${formatCefr(estimate.reading.cefr)}, then the overall rating collapses to ${formatCefr(estimate.cefr)} under the bucket rule.`
     );
 
     const weaker = estimate.listening.scaled >= estimate.reading.scaled ? 'reading' : 'listening';

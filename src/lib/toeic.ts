@@ -55,10 +55,13 @@ type SectionPartStat<TPart extends MistakeKey> = {
 };
 
 type SectionBiasProfile = {
+	alpha: number;
 	basicErrorRate: number;
 	advancedErrorRate: number;
 	anomalyGap: number;
+	deltaRaw: number;
 	penaltyRaw: number;
+	anomalyDetected: boolean;
 };
 
 export type ToeicSectionEstimate = {
@@ -75,6 +78,7 @@ export type ToeicSectionEstimate = {
 	strongestPart?: MistakeKey;
 	weakestPart?: MistakeKey;
 	unfinishedPenalty: number;
+	responsePattern: "normal" | "aberrant";
 };
 
 export type ToeicCombinedEstimate = {
@@ -139,52 +143,15 @@ export const PART_QUESTION_COUNTS: Record<MistakeKey, number> = {
 	"Part 7 Multiple": 25,
 };
 
-const LISTENING_SCORE_CHECKPOINTS: ScoreCheckpoint[] = [
-	{ raw: 0, scaled: 5 },
-	{ raw: 5, scaled: 25 },
-	{ raw: 10, scaled: 50 },
-	{ raw: 15, scaled: 75 },
-	{ raw: 20, scaled: 105 },
-	{ raw: 25, scaled: 135 },
-	{ raw: 30, scaled: 170 },
-	{ raw: 35, scaled: 205 },
-	{ raw: 40, scaled: 240 },
-	{ raw: 45, scaled: 270 },
-	{ raw: 50, scaled: 300 },
-	{ raw: 55, scaled: 330 },
-	{ raw: 60, scaled: 355 },
-	{ raw: 65, scaled: 380 },
-	{ raw: 70, scaled: 405 },
-	{ raw: 75, scaled: 425 },
-	{ raw: 80, scaled: 445 },
-	{ raw: 85, scaled: 460 },
-	{ raw: 90, scaled: 475 },
-	{ raw: 95, scaled: 490 },
-	{ raw: 100, scaled: 495 },
-];
-
-const READING_SCORE_CHECKPOINTS: ScoreCheckpoint[] = [
-	{ raw: 0, scaled: 5 },
-	{ raw: 5, scaled: 15 },
-	{ raw: 10, scaled: 35 },
-	{ raw: 15, scaled: 55 },
-	{ raw: 20, scaled: 80 },
-	{ raw: 25, scaled: 110 },
-	{ raw: 30, scaled: 140 },
-	{ raw: 35, scaled: 170 },
-	{ raw: 40, scaled: 200 },
-	{ raw: 45, scaled: 230 },
-	{ raw: 50, scaled: 260 },
-	{ raw: 55, scaled: 290 },
-	{ raw: 60, scaled: 320 },
-	{ raw: 65, scaled: 350 },
-	{ raw: 70, scaled: 380 },
-	{ raw: 75, scaled: 405 },
-	{ raw: 80, scaled: 430 },
-	{ raw: 85, scaled: 450 },
-	{ raw: 90, scaled: 470 },
-	{ raw: 95, scaled: 485 },
-	{ raw: 100, scaled: 495 },
+export const PEASEA_ERROR_VECTOR_PARTS: readonly MistakeKey[] = [
+	"Part 1",
+	"Part 2",
+	"Part 3",
+	"Part 4",
+	"Part 5",
+	"Part 6",
+	"Part 7 Single",
+	"Part 7 Multiple",
 ];
 
 const PEASEA_SECTION_CONFIG = {
@@ -207,12 +174,14 @@ const PEASEA_SECTION_CONFIG = {
 		],
 		basicParts: ["Part 1", "Part 2"] as const,
 		advancedParts: ["Part 3", "Part 4"] as const,
+		alpha: 0.12,
 		sem: 25,
 	},
 	R: {
 		anchors: [
 			{ raw: 0, scaled: 5 },
 			{ raw: 19, scaled: 5 },
+			{ raw: 20, scaled: 5 },
 			{ raw: 30, scaled: 55 },
 			{ raw: 40, scaled: 115 },
 			{ raw: 50, scaled: 175 },
@@ -227,6 +196,7 @@ const PEASEA_SECTION_CONFIG = {
 		],
 		basicParts: ["Part 5"] as const,
 		advancedParts: ["Part 6", "Part 7 Single", "Part 7 Multiple"] as const,
+		alpha: 0.18,
 		sem: 25,
 	},
 } as const;
@@ -242,6 +212,17 @@ const CEFR_THRESHOLDS: Array<{
 	{ level: "B1", listening: 275, reading: 275, total: 550 },
 	{ level: "A2", listening: 110, reading: 115, total: 225 },
 	{ level: "A1", listening: 60, reading: 60, total: 120 },
+];
+
+const SECTION_CEFR_THRESHOLDS: Array<{
+	level: Exclude<ToeicCefrLevel, "Below A1">;
+	minimum: number;
+}> = [
+	{ level: "C1", minimum: 455 },
+	{ level: "B2", minimum: 385 },
+	{ level: "B1", minimum: 275 },
+	{ level: "A2", minimum: 115 },
+	{ level: "A1", minimum: 60 },
 ];
 
 export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
@@ -376,26 +357,8 @@ export function hasRecordedSessionData(record: SessionRecord) {
 }
 
 export function estimateToeicScaledScore(rawCorrect: number, type: SessionType) {
-	const totalQuestions = getQuestionCountForType(type);
-	const safeRaw = Math.min(totalQuestions, Math.max(rawCorrect, 0));
-	const checkpoints = type === "L" ? LISTENING_SCORE_CHECKPOINTS : READING_SCORE_CHECKPOINTS;
-
-	if (safeRaw <= checkpoints[0].raw) {
-		return checkpoints[0].scaled;
-	}
-
-	for (let index = 1; index < checkpoints.length; index += 1) {
-		const previous = checkpoints[index - 1];
-		const current = checkpoints[index];
-
-		if (safeRaw <= current.raw) {
-			const progress = (safeRaw - previous.raw) / (current.raw - previous.raw);
-			const scaled = previous.scaled + progress * (current.scaled - previous.scaled);
-			return Math.min(495, Math.max(5, Math.round(scaled / 5) * 5));
-		}
-	}
-
-	return 495;
+	const safeRaw = clampRawScore(rawCorrect, type);
+	return interpolateScaledScore(safeRaw, PEASEA_SECTION_CONFIG[type].anchors);
 }
 
 function clampRawScore(value: number, type: SessionType) {
@@ -479,6 +442,16 @@ function getCefrLevelFromScores(listening: number, reading: number, total: numbe
 	return "Below A1";
 }
 
+function getSectionCefrLevel(score: number): ToeicCefrLevel {
+	for (const threshold of SECTION_CEFR_THRESHOLDS) {
+		if (score >= threshold.minimum) {
+			return threshold.level;
+		}
+	}
+
+	return "Below A1";
+}
+
 export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEstimate {
 	const parts = getPartsForType(record.type);
 	const totalQuestions = getQuestionCountForType(record.type);
@@ -499,8 +472,11 @@ export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEs
 	const basicErrorRate = basicQuestionCount > 0 ? basicMistakes / basicQuestionCount : 0;
 	const advancedErrorRate = advancedQuestionCount > 0 ? advancedMistakes / advancedQuestionCount : 0;
 	const anomalyGap = Math.max(0, basicErrorRate - advancedErrorRate);
-	const penaltyRaw = Number((anomalyGap * 8).toFixed(1));
-	const adjustedRawCorrect = clampRawScore(rawCorrect - penaltyRaw, record.type);
+	const deltaRaw = Number(
+		(config.alpha * Math.min(0, advancedErrorRate - basicErrorRate) * 100).toFixed(2)
+	);
+	const penaltyRaw = Number(Math.abs(deltaRaw).toFixed(1));
+	const adjustedRawCorrect = clampRawScore(rawCorrect + deltaRaw, record.type);
 	const scaled = interpolateScaledScore(adjustedRawCorrect, config.anchors);
 	const partStats = parts
 		.map((part) => {
@@ -531,21 +507,22 @@ export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEs
 		adjustedRawCorrect: Number(adjustedRawCorrect.toFixed(1)),
 		scaled,
 		interval,
-		cefr:
-			record.type === "L"
-				? getCefrLevelFromScores(scaled, 495, scaled + 495)
-				: getCefrLevelFromScores(495, scaled, 495 + scaled),
+		cefr: getSectionCefrLevel(scaled),
 		sem: config.sem,
 		bias: {
+			alpha: config.alpha,
 			basicErrorRate,
 			advancedErrorRate,
 			anomalyGap,
+			deltaRaw,
 			penaltyRaw,
+			anomalyDetected: deltaRaw < 0,
 		},
 		partStats,
 		strongestPart,
 		weakestPart,
 		unfinishedPenalty: record.type === "R" ? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0) : 0,
+		responsePattern: deltaRaw < 0 ? "aberrant" : "normal",
 	};
 }
 
