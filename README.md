@@ -44,12 +44,14 @@ npm run dev
 
 浏览器打开：`http://localhost:3000`
 
-### 3. 生产构建与运行
+### 3. 生产构建与预览
 
 ```bash
 npm run build
-npm run start
+npx serve out
 ```
+
+构建完成后会生成静态目录 `out`。
 
 ### 4. 代码检查
 
@@ -60,9 +62,37 @@ npm run lint
 ## NPM Scripts
 
 - `npm run dev`: 启动本地开发服务器
-- `npm run build`: 生成生产构建
-- `npm run start`: 启动生产服务
+- `npm run build`: 生成静态导出（`out` 目录）
 - `npm run lint`: 运行 ESLint
+
+## 部署到 Cloudflare Pages
+
+### 1. 连接仓库
+
+- 在 Cloudflare Pages 选择 `Connect to Git`
+- 选择仓库：`Chizukuo/toeic-tracker`
+- 分支选择：`master`
+
+### 2. 构建配置
+
+- Framework preset: `None`
+- Build command: `npm run build`
+- Build output directory: `out`
+- Root directory: `/`
+
+### 3. 环境变量（推荐）
+
+- `NODE_VERSION=20`
+
+### 4. 部署
+
+- 点击 `Save and Deploy`
+- 首次成功后会得到 `*.pages.dev` 地址
+
+## 部署说明
+
+- 当前项目已配置 Next.js 静态导出（`output: 'export'`），适合 Cloudflare Pages。
+- 若后续需要 Next.js SSR / API Routes，建议迁移到 Vercel 或 Cloudflare Workers 方案。
 
 ## 功能说明
 

@@ -47,6 +47,7 @@ type SnapshotLike = {
 };
 
 const DEFAULT_EXAM_DATE = '2026-05-24';
+const EXAM_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 interface AppState {
   sessions: SessionRecord[];
@@ -198,7 +199,10 @@ export const useStore = create<AppState>()(
           activeSessionId: state.sessions.some((session) => session.id === sessionId) ? sessionId : state.activeSessionId,
         })),
       setLocale: (locale) => set({ locale }),
-      setExamDate: (examDate) => set({ examDate }),
+      setExamDate: (examDate) =>
+        set((state) => ({
+          examDate: EXAM_DATE_PATTERN.test(examDate) ? examDate : state.examDate,
+        })),
       patchSession: (sessionId, data) =>
         set((state) => ({
           sessions: state.sessions.map((session) =>

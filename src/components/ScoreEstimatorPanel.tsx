@@ -229,9 +229,16 @@ function buildEstimate(session: SessionRecord): SectionEstimate {
   const mistakes = sumMistakes(session);
   const scaled = estimateToeicScaledScore(rawCorrect, session.type);
   const accuracy = Number(((rawCorrect / 100) * 100).toFixed(1));
+  const hasMistakeEntries = Object.keys(session.mistakes).length > 0;
+  const hasEffectiveData = hasRecordedSessionData(session) && (
+    mistakes > 0 ||
+    hasMistakeEntries ||
+    Boolean(session.timerSummary) ||
+    session.reasons.length > 0
+  );
 
   return {
-    available: hasRecordedSessionData(session),
+    available: hasEffectiveData,
     rawCorrect,
     mistakes,
     scaled,

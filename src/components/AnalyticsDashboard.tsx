@@ -23,6 +23,7 @@ import {
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  getPartsForType,
   LISTENING_PARTS,
   PART_QUESTION_COUNTS,
   READING_PARTS,
@@ -52,7 +53,9 @@ export function AnalyticsDashboard() {
     });
 
     const radarData = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
-      const matchingSessions = sessions.filter((session) => part in session.mistakes);
+      const matchingSessions = sessions.filter(
+        (session) => session.status !== 'not-started' && getPartsForType(session.type).includes(part as never)
+      );
       const totalMistakes = matchingSessions.reduce((sum, session) => sum + (session.mistakes[part] ?? 0), 0);
       const totalQuestions = PART_QUESTION_COUNTS[part] * Math.max(matchingSessions.length, 1);
       const errorRate = totalQuestions > 0 ? Number(((totalMistakes / totalQuestions) * 100).toFixed(1)) : 0;
