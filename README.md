@@ -85,6 +85,7 @@ npm run lint
 ### 3. 环境变量（推荐）
 
 - `NODE_VERSION=20`
+- `NEXT_PUBLIC_SITE_URL=https://你的正式域名`（用于 canonical、sitemap、Open Graph 等 SEO 地址生成）
 
 ### 4. 部署
 
