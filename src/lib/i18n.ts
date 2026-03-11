@@ -210,12 +210,14 @@ type Copy = {
 	syncAction: string;
 	syncCopyAction: string;
 	syncQrAction: string;
+	syncCopiedAction: string;
 	syncSuccess: string;
 	syncFailure: string;
 	syncCopied: string;
 	syncTooLarge: string;
 	syncDetectedTitle: string;
 	syncDetectedBody: string;
+	syncDialogWarning: string;
 	syncImportAction: string;
 	syncDismissAction: string;
 	syncPreviewVersion: string;
@@ -224,8 +226,18 @@ type Copy = {
 	syncPreviewActive: string;
 	syncPreviewExportedAt: string;
 	syncPreviewSize: string;
+	syncPreviewCompression: string;
 	syncQrTitle: string;
 	syncQrBody: string;
+	importDialogTitle: string;
+	importDialogBody: string;
+	importDialogWarning: string;
+	importConfirmAction: string;
+	importPreviewFile: string;
+	importPreviewSource: string;
+	importPreviewExamDate: string;
+	importPreviewSize: string;
+	dataVaultIdleMeta: string;
 	languageLabel: string;
 	unfinishedTrackerTitle: string;
 	unfinishedTrackerDescription: string;
@@ -402,12 +414,14 @@ const copy: Record<Locale, Copy> = {
 		syncAction: '生成链接',
 		syncCopyAction: '复制链接',
 		syncQrAction: '显示二维码',
+		syncCopiedAction: '已复制',
 		syncSuccess: '同步链接已生成。',
 		syncFailure: '同步链接生成失败，请重试。',
 		syncCopied: '同步链接已复制。',
 		syncTooLarge: '当前数据量较大，不适合生成同步链接。建议改用 JSON 备份文件。',
 		syncDetectedTitle: '检测到同步链接',
 		syncDetectedBody: '这个页面地址里包含一份压缩快照。确认后可直接导入到当前设备。',
+		syncDialogWarning: '导入后会覆盖当前设备中的训练进度、历史成绩和考试日期。',
 		syncImportAction: '导入同步数据',
 		syncDismissAction: '忽略链接',
 		syncPreviewVersion: '快照版本',
@@ -416,8 +430,18 @@ const copy: Record<Locale, Copy> = {
 		syncPreviewActive: '当前定位',
 		syncPreviewExportedAt: '导出时间',
 		syncPreviewSize: '链接长度',
+		syncPreviewCompression: '压缩占比',
 		syncQrTitle: '同步二维码',
 		syncQrBody: '用另一台设备扫码打开该链接，再确认导入即可。',
+		importDialogTitle: '确认导入这份快照？',
+		importDialogBody: '已解析出快照信息。确认后会用文件中的数据覆盖当前设备状态。',
+		importDialogWarning: '导入会覆盖当前训练记录、历史成绩和考试日期。建议先导出当前设备的备份。',
+		importConfirmAction: '确认导入',
+		importPreviewFile: '文件名',
+		importPreviewSource: '导入来源',
+		importPreviewExamDate: '考试日期',
+		importPreviewSize: '文件大小',
+		dataVaultIdleMeta: '暂无操作',
 		languageLabel: '语言',
 		unfinishedTrackerTitle: '未完成',
 		unfinishedTrackerDescription: '查看未完成题并跳转处理。',
@@ -592,12 +616,14 @@ const copy: Record<Locale, Copy> = {
 		syncAction: 'Create link',
 		syncCopyAction: 'Copy link',
 		syncQrAction: 'Show QR',
+		syncCopiedAction: 'Copied',
 		syncSuccess: 'Sync link created.',
 		syncFailure: 'Failed to create sync link. Please try again.',
 		syncCopied: 'Sync link copied.',
 		syncTooLarge: 'The current dataset is too large for a practical sync link. Use the JSON backup instead.',
 		syncDetectedTitle: 'Sync link detected',
 		syncDetectedBody: 'This page contains a compressed snapshot in the address. Import it to restore the same data on this device.',
+		syncDialogWarning: 'Importing will overwrite the current device progress, score history, and exam date.',
 		syncImportAction: 'Import sync data',
 		syncDismissAction: 'Dismiss',
 		syncPreviewVersion: 'Snapshot version',
@@ -606,8 +632,18 @@ const copy: Record<Locale, Copy> = {
 		syncPreviewActive: 'Active session',
 		syncPreviewExportedAt: 'Exported at',
 		syncPreviewSize: 'Link length',
+		syncPreviewCompression: 'Compression load',
 		syncQrTitle: 'Sync QR Code',
 		syncQrBody: 'Scan this code on another device, open the link, then confirm import.',
+		importDialogTitle: 'Import this snapshot?',
+		importDialogBody: 'The file was parsed successfully. Confirm to overwrite this device with the imported data.',
+		importDialogWarning: 'This replaces the current sprint progress, score history, and exam date. Export a backup first if needed.',
+		importConfirmAction: 'Confirm import',
+		importPreviewFile: 'File name',
+		importPreviewSource: 'Source',
+		importPreviewExamDate: 'Exam date',
+		importPreviewSize: 'File size',
+		dataVaultIdleMeta: 'No activity yet',
 		languageLabel: 'Language',
 		unfinishedTrackerTitle: 'Unfinished',
 		unfinishedTrackerDescription: 'Review unfinished questions and jump back to the set.',
