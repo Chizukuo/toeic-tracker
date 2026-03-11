@@ -202,8 +202,30 @@ type Copy = {
 	dataVaultNoteExport: string;
 	dataVaultNoteImport: string;
 	dataVaultNoteReset: string;
+	dataVaultNoteSync: string;
 	lastOperation: string;
 	dataVaultIdle: string;
+	syncTitle: string;
+	syncBody: string;
+	syncAction: string;
+	syncCopyAction: string;
+	syncQrAction: string;
+	syncSuccess: string;
+	syncFailure: string;
+	syncCopied: string;
+	syncTooLarge: string;
+	syncDetectedTitle: string;
+	syncDetectedBody: string;
+	syncImportAction: string;
+	syncDismissAction: string;
+	syncPreviewVersion: string;
+	syncPreviewSessions: string;
+	syncPreviewHistory: string;
+	syncPreviewActive: string;
+	syncPreviewExportedAt: string;
+	syncPreviewSize: string;
+	syncQrTitle: string;
+	syncQrBody: string;
 	languageLabel: string;
 	unfinishedTrackerTitle: string;
 	unfinishedTrackerDescription: string;
@@ -372,8 +394,30 @@ const copy: Record<Locale, Copy> = {
 		dataVaultNoteExport: '• 导出：生成包含全部训练数据的 JSON 快照',
 		dataVaultNoteImport: '• 导入：加载已有的快照并覆盖当前环境数据',
 		dataVaultNoteReset: '• 重置：一键清空进度还原初始状态',
+		dataVaultNoteSync: '• 同步：生成高压缩同步链接或二维码，跨设备打开即可恢复',
 		lastOperation: '状态日志',
 		dataVaultIdle: '系统空闲中。',
+		syncTitle: '生成同步链接',
+		syncBody: '把当前数据压缩进链接 hash，适合复制到聊天工具、备忘录或扫码在另一台设备恢复。',
+		syncAction: '生成链接',
+		syncCopyAction: '复制链接',
+		syncQrAction: '显示二维码',
+		syncSuccess: '同步链接已生成。',
+		syncFailure: '同步链接生成失败，请重试。',
+		syncCopied: '同步链接已复制。',
+		syncTooLarge: '当前数据量较大，不适合生成同步链接。建议改用 JSON 备份文件。',
+		syncDetectedTitle: '检测到同步链接',
+		syncDetectedBody: '这个页面地址里包含一份压缩快照。确认后可直接导入到当前设备。',
+		syncImportAction: '导入同步数据',
+		syncDismissAction: '忽略链接',
+		syncPreviewVersion: '快照版本',
+		syncPreviewSessions: 'Session 数',
+		syncPreviewHistory: '历史成绩',
+		syncPreviewActive: '当前定位',
+		syncPreviewExportedAt: '导出时间',
+		syncPreviewSize: '链接长度',
+		syncQrTitle: '同步二维码',
+		syncQrBody: '用另一台设备扫码打开该链接，再确认导入即可。',
 		languageLabel: '语言',
 		unfinishedTrackerTitle: '未完成',
 		unfinishedTrackerDescription: '查看未完成题并跳转处理。',
@@ -540,8 +584,30 @@ const copy: Record<Locale, Copy> = {
 		dataVaultNoteExport: '• Export: Save full sprint history to a readable JSON file',
 		dataVaultNoteImport: '• Import: Restore progress by overwriting current setup',
 		dataVaultNoteReset: '• Reset: Wipe all local data and return to initial state',
+		dataVaultNoteSync: '• Sync: Generate a compressed link or QR code and open it on another device to restore data',
 		lastOperation: 'Status log',
 		dataVaultIdle: 'System idle.',
+		syncTitle: 'Create Sync Link',
+		syncBody: 'Compress the current snapshot into the URL hash so it can be copied into chat, notes, or opened from a QR code on another device.',
+		syncAction: 'Create link',
+		syncCopyAction: 'Copy link',
+		syncQrAction: 'Show QR',
+		syncSuccess: 'Sync link created.',
+		syncFailure: 'Failed to create sync link. Please try again.',
+		syncCopied: 'Sync link copied.',
+		syncTooLarge: 'The current dataset is too large for a practical sync link. Use the JSON backup instead.',
+		syncDetectedTitle: 'Sync link detected',
+		syncDetectedBody: 'This page contains a compressed snapshot in the address. Import it to restore the same data on this device.',
+		syncImportAction: 'Import sync data',
+		syncDismissAction: 'Dismiss',
+		syncPreviewVersion: 'Snapshot version',
+		syncPreviewSessions: 'Sessions',
+		syncPreviewHistory: 'Score history',
+		syncPreviewActive: 'Active session',
+		syncPreviewExportedAt: 'Exported at',
+		syncPreviewSize: 'Link length',
+		syncQrTitle: 'Sync QR Code',
+		syncQrBody: 'Scan this code on another device, open the link, then confirm import.',
 		languageLabel: 'Language',
 		unfinishedTrackerTitle: 'Unfinished',
 		unfinishedTrackerDescription: 'Review unfinished questions and jump back to the set.',

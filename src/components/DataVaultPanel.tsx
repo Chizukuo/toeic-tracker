@@ -1,8 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
-import { useRef, useState } from 'react';
-import { Database, Download, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
+import { Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
 
 import {
 	Dialog,
@@ -16,10 +18,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { getCopy } from '@/lib/i18n';
+import { MAX_SYNC_URL_LENGTH, buildSyncUrl, decodeSnapshotFromSyncPayload, extractSyncPayloadFromHash, getSyncPreview, type SyncPreview } from '@/lib/syncLink';
+import type { SprintSnapshot } from '@/store/useStore';
 import type { ImportSnapshotResult } from '@/store/useStore';
 import { useStore } from '@/store/useStore';
 
 type FeedbackTone = 'success' | 'error' | 'info';
+
+type SyncDraft = {
+	url: string;
+	qrDataUrl: string | null;
+	preview: SyncPreview;
+	linkLength: number;
+};
+
+type PendingSyncImport = {
+	snapshot: SprintSnapshot;
+	preview: SyncPreview;
+	linkLength: number;
+};
 
 export function DataVaultPanel() {
 	const locale = useStore((state) => state.locale);
@@ -35,10 +52,50 @@ export function DataVaultPanel() {
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 	const [resetOpen, setResetOpen] = useState(false);
+	const [qrOpen, setQrOpen] = useState(false);
+	const [syncDraft, setSyncDraft] = useState<SyncDraft | null>(null);
+	const [pendingSyncImport, setPendingSyncImport] = useState<PendingSyncImport | null>(null);
 
 	const recordedSessions = sessions.filter((session) => session.status !== 'not-started').length;
 	const reviewedSessions = sessions.filter((session) => session.status === 'debugged').length;
 	const activeSessionLabel = sessions.find((session) => session.id === activeSessionId)?.label ?? activeSessionId;
+
+	useEffect(() => {
+		if (typeof window === 'undefined') {
+			return undefined;
+		}
+
+		const syncFromHash = () => {
+			const payload = extractSyncPayloadFromHash(window.location.hash);
+
+			if (!payload) {
+				setPendingSyncImport(null);
+				return;
+			}
+
+			try {
+				const snapshot = decodeSnapshotFromSyncPayload(payload);
+				setPendingSyncImport({
+					snapshot,
+					preview: getSyncPreview(snapshot),
+					linkLength: window.location.href.length,
+				});
+			} catch {
+				setPendingSyncImport(null);
+				setFeedback({
+					tone: 'error',
+					text: locale === 'zh' ? `${copy.importFailure} 同步链接无效。` : `${copy.importFailure} Invalid sync link.`,
+				});
+			}
+		};
+
+		syncFromHash();
+		window.addEventListener('hashchange', syncFromHash);
+
+		return () => {
+			window.removeEventListener('hashchange', syncFromHash);
+		};
+	}, [copy.importFailure, locale]);
 
 	const handleExport = () => {
 		try {
@@ -58,6 +115,59 @@ export function DataVaultPanel() {
 			setFeedback({ tone: 'success', text: `${copy.exportSuccess} v${snapshot.version}` });
 		} catch {
 			setFeedback({ tone: 'error', text: copy.exportFailure });
+		}
+	};
+
+	const handleGenerateSyncLink = async () => {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		try {
+			const snapshot = exportSnapshot();
+			const url = buildSyncUrl(snapshot, window.location.href);
+
+			if (url.length > MAX_SYNC_URL_LENGTH) {
+				setSyncDraft(null);
+				setFeedback({ tone: 'error', text: copy.syncTooLarge });
+				return;
+			}
+
+			let qrDataUrl: string | null = null;
+
+			try {
+				qrDataUrl = await QRCode.toDataURL(url, {
+					errorCorrectionLevel: 'L',
+					margin: 1,
+					scale: 8,
+				});
+			} catch {
+				qrDataUrl = null;
+			}
+
+			setSyncDraft({
+				url,
+				qrDataUrl,
+				preview: getSyncPreview(snapshot),
+				linkLength: url.length,
+			});
+			setFeedback({ tone: 'success', text: copy.syncSuccess });
+		} catch {
+			setFeedback({ tone: 'error', text: copy.syncFailure });
+		}
+	};
+
+	const handleCopySyncLink = async () => {
+		if (!syncDraft?.url || typeof navigator === 'undefined' || !navigator.clipboard) {
+			setFeedback({ tone: 'error', text: copy.syncFailure });
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(syncDraft.url);
+			setFeedback({ tone: 'success', text: copy.syncCopied });
+		} catch {
+			setFeedback({ tone: 'error', text: copy.syncFailure });
 		}
 	};
 
@@ -87,6 +197,30 @@ export function DataVaultPanel() {
 		}
 	};
 
+	const clearSyncHash = () => {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+	};
+
+	const handleImportFromSyncLink = () => {
+		if (!pendingSyncImport) {
+			return;
+		}
+
+		const result = importSnapshot(pendingSyncImport.snapshot);
+		setFeedback({ tone: 'success', text: formatImportFeedback(locale, copy.importSuccess, result) });
+		setPendingSyncImport(null);
+		clearSyncHash();
+	};
+
+	const handleDismissSyncLink = () => {
+		setPendingSyncImport(null);
+		clearSyncHash();
+	};
+
 	const handleReset = () => {
 		resetProgress();
 		setResetOpen(false);
@@ -104,8 +238,8 @@ export function DataVaultPanel() {
 						{copy.dataVaultDescription}
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="grid gap-4 p-6 xl:grid-cols-3">
-					<div className="xl:col-span-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+				<CardContent className="grid gap-4 p-6 xl:grid-cols-4">
+					<div className="xl:col-span-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 						<SummaryTile
 							label={locale === 'zh' ? '已录入套题' : 'Recorded Sets'}
 							value={`${recordedSessions}/20`}
@@ -128,6 +262,32 @@ export function DataVaultPanel() {
 						/>
 					</div>
 
+					{pendingSyncImport ? (
+						<div className="xl:col-span-4 deck-surface-strong flex flex-col gap-5 p-5">
+							<div>
+								<div className="font-mono text-[10px] uppercase tracking-[0.24em] text-emerald-600 dark:text-emerald-300">
+									{copy.syncDetectedTitle}
+								</div>
+								<p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">{copy.syncDetectedBody}</p>
+							</div>
+							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+								<SyncMetric label={copy.syncPreviewVersion} value={`v${pendingSyncImport.preview.version}`} />
+								<SyncMetric label={copy.syncPreviewSessions} value={`${pendingSyncImport.preview.sessionCount}`} />
+								<SyncMetric label={copy.syncPreviewHistory} value={`${pendingSyncImport.preview.historyCount}`} />
+								<SyncMetric label={copy.syncPreviewActive} value={pendingSyncImport.preview.activeSessionId} />
+								<SyncMetric label={copy.syncPreviewSize} value={`${pendingSyncImport.linkLength}`} />
+							</div>
+							<div className="flex flex-wrap gap-3">
+								<Button onClick={handleImportFromSyncLink} className="font-mono text-[12px] uppercase tracking-widest">
+									{copy.syncImportAction}
+								</Button>
+								<Button variant="outline" onClick={handleDismissSyncLink} className="font-mono text-[12px] uppercase tracking-widest">
+									{copy.syncDismissAction}
+								</Button>
+							</div>
+						</div>
+					) : null}
+
 					<ActionPanel
 						icon={<Download className="size-5" />}
 						title={copy.exportTitle}
@@ -143,6 +303,15 @@ export function DataVaultPanel() {
 						onAction={handleImportClick}
 					/>
 					<ActionPanel
+						icon={<Link2 className="size-5" />}
+						title={copy.syncTitle}
+						body={copy.syncBody}
+						actionLabel={copy.syncAction}
+						onAction={() => {
+							void handleGenerateSyncLink();
+						}}
+					/>
+					<ActionPanel
 						icon={<RotateCcw className="size-5" />}
 						title={copy.resetTitle}
 						body={copy.resetBody}
@@ -151,7 +320,47 @@ export function DataVaultPanel() {
 						danger
 					/>
 
-					<div className="xl:col-span-3 grid gap-4 xl:grid-cols-[2fr_1fr]">
+					{syncDraft ? (
+						<div className="xl:col-span-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+							<div className="deck-surface flex flex-col p-5">
+								<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+									<Link2 className="size-3.5" />
+									{copy.syncTitle}
+								</div>
+								<textarea
+									readOnly
+									value={syncDraft.url}
+									className="mt-4 min-h-32 w-full resize-none rounded-2xl border border-zinc-200/80 bg-white/90 px-4 py-3 text-xs leading-6 text-zinc-600 outline-none dark:border-white/10 dark:bg-zinc-950/80 dark:text-zinc-300"
+								/>
+								<div className="mt-4 flex flex-wrap gap-3">
+									<Button variant="outline" onClick={() => void handleCopySyncLink()} className="font-mono text-[12px] uppercase tracking-widest">
+										<Copy className="mr-2 size-4" />
+										{copy.syncCopyAction}
+									</Button>
+									<Button
+										variant="outline"
+										onClick={() => setQrOpen(true)}
+										className="font-mono text-[12px] uppercase tracking-widest"
+										disabled={!syncDraft.qrDataUrl}
+									>
+										<QrCode className="mr-2 size-4" />
+										{copy.syncQrAction}
+									</Button>
+								</div>
+							</div>
+
+							<div className="deck-surface-soft grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-1">
+								<SyncMetric label={copy.syncPreviewVersion} value={`v${syncDraft.preview.version}`} />
+								<SyncMetric label={copy.syncPreviewSessions} value={`${syncDraft.preview.sessionCount}`} />
+								<SyncMetric label={copy.syncPreviewHistory} value={`${syncDraft.preview.historyCount}`} />
+								<SyncMetric label={copy.syncPreviewActive} value={syncDraft.preview.activeSessionId} />
+								<SyncMetric label={copy.syncPreviewExportedAt} value={formatExportedAt(syncDraft.preview.exportedAt)} />
+								<SyncMetric label={copy.syncPreviewSize} value={`${syncDraft.linkLength}`} />
+							</div>
+						</div>
+					) : null}
+
+					<div className="xl:col-span-4 grid gap-4 xl:grid-cols-[2fr_1fr]">
 						<div className="deck-surface-soft flex flex-col justify-center p-5">
 							<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
 								<Database className="size-3.5" />
@@ -160,6 +369,7 @@ export function DataVaultPanel() {
 							<div className="mt-4 flex flex-col gap-2 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
 								<p>{copy.dataVaultNoteExport}</p>
 								<p>{copy.dataVaultNoteImport}</p>
+								<p>{copy.dataVaultNoteSync}</p>
 								<p>{copy.dataVaultNoteReset}</p>
 							</div>
 						</div>
@@ -210,7 +420,34 @@ export function DataVaultPanel() {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			<Dialog open={qrOpen} onOpenChange={setQrOpen}>
+				<DialogContent className="max-w-md rounded-[28px] border border-white/65 bg-white/92 p-0 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-zinc-950/92 overflow-hidden">
+					<DialogHeader className="px-6 pt-6">
+						<DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{copy.syncQrTitle}</DialogTitle>
+						<DialogDescription className="text-sm leading-7">{copy.syncQrBody}</DialogDescription>
+					</DialogHeader>
+					<div className="px-6 pb-6">
+						<div className="deck-surface-soft flex items-center justify-center rounded-[24px] p-6">
+							{syncDraft?.qrDataUrl ? (
+								<Image src={syncDraft.qrDataUrl} alt={copy.syncQrTitle} width={256} height={256} className="size-64 rounded-2xl bg-white p-3" unoptimized />
+							) : (
+								<div className="text-sm text-zinc-500 dark:text-zinc-400">{copy.syncFailure}</div>
+							)}
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</>
+	);
+}
+
+function SyncMetric({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="rounded-[22px] border border-white/65 bg-white/78 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+			<div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{label}</div>
+			<div className="mt-2 break-all text-sm font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{value}</div>
+		</div>
 	);
 }
 
@@ -322,4 +559,8 @@ function formatImportFeedback(locale: 'zh' | 'en', base: string, result: ImportS
 	}
 
 	return `${base} ${sourceLabel} ${versionLabel}`;
+}
+
+function formatExportedAt(value: string) {
+	return value.replace('T', ' ').replace('.000Z', ' UTC');
 }
