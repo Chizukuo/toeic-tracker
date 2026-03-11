@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useDeferredValue, useMemo } from 'react';
 
 import {
   CartesianGrid,
@@ -80,16 +80,17 @@ export function AnalyticsDashboard() {
   const sessions = useStore((state) => state.sessions);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
+  const deferredSessions = useDeferredValue(sessions);
 
   const { trendData, lossSummary, radarData, radarSummary, reasonData, analyticsConfidence } = useMemo(() => {
-    const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+    const sessionMap = new Map(deferredSessions.map((session) => [session.id, session]));
     const partMistakes = new Map<string, number>();
     const partAttempts = new Map<string, number>();
     const reasonCounts = new Map<string, number>();
     let totalTrackedLoss = 0;
     let recordedSessions = 0;
 
-    for (const session of sessions) {
+    for (const session of deferredSessions) {
       if (session.status !== 'not-started') {
         recordedSessions += 1;
         const partLossMap = getSessionPartLossMap(session);
@@ -171,7 +172,7 @@ export function AnalyticsDashboard() {
 
     return {
       trendData,
-      analyticsConfidence: getAnalyticsDataConfidence(sessions),
+      analyticsConfidence: getAnalyticsDataConfidence(deferredSessions),
       lossSummary: summarizeLossTrend(trendData),
       radarData,
       radarSummary: {
@@ -183,7 +184,7 @@ export function AnalyticsDashboard() {
       },
       reasonData,
     };
-  }, [locale, sessions]);
+  }, [deferredSessions, locale]);
 
   return (
     <section className="grid gap-6">

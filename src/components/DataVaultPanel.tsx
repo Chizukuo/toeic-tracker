@@ -2,8 +2,7 @@
 
 import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import { Check, Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
 
 import {
@@ -184,6 +183,7 @@ export function DataVaultPanel() {
 			let qrDataUrl: string | null = null;
 
 			try {
+				const { default: QRCode } = await import('qrcode');
 				qrDataUrl = await QRCode.toDataURL(url, {
 					errorCorrectionLevel: 'L',
 					margin: 1,
@@ -193,15 +193,17 @@ export function DataVaultPanel() {
 				qrDataUrl = null;
 			}
 
-			setSyncDraft({
-				url,
-				qrDataUrl,
-				preview: getSyncPreview(snapshot),
-				linkLength: url.length,
-				rawBytes,
-				compressionRatio: Math.max(1, Math.round((url.length / rawBytes) * 100)),
+			startTransition(() => {
+				setSyncDraft({
+					url,
+					qrDataUrl,
+					preview: getSyncPreview(snapshot),
+					linkLength: url.length,
+					rawBytes,
+					compressionRatio: Math.max(1, Math.round((url.length / rawBytes) * 100)),
+				});
+				setCopyState('idle');
 			});
-			setCopyState('idle');
 			pushFeedback('success', copy.syncSuccess);
 		} catch {
 			pushFeedback('error', copy.syncFailure);

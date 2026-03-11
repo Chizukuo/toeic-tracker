@@ -1,11 +1,17 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { DebugForm } from '@/components/DebugForm';
-import { DashboardShell, ProtocolRow, SectionShell, useDashboardContext } from '@/components/DashboardShell';
+import { DashboardShell, DeferredPanelPlaceholder, ProtocolRow, SectionShell, useDashboardContext } from '@/components/DashboardShell';
 import { LapTimer } from '@/components/LapTimer';
-import { TimeWaterfallChart } from '@/components/TimeWaterfallChart';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatSessionTitle, translateStatus } from '@/lib/i18n';
+
+const TimeWaterfallChart = dynamic(
+  () => import('@/components/TimeWaterfallChart').then((module) => module.TimeWaterfallChart),
+  { loading: () => <DeferredPanelPlaceholder /> }
+);
 
 export default function TimerPage() {
   return (

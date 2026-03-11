@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState, type ReactNode } from 'react';
+import { memo, startTransition, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -124,18 +124,20 @@ export function ScoreEstimatorPanel() {
   const [historyDate, setHistoryDate] = useState('');
   const [historyListening, setHistoryListening] = useState('350');
   const [historyReading, setHistoryReading] = useState('330');
+  const deferredSessions = useDeferredValue(sessions);
+  const deferredHistoricalScores = useDeferredValue(historicalScores);
 
   const { estimateMap, listeningSessions, readingSessions, sessionMap } = useMemo(() => {
-    const nextSessionMap = new Map(sessions.map((session) => [session.id, session]));
-    const nextEstimateMap = new Map(sessions.map((session) => [session.id, estimateToeicSessionScore(session)]));
+    const nextSessionMap = new Map(deferredSessions.map((session) => [session.id, session]));
+    const nextEstimateMap = new Map(deferredSessions.map((session) => [session.id, estimateToeicSessionScore(session)]));
 
     return {
       sessionMap: nextSessionMap,
       estimateMap: nextEstimateMap,
-      listeningSessions: sessions.filter((session) => session.type === 'L'),
-      readingSessions: sessions.filter((session) => session.type === 'R'),
+      listeningSessions: deferredSessions.filter((session) => session.type === 'L'),
+      readingSessions: deferredSessions.filter((session) => session.type === 'R'),
     };
-  }, [sessions]);
+  }, [deferredSessions]);
 
   const selectedListening = sessionMap.get(selectedListeningId) ?? listeningSessions[0];
   const selectedReading = sessionMap.get(selectedReadingId) ?? readingSessions[0];
@@ -199,7 +201,7 @@ export function ScoreEstimatorPanel() {
   );
 
   const historicalTrend = useMemo<HistoricalTrendPoint[]>(() => {
-    return historicalScores.map((item) => ({
+    return deferredHistoricalScores.map((item) => ({
       id: item.id,
       label: formatShortDate(item.date, locale),
       listening: item.listening,
@@ -209,9 +211,9 @@ export function ScoreEstimatorPanel() {
       source: item.source,
       note: item.note,
     }));
-  }, [historicalScores, locale]);
+  }, [deferredHistoricalScores, locale]);
 
-  const latestHistorical = historicalScores[historicalScores.length - 1];
+  const latestHistorical = deferredHistoricalScores[deferredHistoricalScores.length - 1];
   const manualTotalPreview = safeNumber(historyListening) + safeNumber(historyReading);
 
   const activeSummary = useMemo<ActiveSummary | null>(() => {
@@ -276,12 +278,14 @@ export function ScoreEstimatorPanel() {
       return;
     }
 
-    addHistoricalScore({
-      date: historyDate,
-      listening: safeNumber(historyListening),
-      reading: safeNumber(historyReading),
-      total: manualTotalPreview,
-      source: 'manual',
+    startTransition(() => {
+      addHistoricalScore({
+        date: historyDate,
+        listening: safeNumber(historyListening),
+        reading: safeNumber(historyReading),
+        total: manualTotalPreview,
+        source: 'manual',
+      });
     });
 
     setHistoryDate('');
@@ -292,13 +296,18 @@ export function ScoreEstimatorPanel() {
       return;
     }
 
-    addHistoricalScore({
-      date: historyDate || getTodayDateLocal(),
-      listening: pairEstimate.listening.scaled,
-      reading: pairEstimate.reading.scaled,
-      total: pairEstimate.total,
-      source: 'estimated',
-      note: `${selectedPairListening.label} + ${selectedPairReading.label}`,
+    const listeningEstimate = pairEstimate.listening;
+    const readingEstimate = pairEstimate.reading;
+
+    startTransition(() => {
+      addHistoricalScore({
+        date: historyDate || getTodayDateLocal(),
+        listening: listeningEstimate.scaled,
+        reading: readingEstimate.scaled,
+        total: pairEstimate.total,
+        source: 'estimated',
+        note: `${selectedPairListening.label} + ${selectedPairReading.label}`,
+      });
     });
 
     setHistoryDate('');
@@ -496,12 +505,12 @@ export function ScoreEstimatorPanel() {
               </div>
 
               <div className="mt-4 space-y-3">
-                {historicalScores.length === 0 ? (
+                {deferredHistoricalScores.length === 0 ? (
                   <div className="deck-empty px-4 py-5 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                     {locale === 'zh' ? '还没有历史成绩，先补录一次模考、正式成绩，或录入一次当前估分。' : 'No historical scores yet. Add a mock, official record, or capture the current estimate.'}
                   </div>
                 ) : (
-                  historicalScores.map((item) => (
+                  deferredHistoricalScores.map((item) => (
                     <div key={item.id} className="deck-surface-soft rounded-[22px] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -518,7 +527,11 @@ export function ScoreEstimatorPanel() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeHistoricalScore(item.id)}
+                          onClick={() => {
+                            startTransition(() => {
+                              removeHistoricalScore(item.id);
+                            });
+                          }}
                           className="flex size-9 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/80 text-zinc-500 transition-colors hover:text-red-600 dark:border-white/8 dark:bg-zinc-950/80 dark:hover:text-red-300"
                           aria-label={locale === 'zh' ? '删除历史成绩' : 'Remove historical score'}
                         >
