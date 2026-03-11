@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { ArrowRight, ChartNoAxesColumn, Clock3, Database, LayoutDashboard, ListChecks, Route } from 'lucide-react';
 
 import { DashboardShell, SectionShell, useDashboardContext } from '@/components/DashboardShell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getNextStepRecommendation } from '@/lib/nextStep';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/store/useStore';
 
 export default function Home() {
   return (
@@ -16,7 +19,20 @@ export default function Home() {
 }
 
 function HomeOverview() {
-  const { locale, copy, activeSession } = useDashboardContext();
+  const { locale, copy, activeSession, sessions } = useDashboardContext();
+  const selectSession = useStore((state) => state.selectSession);
+  const historicalScoreCount = useStore((state) => state.historicalScores.length);
+
+  const nextStep = useMemo(
+    () =>
+      getNextStepRecommendation({
+        locale,
+        sessions,
+        activeSessionId: activeSession.id,
+        historicalScoreCount,
+      }),
+    [activeSession.id, historicalScoreCount, locale, sessions]
+  );
 
   const routes = [
     {
@@ -107,6 +123,66 @@ function HomeOverview() {
 
       <SectionShell
         index="02"
+        title={locale === 'zh' ? '下一步建议' : 'Next Recommended Move'}
+        description={locale === 'zh' ? '首页会优先给出当前最值得执行的一步，而不是平均分配注意力。' : 'The home page surfaces the single next move with the highest payoff instead of splitting your attention.'}
+      >
+        <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
+          <CardContent className="grid gap-5 p-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn(
+                  'rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em]',
+                  nextStep.tone === 'coral'
+                    ? 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300'
+                    : nextStep.tone === 'amber'
+                      ? 'border-amber-400/30 bg-amber-400/12 text-amber-700 dark:text-amber-300'
+                      : nextStep.tone === 'cyan'
+                        ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300'
+                        : 'border-zinc-300/70 bg-zinc-200/50 text-zinc-700 dark:border-white/12 dark:bg-white/6 dark:text-zinc-300'
+                )}>
+                  {locale === 'zh' ? 'Priority 01' : 'Priority 01'}
+                </span>
+                {nextStep.targetSessionId ? (
+                  <span className="deck-pill text-[10px] tracking-[0.18em]">{nextStep.targetSessionId}</span>
+                ) : null}
+              </div>
+
+              <div className="mt-4 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                {nextStep.title}
+              </div>
+              <div className="mt-3 max-w-3xl text-sm leading-7 text-zinc-500 dark:text-zinc-400">
+                {nextStep.body}
+              </div>
+              <div className="mt-4 rounded-[20px] border border-zinc-200/80 bg-white/78 px-4 py-3 text-sm leading-6 text-zinc-600 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-300">
+                {nextStep.helper}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Link
+                href={nextStep.href}
+                onClick={() => {
+                  if (nextStep.targetSessionId) {
+                    selectSession(nextStep.targetSessionId);
+                  }
+                }}
+                className="inline-flex items-center justify-center rounded-2xl bg-zinc-950 px-5 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {nextStep.cta}
+              </Link>
+
+              <div className="deck-surface-soft rounded-[22px] p-4 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                {locale === 'zh'
+                  ? '只有当前高优先级动作做完，后面的趋势、估分和热点分析才更可信。'
+                  : 'The rest of the charts and projections become more trustworthy only after this highest-priority move is done.'}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </SectionShell>
+
+      <SectionShell
+        index="03"
         title={locale === 'zh' ? '当前套题入口' : 'Current Set'}
         description={locale === 'zh' ? '当前活跃 session 可以直接跳转到计时与复盘页。' : 'Jump directly into the active timer and review flow.'}
       >
