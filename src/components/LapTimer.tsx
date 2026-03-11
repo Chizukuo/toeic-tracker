@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Flag, Hourglass, Play, ShieldAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,85 @@ type PendingSubmit = {
   timedOut: boolean;
 };
 
+type InitialTimerState = {
+  timeLeft: number;
+  isRunning: boolean;
+  readingLapTimes: Partial<Record<ReadingLapKey, number>>;
+  currentLapIndex: number;
+  unfinishedQuestions: string;
+  pendingSubmit: PendingSubmit | null;
+  startedAtMs: number | null;
+  lapStartedAtMs: number | null;
+  expiredRuntime?: {
+    mode: 'commit' | 'freeze-pending';
+    startedAtMs: number;
+    runtime: NonNullable<SessionRecord['timerRuntime']>;
+  };
+};
+
+function getInitialTimerState(session: SessionRecord, totalDurationMs: number): InitialTimerState {
+  const unfinishedDraft = session.timerRuntime?.unfinishedQuestionsDraft ?? (session.timerSummary ? String(session.timerSummary.unfinishedQuestions) : '');
+  const runtime = session.timerRuntime;
+
+  if (!runtime) {
+    return {
+      timeLeft: totalDurationMs,
+      isRunning: false,
+      readingLapTimes: {},
+      currentLapIndex: 0,
+      unfinishedQuestions: unfinishedDraft,
+      pendingSubmit: null,
+      startedAtMs: null,
+      lapStartedAtMs: null,
+    };
+  }
+
+  const startedAtMs = new Date(runtime.startedAt).getTime();
+  const lapStartedAtMs = runtime.lapStartedAt ? new Date(runtime.lapStartedAt).getTime() : startedAtMs;
+  const safeStartedAtMs = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
+  const safeLapStartedAtMs = Number.isFinite(lapStartedAtMs) ? lapStartedAtMs : safeStartedAtMs;
+  const restoredTimeLeft = typeof runtime.timeLeftMs === 'number' ? runtime.timeLeftMs : Math.max(totalDurationMs - (Date.now() - safeStartedAtMs), 0);
+  const frozenPendingSubmit = !runtime.pendingSubmit && session.type === 'R' && runtime.currentLapIndex < READING_LAP_SEGMENTS.length && restoredTimeLeft <= 0
+    ? { forcedSubmit: true, timedOut: true }
+    : runtime.pendingSubmit ?? null;
+
+  if (!runtime.pendingSubmit && restoredTimeLeft <= 0 && (session.type === 'L' || runtime.currentLapIndex >= READING_LAP_SEGMENTS.length)) {
+    return {
+      timeLeft: totalDurationMs,
+      isRunning: false,
+      readingLapTimes: {},
+      currentLapIndex: 0,
+      unfinishedQuestions: unfinishedDraft,
+      pendingSubmit: null,
+      startedAtMs: safeStartedAtMs,
+      lapStartedAtMs: safeLapStartedAtMs,
+      expiredRuntime: {
+        mode: 'commit',
+        startedAtMs: safeStartedAtMs,
+        runtime,
+      },
+    };
+  }
+
+  return {
+    timeLeft: restoredTimeLeft,
+    isRunning: !frozenPendingSubmit,
+    readingLapTimes: runtime.readingLapTimes,
+    currentLapIndex: runtime.currentLapIndex,
+    unfinishedQuestions: runtime.unfinishedQuestionsDraft ?? unfinishedDraft,
+    pendingSubmit: frozenPendingSubmit,
+    startedAtMs: safeStartedAtMs,
+    lapStartedAtMs: safeLapStartedAtMs,
+    expiredRuntime: frozenPendingSubmit && !runtime.pendingSubmit && restoredTimeLeft <= 0
+      ? {
+          mode: 'freeze-pending',
+          startedAtMs: safeStartedAtMs,
+          runtime,
+        }
+      : undefined,
+  };
+}
+
 export function LapTimer({ session }: { session: SessionRecord }) {
   const patchSession = useStore((state) => state.patchSession);
   const locale = useStore((state) => state.locale);
@@ -31,55 +110,113 @@ export function LapTimer({ session }: { session: SessionRecord }) {
   const isListening = session.type === 'L';
   const totalDurationMs = getTargetDurationMs(session.type);
   const lastReadingTotal = sumReadingLapTimes(session);
+  const initialTimerState = getInitialTimerState(session, totalDurationMs);
 
-  const [timeLeft, setTimeLeft] = useState(totalDurationMs);
-  const [isRunning, setIsRunning] = useState(false);
-  const [readingLapTimes, setReadingLapTimes] = useState<Partial<Record<ReadingLapKey, number>>>({});
-  const [currentLapIndex, setCurrentLapIndex] = useState(0);
-  const [unfinishedQuestions, setUnfinishedQuestions] = useState(
-    session.timerSummary ? String(session.timerSummary.unfinishedQuestions) : ''
-  );
-  const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(null);
+  const [timeLeft, setTimeLeft] = useState(initialTimerState.timeLeft);
+  const [isRunning, setIsRunning] = useState(initialTimerState.isRunning);
+  const [readingLapTimes, setReadingLapTimes] = useState<Partial<Record<ReadingLapKey, number>>>(initialTimerState.readingLapTimes);
+  const [currentLapIndex, setCurrentLapIndex] = useState(initialTimerState.currentLapIndex);
+  const [unfinishedQuestions, setUnfinishedQuestions] = useState(initialTimerState.unfinishedQuestions);
+  const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(initialTimerState.pendingSubmit);
 
-  const startedAtRef = useRef<number | null>(null);
-  const lapStartedAtRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(initialTimerState.startedAtMs);
+  const lapStartedAtRef = useRef<number | null>(initialTimerState.lapStartedAtMs);
 
   const completedLapCount = useMemo(
     () => READING_LAP_SEGMENTS.filter((segment) => readingLapTimes[segment.key] !== undefined).length,
     [readingLapTimes]
   );
 
-  const persistAttempt = useCallback(
-    (options: PendingSubmit & { unfinishedCount: number }) => {
-      const elapsed = startedAtRef.current ? Date.now() - startedAtRef.current : totalDurationMs - timeLeft;
-      const shouldMarkTimedOut = options.timedOut && options.unfinishedCount > 0;
+  function commitAttempt(options: PendingSubmit & { unfinishedCount: number; elapsedMs?: number; readingLapTimesOverride?: Partial<Record<ReadingLapKey, number>> }) {
+    const elapsed = options.elapsedMs ?? (startedAtRef.current ? Date.now() - startedAtRef.current : totalDurationMs - timeLeft);
+    const shouldMarkTimedOut = options.timedOut && options.unfinishedCount > 0;
+    const nextReadingLapTimes = isListening ? session.readingLapTimes : (options.readingLapTimesOverride ?? readingLapTimes);
+
+    patchSession(session.id, {
+      status: 'in-progress',
+      readingLapTimes: nextReadingLapTimes,
+      timerSummary: {
+        totalElapsedMs: Math.min(totalDurationMs, Math.max(elapsed, 0)),
+        forcedSubmit: options.forcedSubmit,
+        timedOut: shouldMarkTimedOut,
+        unfinishedQuestions: options.unfinishedCount,
+        completedAt: new Date().toISOString(),
+      },
+      timerRuntime: undefined,
+    });
+
+    startedAtRef.current = null;
+    lapStartedAtRef.current = null;
+    setIsRunning(false);
+    setPendingSubmit(null);
+    setUnfinishedQuestions(options.unfinishedCount > 0 ? String(options.unfinishedCount) : '');
+    setTimeLeft(totalDurationMs);
+  }
+
+  function persistAttempt(options: PendingSubmit & { unfinishedCount: number; readingLapTimesOverride?: Partial<Record<ReadingLapKey, number>> }) {
+    commitAttempt(options);
+  }
+
+  function requestSubmit(options: PendingSubmit) {
+    if (!isListening && completedLapCount < READING_LAP_SEGMENTS.length) {
+      const frozenTimeLeft = startedAtRef.current ? Math.max(totalDurationMs - (Date.now() - startedAtRef.current), 0) : timeLeft;
+
       patchSession(session.id, {
-        status: 'in-progress',
-        readingLapTimes: isListening ? session.readingLapTimes : readingLapTimes,
-        timerSummary: {
-          totalElapsedMs: Math.min(totalDurationMs, Math.max(elapsed, 0)),
-          forcedSubmit: options.forcedSubmit,
-          timedOut: shouldMarkTimedOut,
-          unfinishedQuestions: options.unfinishedCount,
-          completedAt: new Date().toISOString(),
+        readingLapTimes,
+        timerRuntime: {
+          startedAt: new Date(startedAtRef.current ?? Date.now()).toISOString(),
+          lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
+          currentLapIndex,
+          readingLapTimes,
+          pendingSubmit: options,
+          unfinishedQuestionsDraft: unfinishedQuestions,
+          timeLeftMs: frozenTimeLeft,
         },
       });
-      setPendingSubmit(null);
-    },
-    [isListening, patchSession, readingLapTimes, session.id, session.readingLapTimes, timeLeft, totalDurationMs]
-  );
 
-  const requestSubmit = useCallback(
-    (options: PendingSubmit) => {
-      if (!isListening && completedLapCount < READING_LAP_SEGMENTS.length) {
-        setPendingSubmit(options);
-        return;
-      }
+      setPendingSubmit(options);
+      setTimeLeft(frozenTimeLeft);
+      return;
+    }
 
-      persistAttempt({ ...options, unfinishedCount: 0 });
-    },
-    [completedLapCount, isListening, persistAttempt]
-  );
+    persistAttempt({ ...options, unfinishedCount: 0 });
+  }
+
+  const handleTimerElapsed = useEffectEvent(() => {
+    requestSubmit({ forcedSubmit: true, timedOut: true });
+  });
+
+  useEffect(() => {
+    const expiredRuntime = initialTimerState.expiredRuntime;
+
+    if (!expiredRuntime) {
+      return;
+    }
+
+    if (expiredRuntime.mode === 'freeze-pending') {
+      patchSession(session.id, {
+        timerRuntime: {
+          ...expiredRuntime.runtime,
+          pendingSubmit: { forcedSubmit: true, timedOut: true },
+          timeLeftMs: 0,
+        },
+      });
+      return;
+    }
+
+    patchSession(session.id, {
+      status: 'in-progress',
+      readingLapTimes: isListening ? session.readingLapTimes : expiredRuntime.runtime.readingLapTimes,
+      timerSummary: {
+        totalElapsedMs: totalDurationMs,
+        forcedSubmit: true,
+        timedOut: false,
+        unfinishedQuestions: 0,
+        completedAt: new Date().toISOString(),
+      },
+      timerRuntime: undefined,
+    });
+  }, [initialTimerState.expiredRuntime, isListening, patchSession, session.id, session.readingLapTimes, totalDurationMs]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -97,29 +234,36 @@ export function LapTimer({ session }: { session: SessionRecord }) {
 
       if (remaining === 0) {
         setIsRunning(false);
-        startedAtRef.current = null;
-        lapStartedAtRef.current = null;
-        requestSubmit({ forcedSubmit: true, timedOut: true });
+        handleTimerElapsed();
       }
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [isRunning, requestSubmit, totalDurationMs]);
+  }, [isRunning, totalDurationMs]);
 
   const startTimer = () => {
+    const now = Date.now();
+
     setTimeLeft(totalDurationMs);
     setIsRunning(true);
     setReadingLapTimes({});
     setCurrentLapIndex(0);
     setPendingSubmit(null);
     setUnfinishedQuestions('');
-    startedAtRef.current = Date.now();
-    lapStartedAtRef.current = Date.now();
+    startedAtRef.current = now;
+    lapStartedAtRef.current = now;
 
     patchSession(session.id, {
       status: 'in-progress',
       readingLapTimes: {},
       timerSummary: undefined,
+      timerRuntime: {
+        startedAt: new Date(now).toISOString(),
+        lapStartedAt: new Date(now).toISOString(),
+        currentLapIndex: 0,
+        readingLapTimes: {},
+        unfinishedQuestionsDraft: '',
+      },
     });
   };
 
@@ -137,21 +281,26 @@ export function LapTimer({ session }: { session: SessionRecord }) {
     };
 
     setReadingLapTimes(nextLapTimes);
+    setCurrentLapIndex((value) => value + 1);
     patchSession(session.id, {
       status: 'in-progress',
       readingLapTimes: nextLapTimes,
+      timerRuntime: {
+        startedAt: new Date(startedAtRef.current ?? now).toISOString(),
+        lapStartedAt: new Date(now).toISOString(),
+        currentLapIndex: currentLapIndex + 1,
+        readingLapTimes: nextLapTimes,
+        unfinishedQuestionsDraft: unfinishedQuestions,
+      },
     });
 
     lapStartedAtRef.current = now;
 
     if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
-      setCurrentLapIndex((value) => value + 1);
       setIsRunning(false);
-      persistAttempt({ forcedSubmit: false, timedOut: false, unfinishedCount: 0 });
+      persistAttempt({ forcedSubmit: false, timedOut: false, unfinishedCount: 0, readingLapTimesOverride: nextLapTimes });
       return;
     }
-
-    setCurrentLapIndex((value) => value + 1);
   };
 
   const submitForced = () => {
@@ -171,6 +320,19 @@ export function LapTimer({ session }: { session: SessionRecord }) {
 
     persistAttempt({ ...pendingSubmit, unfinishedCount });
   };
+
+  useEffect(() => {
+    if (!pendingSubmit || !session.timerRuntime) {
+      return;
+    }
+
+    patchSession(session.id, {
+      timerRuntime: {
+        ...session.timerRuntime,
+        unfinishedQuestionsDraft: unfinishedQuestions,
+      },
+    });
+  }, [patchSession, pendingSubmit, session.id, session.timerRuntime, unfinishedQuestions]);
 
   const warning = isListening || timeLeft <= 5 * 60 * 1000;
   const progressValue = ((totalDurationMs - timeLeft) / totalDurationMs) * 100;

@@ -36,8 +36,11 @@ import { getCopy, translatePart } from '@/lib/i18n';
 import {
   estimateToeicCombinedScore,
   estimateToeicSessionScore,
+  getCombinedDataConfidence,
   getCombinedEstimateBand,
+  getSessionDataConfidence,
   getSectionEstimateBand,
+  type DataConfidence,
   type SessionRecord,
   type ToeicCefrLevel,
   type ToeicCombinedEstimate,
@@ -89,6 +92,7 @@ type ActiveSummary = {
   color: string;
   scaleLabel: string;
   penaltyRaw: number;
+  confidence: ConfidenceSummary;
   insights: string[];
   partBreakdown: PartBreakdownItem[];
   breakdownCards: Array<{
@@ -97,6 +101,12 @@ type ActiveSummary = {
     interval: string;
     cefr: string;
   }>;
+};
+
+type ConfidenceSummary = {
+  label: string;
+  detail: string;
+  tone: 'emerald' | 'amber' | 'coral';
 };
 
 export function ScoreEstimatorPanel() {
@@ -207,6 +217,7 @@ export function ScoreEstimatorPanel() {
   const activeSummary = useMemo<ActiveSummary | null>(() => {
     if (mode === 'L' && selectedListening && listeningEstimate) {
       return buildSectionSummary({
+        record: selectedListening,
         estimate: listeningEstimate,
         locale,
         title: `${copy.scoreListeningLabel} · ${selectedListening.label}`,
@@ -218,6 +229,7 @@ export function ScoreEstimatorPanel() {
 
     if (mode === 'R' && selectedReading && readingEstimate) {
       return buildSectionSummary({
+        record: selectedReading,
         estimate: readingEstimate,
         locale,
         title: `${copy.scoreReadingLabel} · ${selectedReading.label}`,
@@ -230,6 +242,8 @@ export function ScoreEstimatorPanel() {
     if (selectedPairListening && selectedPairReading) {
       return buildTotalSummary({
         estimate: pairEstimate,
+        listeningRecord: selectedPairListening,
+        readingRecord: selectedPairReading,
         locale,
         title: `${selectedPairListening.label} + ${selectedPairReading.label}`,
         chart: totalTrend,
@@ -417,6 +431,13 @@ export function ScoreEstimatorPanel() {
                     <div className="deck-pill mb-2 text-[10px] tracking-[0.18em]">
                       CEFR {activeSummary.cefr}
                     </div>
+                    <div className={cn('mb-2 rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em]', confidenceBadgeClassName(activeSummary.confidence.tone))}>
+                      {activeSummary.confidence.label}
+                    </div>
+                  </div>
+
+                  <div className={cn('mt-4 rounded-[20px] border px-4 py-3 text-sm leading-6', confidencePanelClassName(activeSummary.confidence.tone))}>
+                    {activeSummary.confidence.detail}
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-4">
@@ -522,6 +543,7 @@ export function ScoreEstimatorPanel() {
 }
 
 function buildSectionSummary({
+  record,
   estimate,
   locale,
   title,
@@ -529,6 +551,7 @@ function buildSectionSummary({
   color,
   label,
 }: {
+  record: SessionRecord;
   estimate: ToeicSectionEstimate;
   locale: 'zh' | 'en';
   title: string;
@@ -551,6 +574,7 @@ function buildSectionSummary({
     color,
     scaleLabel: label,
     penaltyRaw: estimate.bias.penaltyRaw,
+    confidence: buildConfidenceSummary(getSessionDataConfidence(record), locale),
     insights: buildSectionInsights(estimate, locale),
     partBreakdown: estimate.partStats.slice(0, 4).map((item) => ({
       label: translatePart(locale, item.part),
@@ -571,6 +595,8 @@ function buildSectionSummary({
 
 function buildTotalSummary({
   estimate,
+  listeningRecord,
+  readingRecord,
   locale,
   title,
   chart,
@@ -578,6 +604,8 @@ function buildTotalSummary({
   label,
 }: {
   estimate: ToeicCombinedEstimate;
+  listeningRecord?: SessionRecord;
+  readingRecord?: SessionRecord;
   locale: 'zh' | 'en';
   title: string;
   chart: ScoreTrendPoint[];
@@ -618,6 +646,7 @@ function buildTotalSummary({
     penaltyRaw: Number(
       (((estimate.listening?.bias.penaltyRaw ?? 0) + (estimate.reading?.bias.penaltyRaw ?? 0)).toFixed(1))
     ),
+    confidence: buildConfidenceSummary(getCombinedDataConfidence(listeningRecord, readingRecord), locale),
     insights: buildTotalInsights(estimate, locale),
     partBreakdown,
     breakdownCards: [
@@ -1105,6 +1134,70 @@ function formatInterval(min: number, max: number) {
 
 function formatCefr(level: ToeicCefrLevel) {
   return level === 'Below A1' ? '<A1' : level;
+}
+
+function buildConfidenceSummary(confidence: DataConfidence, locale: 'zh' | 'en'): ConfidenceSummary {
+  if (confidence.level === 'high') {
+    return {
+      label: locale === 'zh' ? '高可信度' : 'High Confidence',
+      detail: locale === 'zh' ? '当前样本已包含严格计时与复盘结果，这次估分更适合拿来判断真实趋势。' : 'The sample includes both strict timing and review data, so this estimate is suitable for reading as a real trend.',
+      tone: 'emerald',
+    };
+  }
+
+  if (confidence.level === 'medium') {
+    const detail = confidence.issues.includes('unfinished-backlog')
+      ? locale === 'zh'
+        ? '当前样本可参考，但阅读仍有未完成题或部分节点尚未完全复盘，结论要保守看。'
+        : 'This sample is usable, but unfinished reading backlog or partially reviewed sets still make the conclusion conservative.'
+      : locale === 'zh'
+        ? '当前样本已经可用，但仍缺少完整复盘或计时闭环，建议结合后续几次记录一起看。'
+        : 'The sample is usable, but it still lacks a full timer-review loop, so read it together with the next few records.';
+
+    return {
+      label: locale === 'zh' ? '中等可信度' : 'Medium Confidence',
+      detail,
+      tone: 'amber',
+    };
+  }
+
+  const detail = confidence.issues.includes('timer-running')
+    ? locale === 'zh'
+      ? '当前套题仍在进行中，估分与分布都还没稳定，先不要把它当成正式结论。'
+      : 'The current set is still in progress, so neither the estimate nor the distribution is stable enough for a firm conclusion.'
+    : locale === 'zh'
+      ? '当前数据还不完整，通常意味着缺少严格计时、完整复盘，或听阅配对样本不足。'
+      : 'The current data is still incomplete, usually because strict timing, full review, or paired listening-reading samples are missing.';
+
+  return {
+    label: locale === 'zh' ? '低可信度' : 'Low Confidence',
+    detail,
+    tone: 'coral',
+  };
+}
+
+function confidenceBadgeClassName(tone: ConfidenceSummary['tone']) {
+  if (tone === 'emerald') {
+    return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  }
+
+  if (tone === 'amber') {
+    return 'border-amber-400/30 bg-amber-400/12 text-amber-700 dark:text-amber-300';
+  }
+
+  return 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300';
+}
+
+function confidencePanelClassName(tone: ConfidenceSummary['tone']) {
+  if (tone === 'emerald') {
+    return 'border-emerald-500/20 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300';
+  }
+
+  if (tone === 'amber') {
+    return 'border-amber-400/20 bg-amber-400/8 text-amber-700 dark:text-amber-300';
+  }
+
+  return 'border-red-500/20 bg-red-500/8 text-red-700 dark:text-red-300';
 }
 
 function formatShortDate(value: string, locale: 'zh' | 'en') {

@@ -16,6 +16,19 @@ export type TimerSummary = {
 	completedAt: string;
 };
 
+export type TimerRuntimeState = {
+	startedAt: string;
+	lapStartedAt?: string;
+	currentLapIndex: number;
+	readingLapTimes: Partial<Record<ReadingLapKey, number>>;
+	pendingSubmit?: {
+		forcedSubmit: boolean;
+		timedOut: boolean;
+	};
+	unfinishedQuestionsDraft?: string;
+	timeLeftMs?: number;
+};
+
 export type SessionBlueprint = {
 	id: string;
 	sprintDay: number;
@@ -32,7 +45,30 @@ export type SessionRecord = SessionBlueprint & {
 	reasons: string[];
 	readingLapTimes: Partial<Record<ReadingLapKey, number>>;
 	timerSummary?: TimerSummary;
+	timerRuntime?: TimerRuntimeState;
 	updatedAt?: string;
+};
+
+export type DataConfidenceLevel = "low" | "medium" | "high";
+
+export type DataConfidenceIssue =
+	| "timer-running"
+	| "missing-timer"
+	| "missing-review"
+	| "unfinished-backlog"
+	| "sparse-history";
+
+export type DataConfidence = {
+	level: DataConfidenceLevel;
+	issues: DataConfidenceIssue[];
+};
+
+export type AnalyticsConfidence = DataConfidence & {
+	recordedSessions: number;
+	reviewedSessions: number;
+	inProgressSessions: number;
+	unfinishedSessions: number;
+	timedOutSessions: number;
 };
 
 type ScoreCheckpoint = {
@@ -351,9 +387,132 @@ export function hasRecordedSessionData(record: SessionRecord) {
 		record.status !== "not-started" ||
 		sumMistakes(record) > 0 ||
 		Boolean(record.timerSummary) ||
+		Boolean(record.timerRuntime) ||
 		Object.keys(record.readingLapTimes).length > 0 ||
 		record.reasons.length > 0
 	);
+}
+
+export function getSessionDataConfidence(record: SessionRecord): DataConfidence {
+	const issues: DataConfidenceIssue[] = [];
+
+	if (record.timerRuntime) {
+		issues.push("timer-running");
+	}
+
+	if (!record.timerSummary) {
+		issues.push("missing-timer");
+	}
+
+	if (record.status !== "debugged") {
+		issues.push("missing-review");
+	}
+
+	if (record.type === "R" && getUnfinishedPenalty(record) > 0) {
+		issues.push("unfinished-backlog");
+	}
+
+	return {
+		level: issues.includes("timer-running") || issues.includes("missing-timer")
+			? "low"
+			: issues.length > 0
+				? "medium"
+				: "high",
+		issues,
+	};
+}
+
+export function getCombinedDataConfidence(
+	listeningRecord?: SessionRecord,
+	readingRecord?: SessionRecord
+): DataConfidence {
+	const issues = new Set<DataConfidenceIssue>();
+	const sectionLevels: DataConfidenceLevel[] = [];
+
+	if (!listeningRecord || !readingRecord) {
+		issues.add("sparse-history");
+		return {
+			level: "low",
+			issues: [...issues],
+		};
+	}
+
+	for (const record of [listeningRecord, readingRecord]) {
+		const confidence = getSessionDataConfidence(record);
+		sectionLevels.push(confidence.level);
+		for (const issue of confidence.issues) {
+			issues.add(issue);
+		}
+	}
+
+	return {
+		level: sectionLevels.includes("low")
+			? "low"
+			: sectionLevels.includes("medium")
+				? "medium"
+				: "high",
+		issues: [...issues],
+	};
+}
+
+export function getAnalyticsDataConfidence(sessions: SessionRecord[]): AnalyticsConfidence {
+	let recordedSessions = 0;
+	let reviewedSessions = 0;
+	let inProgressSessions = 0;
+	let unfinishedSessions = 0;
+	let timedOutSessions = 0;
+	const issues = new Set<DataConfidenceIssue>();
+
+	for (const session of sessions) {
+		if (hasRecordedSessionData(session)) {
+			recordedSessions += 1;
+		}
+
+		if (session.status === "debugged") {
+			reviewedSessions += 1;
+		}
+
+		if (session.status === "in-progress") {
+			inProgressSessions += 1;
+		}
+
+		if (session.type === "R" && getUnfinishedPenalty(session) > 0) {
+			unfinishedSessions += 1;
+		}
+
+		if (session.timerSummary?.timedOut) {
+			timedOutSessions += 1;
+		}
+	}
+
+	if (recordedSessions < 4) {
+		issues.add("sparse-history");
+	}
+
+	if (inProgressSessions > 0) {
+		issues.add("missing-review");
+	}
+
+	if (unfinishedSessions > 0) {
+		issues.add("unfinished-backlog");
+	}
+
+	const level: DataConfidenceLevel =
+		recordedSessions < 2 || inProgressSessions > 0
+			? "low"
+			: unfinishedSessions > 0 || reviewedSessions < recordedSessions
+				? "medium"
+				: "high";
+
+	return {
+		level,
+		issues: [...issues],
+		recordedSessions,
+		reviewedSessions,
+		inProgressSessions,
+		unfinishedSessions,
+		timedOutSessions,
+	};
 }
 
 export function estimateToeicScaledScore(rawCorrect: number, type: SessionType) {

@@ -23,10 +23,12 @@ import {
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  getAnalyticsDataConfidence,
   getIncorrectAnswers,
   getSessionPartLossMap,
   getPartsForType,
   LISTENING_PARTS,
+  type AnalyticsConfidence,
   type MistakeKey,
   PART_QUESTION_COUNTS,
   READING_PARTS,
@@ -79,7 +81,7 @@ export function AnalyticsDashboard() {
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
 
-  const { trendData, lossSummary, radarData, radarSummary, reasonData } = useMemo(() => {
+  const { trendData, lossSummary, radarData, radarSummary, reasonData, analyticsConfidence } = useMemo(() => {
     const sessionMap = new Map(sessions.map((session) => [session.id, session]));
     const partMistakes = new Map<string, number>();
     const partAttempts = new Map<string, number>();
@@ -169,6 +171,7 @@ export function AnalyticsDashboard() {
 
     return {
       trendData,
+      analyticsConfidence: getAnalyticsDataConfidence(sessions),
       lossSummary: summarizeLossTrend(trendData),
       radarData,
       radarSummary: {
@@ -184,6 +187,8 @@ export function AnalyticsDashboard() {
 
   return (
     <section className="grid gap-6">
+      <DataConfidenceCard locale={locale} confidence={analyticsConfidence} />
+
       <div className="grid gap-6 xl:grid-cols-2">
         <LossTrendCard
           title={copy.mistakeTrend}
@@ -237,6 +242,106 @@ export function AnalyticsDashboard() {
       </ChartCard>
     </section>
   );
+}
+
+function DataConfidenceCard({ locale, confidence }: { locale: 'zh' | 'en'; confidence: AnalyticsConfidence }) {
+  const title =
+    confidence.level === 'high'
+      ? locale === 'zh'
+        ? '当前分析样本较稳定'
+        : 'Analytics sample is stable'
+      : confidence.level === 'medium'
+        ? locale === 'zh'
+          ? '当前分析可参考，但要保守解读'
+          : 'Analytics is usable, but read conservatively'
+        : locale === 'zh'
+          ? '当前分析样本还不够稳'
+          : 'Analytics sample is still unstable';
+
+  const body =
+    confidence.level === 'high'
+      ? locale === 'zh'
+        ? '大部分记录已经形成“计时 + 复盘”闭环，趋势和薄弱项可以直接拿来指导下一轮训练。'
+        : 'Most records already complete the timer-review loop, so the trends and weak spots are fit to guide the next round.'
+      : confidence.level === 'medium'
+        ? locale === 'zh'
+          ? '当前图表已经有参考价值，但未完成题或未复盘节点仍会拉偏部分趋势。'
+          : 'The charts are already useful, but unfinished items or unreviewed nodes still bias parts of the trend.'
+        : locale === 'zh'
+          ? '当前仍有较多在途记录或样本偏少，先补齐流程再下结论更稳。'
+          : 'There are still too many in-flight records or too little data, so finish the workflow before drawing strong conclusions.';
+
+  return (
+    <Card className="deck-card">
+      <CardHeader className="deck-card-header gap-3 px-6 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
+              {locale === 'zh' ? 'Data Confidence' : 'Data Confidence'}
+            </CardTitle>
+            <CardDescription className="mt-1 text-sm leading-6">{title}</CardDescription>
+          </div>
+          <span className={confidenceBadgeClassName(confidence.level)}>
+            {confidence.level === 'high' ? (locale === 'zh' ? '高' : 'High') : confidence.level === 'medium' ? (locale === 'zh' ? '中' : 'Medium') : locale === 'zh' ? '低' : 'Low'}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className={confidencePanelClassName(confidence.level)}>{body}</div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <SignalTile label={locale === 'zh' ? '已记录' : 'Recorded'} value={`${confidence.recordedSessions}`} helper={locale === 'zh' ? '已进入分析样本的 session' : 'Sessions included in analytics'} />
+          <SignalTile label={locale === 'zh' ? '已复盘' : 'Reviewed'} value={`${confidence.reviewedSessions}`} helper={locale === 'zh' ? 'debugged 节点数' : 'Nodes already reviewed'} />
+          <SignalTile label={locale === 'zh' ? '进行中' : 'In Progress'} value={`${confidence.inProgressSessions}`} helper={locale === 'zh' ? '仍可能继续变动' : 'Still likely to change'} />
+          <SignalTile label={locale === 'zh' ? '未完成题 session' : 'Backlog Sessions'} value={`${confidence.unfinishedSessions}`} helper={locale === 'zh' ? '阅读遗留会放大失分' : 'Reading backlog inflates loss'} />
+          <SignalTile label={locale === 'zh' ? '超时记录' : 'Timed Out'} value={`${confidence.timedOutSessions}`} helper={locale === 'zh' ? '反映时间压力' : 'Signals time pressure'} />
+          <SignalTile label={locale === 'zh' ? '关键提醒' : 'Key Risk'} value={confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : locale === 'zh' ? '无' : 'None'} helper={locale === 'zh' ? '最先要修正的数据风险' : 'The first data risk to resolve'} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SignalTile({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="deck-surface-soft rounded-[22px] p-4">
+      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{helper}</div>
+    </div>
+  );
+}
+
+function confidenceBadgeClassName(level: AnalyticsConfidence['level']) {
+  return level === 'high'
+    ? 'rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300'
+    : level === 'medium'
+      ? 'rounded-full border border-amber-400/30 bg-amber-400/12 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300'
+      : 'rounded-full border border-red-500/25 bg-red-500/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-red-700 dark:text-red-300';
+}
+
+function confidencePanelClassName(level: AnalyticsConfidence['level']) {
+  return level === 'high'
+    ? 'rounded-[24px] border border-emerald-500/20 bg-emerald-500/8 px-4 py-4 text-sm leading-6 text-emerald-700 dark:text-emerald-300'
+    : level === 'medium'
+      ? 'rounded-[24px] border border-amber-400/20 bg-amber-400/8 px-4 py-4 text-sm leading-6 text-amber-700 dark:text-amber-300'
+      : 'rounded-[24px] border border-red-500/20 bg-red-500/8 px-4 py-4 text-sm leading-6 text-red-700 dark:text-red-300';
+}
+
+function formatConfidenceIssue(locale: 'zh' | 'en', issue: AnalyticsConfidence['issues'][number]) {
+  switch (issue) {
+    case 'unfinished-backlog':
+      return locale === 'zh' ? '先清未完成题' : 'Clear backlog first';
+    case 'missing-review':
+      return locale === 'zh' ? '补齐复盘' : 'Finish review';
+    case 'sparse-history':
+      return locale === 'zh' ? '样本太少' : 'Too little data';
+    case 'missing-timer':
+      return locale === 'zh' ? '缺计时数据' : 'Timer data missing';
+    case 'timer-running':
+      return locale === 'zh' ? '仍在进行中' : 'Still in progress';
+    default:
+      return locale === 'zh' ? '无' : 'None';
+  }
 }
 
 function WeaknessRadarCard({
