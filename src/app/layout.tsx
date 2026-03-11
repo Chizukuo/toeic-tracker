@@ -50,11 +50,7 @@ export const metadata: Metadata = {
     title: siteConfig.shortName,
   },
   icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      defaultIcon,
-    ],
-    shortcut: ["/favicon.ico"],
+    icon: [defaultIcon],
     apple: [defaultAppleIcon],
   },
   alternates: {
