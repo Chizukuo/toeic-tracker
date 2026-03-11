@@ -39,8 +39,9 @@ export const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 export const metadataBase = new URL(siteUrl);
 
 export const defaultIcon = {
-  url: `/icon.svg?v=${ASSET_VERSION}`,
-  type: "image/svg+xml",
+  url: `/icon?v=${ASSET_VERSION}`,
+  sizes: "512x512",
+  type: "image/png",
 } as const;
 
 export const defaultAppleIcon = {

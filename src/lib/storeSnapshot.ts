@@ -220,6 +220,7 @@ export function migrateLegacyRecords(records: LegacyRecord[] | undefined) {
             forcedSubmit: false,
             timedOut: false,
             unfinishedQuestions: 0,
+            resolvedUnfinished: true,
             completedAt: new Date().toISOString(),
           }
         : undefined,

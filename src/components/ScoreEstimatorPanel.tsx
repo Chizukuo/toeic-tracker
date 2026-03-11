@@ -34,8 +34,8 @@ import {
 } from '@/components/ui/select';
 import { getCopy, translatePart } from '@/lib/i18n';
 import {
-  estimateToeicCombinedScore,
-  estimateToeicSessionScore,
+  estimateToeicCombinedDualScore,
+  estimateToeicSessionDualScore,
   getCombinedDataConfidence,
   getCombinedEstimateBand,
   getSessionDataConfidence,
@@ -127,13 +127,13 @@ export function ScoreEstimatorPanel() {
   const deferredSessions = useDeferredValue(sessions);
   const deferredHistoricalScores = useDeferredValue(historicalScores);
 
-  const { estimateMap, listeningSessions, readingSessions, sessionMap } = useMemo(() => {
+  const { dualEstimateMap, listeningSessions, readingSessions, sessionMap } = useMemo(() => {
     const nextSessionMap = new Map(deferredSessions.map((session) => [session.id, session]));
-    const nextEstimateMap = new Map(deferredSessions.map((session) => [session.id, estimateToeicSessionScore(session)]));
+    const nextEstimateMap = new Map(deferredSessions.map((session) => [session.id, estimateToeicSessionDualScore(session)]));
 
     return {
       sessionMap: nextSessionMap,
-      estimateMap: nextEstimateMap,
+      dualEstimateMap: nextEstimateMap,
       listeningSessions: deferredSessions.filter((session) => session.type === 'L'),
       readingSessions: deferredSessions.filter((session) => session.type === 'R'),
     };
@@ -144,41 +144,45 @@ export function ScoreEstimatorPanel() {
   const selectedPairListening = sessionMap.get(`L${selectedPair}`) ?? listeningSessions[0];
   const selectedPairReading = sessionMap.get(`R${selectedPair}`) ?? readingSessions[0];
 
-  const listeningEstimate = selectedListening ? estimateMap.get(selectedListening.id) : undefined;
-  const readingEstimate = selectedReading ? estimateMap.get(selectedReading.id) : undefined;
+  const listeningEstimate = selectedListening ? dualEstimateMap.get(selectedListening.id)?.strict : undefined;
+  const listeningPotentialEstimate = selectedListening ? dualEstimateMap.get(selectedListening.id)?.potential : undefined;
+  const readingEstimate = selectedReading ? dualEstimateMap.get(selectedReading.id)?.strict : undefined;
+  const readingPotentialEstimate = selectedReading ? dualEstimateMap.get(selectedReading.id)?.potential : undefined;
   const pairEstimate = useMemo(
-    () => estimateToeicCombinedScore(selectedPairListening, selectedPairReading),
+    () => estimateToeicCombinedDualScore(selectedPairListening, selectedPairReading),
     [selectedPairListening, selectedPairReading]
   );
+  const pairStrictEstimate = pairEstimate.strict;
+  const pairPotentialEstimate = pairEstimate.potential;
 
   const listeningTrend = useMemo(
     () =>
       listeningSessions.map((session) => {
-        const estimate = estimateMap.get(session.id);
+        const estimate = dualEstimateMap.get(session.id);
         return {
           label: session.label,
-          score: estimate?.available ? estimate.scaled : undefined,
-          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
-          adjustedRaw: estimate?.available ? estimate.adjustedRawCorrect : undefined,
+          score: estimate?.strict.available ? estimate.strict.scaled : undefined,
+          rawCorrect: estimate?.strict.available ? estimate.strict.rawCorrect : undefined,
+          adjustedRaw: estimate?.strict.available ? estimate.strict.adjustedRawCorrect : undefined,
           active: session.id === selectedListeningId,
         };
       }),
-    [estimateMap, listeningSessions, selectedListeningId]
+    [dualEstimateMap, listeningSessions, selectedListeningId]
   );
 
   const readingTrend = useMemo(
     () =>
       readingSessions.map((session) => {
-        const estimate = estimateMap.get(session.id);
+        const estimate = dualEstimateMap.get(session.id);
         return {
           label: session.label,
-          score: estimate?.available ? estimate.scaled : undefined,
-          rawCorrect: estimate?.available ? estimate.rawCorrect : undefined,
-          adjustedRaw: estimate?.available ? estimate.adjustedRawCorrect : undefined,
+          score: estimate?.strict.available ? estimate.strict.scaled : undefined,
+          rawCorrect: estimate?.strict.available ? estimate.strict.rawCorrect : undefined,
+          adjustedRaw: estimate?.strict.available ? estimate.strict.adjustedRawCorrect : undefined,
           active: session.id === selectedReadingId,
         };
       }),
-    [estimateMap, readingSessions, selectedReadingId]
+    [dualEstimateMap, readingSessions, selectedReadingId]
   );
 
   const totalTrend = useMemo(
@@ -187,7 +191,7 @@ export function ScoreEstimatorPanel() {
         const pair = `${index + 1}`;
         const listening = sessionMap.get(`L${pair}`);
         const reading = sessionMap.get(`R${pair}`);
-        const estimate = estimateToeicCombinedScore(listening, reading);
+        const estimate = estimateToeicCombinedDualScore(listening, reading).strict;
 
         return {
           label: `S${pair}`,
@@ -243,7 +247,7 @@ export function ScoreEstimatorPanel() {
 
     if (selectedPairListening && selectedPairReading) {
       return buildTotalSummary({
-        estimate: pairEstimate,
+        estimate: pairStrictEstimate,
         listeningRecord: selectedPairListening,
         readingRecord: selectedPairReading,
         locale,
@@ -263,8 +267,65 @@ export function ScoreEstimatorPanel() {
     listeningTrend,
     locale,
     mode,
-    pairEstimate,
+    pairStrictEstimate,
     readingEstimate,
+    readingTrend,
+    selectedListening,
+    selectedPairListening,
+    selectedPairReading,
+    selectedReading,
+    totalTrend,
+  ]);
+
+  const potentialSummary = useMemo<ActiveSummary | null>(() => {
+    if (mode === 'L' && selectedListening && listeningPotentialEstimate) {
+      return buildSectionSummary({
+        record: selectedListening,
+        estimate: listeningPotentialEstimate,
+        locale,
+        title: `${copy.scoreListeningLabel} · ${selectedListening.label}`,
+        chart: listeningTrend,
+        color: '#f59e0b',
+        label: copy.scoreListeningLabel,
+      });
+    }
+
+    if (mode === 'R' && selectedReading && readingPotentialEstimate) {
+      return buildSectionSummary({
+        record: selectedReading,
+        estimate: readingPotentialEstimate,
+        locale,
+        title: `${copy.scoreReadingLabel} · ${selectedReading.label}`,
+        chart: readingTrend,
+        color: '#38bdf8',
+        label: copy.scoreReadingLabel,
+      });
+    }
+
+    if (selectedPairListening && selectedPairReading) {
+      return buildTotalSummary({
+        estimate: pairPotentialEstimate,
+        listeningRecord: selectedPairListening,
+        readingRecord: selectedPairReading,
+        locale,
+        title: `${selectedPairListening.label} + ${selectedPairReading.label}`,
+        chart: totalTrend,
+        color: '#f97316',
+        label: copy.scoreTotalLabel,
+      });
+    }
+
+    return null;
+  }, [
+    copy.scoreListeningLabel,
+    copy.scoreReadingLabel,
+    copy.scoreTotalLabel,
+    listeningPotentialEstimate,
+    listeningTrend,
+    locale,
+    mode,
+    pairPotentialEstimate,
+    readingPotentialEstimate,
     readingTrend,
     selectedListening,
     selectedPairListening,
@@ -292,19 +353,19 @@ export function ScoreEstimatorPanel() {
   }
 
   function handleAutoAddEstimatedScore() {
-    if (!pairEstimate.available || !pairEstimate.listening || !pairEstimate.reading) {
+    if (!pairStrictEstimate.available || !pairStrictEstimate.listening || !pairStrictEstimate.reading) {
       return;
     }
 
-    const listeningEstimate = pairEstimate.listening;
-    const readingEstimate = pairEstimate.reading;
+    const listeningEstimate = pairStrictEstimate.listening;
+    const readingEstimate = pairStrictEstimate.reading;
 
     startTransition(() => {
       addHistoricalScore({
         date: historyDate || getTodayDateLocal(),
         listening: listeningEstimate.scaled,
         reading: readingEstimate.scaled,
-        total: pairEstimate.total,
+        total: pairStrictEstimate.total,
         source: 'estimated',
         note: `${selectedPairListening.label} + ${selectedPairReading.label}`,
       });
@@ -313,7 +374,7 @@ export function ScoreEstimatorPanel() {
     setHistoryDate('');
   }
 
-  const canAutoRecordEstimate = mode === 'T' && pairEstimate.available;
+  const canAutoRecordEstimate = mode === 'T' && pairStrictEstimate.available;
 
   return (
     <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 shadow-[0_24px_80px_-46px_rgba(15,23,42,0.22)] dark:border-white/10">
@@ -422,6 +483,24 @@ export function ScoreEstimatorPanel() {
             <EstimatePlaceholder />
           ) : (
             <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <DualScoreCard
+                  locale={locale}
+                  title={locale === 'zh' ? '严格模考分' : 'Strict Score'}
+                  body={locale === 'zh' ? '基于规定时间内的错题 + 未完成惩罚。' : 'Built from in-time mistakes plus unfinished-question penalty.'}
+                  summary={activeSummary}
+                  tone="amber"
+                />
+                <DualScoreCard
+                  locale={locale}
+                  title={locale === 'zh' ? '潜力分' : 'Potential Score'}
+                  body={locale === 'zh' ? '合并 overtime 错题，去掉未完成惩罚。' : 'Merges overtime mistakes and removes the unfinished penalty.'}
+                  summary={potentialSummary ?? activeSummary}
+                  tone="cyan"
+                  delta={(potentialSummary ?? activeSummary).score - activeSummary.score}
+                />
+              </div>
+
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_320px]">
                 <div className="deck-surface p-5">
                   <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
@@ -472,6 +551,11 @@ export function ScoreEstimatorPanel() {
                   <div className="mt-4 grid gap-3">
                     <ScoreMetric label={locale === 'zh' ? '预测区间' : 'SEM Range'} value={activeSummary.interval} compact />
                     <ScoreMetric label={locale === 'zh' ? '分布惩罚' : 'Distribution Penalty'} value={`-${activeSummary.penaltyRaw}`} compact />
+                    <ScoreMetric
+                      label={locale === 'zh' ? '速度损失' : 'Speed Gap'}
+                      value={`${Math.max((potentialSummary ?? activeSummary).score - activeSummary.score, 0)}`}
+                      compact
+                    />
                     <ScoreMetric label={locale === 'zh' ? '最近历史' : 'Latest History'} value={latestHistorical ? `${latestHistorical.total}` : '--'} compact />
                   </div>
                 </div>
@@ -994,6 +1078,54 @@ const HistoricalScoreChart = memo(function HistoricalScoreChart({ data, locale }
     </div>
   );
 });
+
+function DualScoreCard({
+  locale,
+  title,
+  body,
+  summary,
+  tone,
+  delta,
+}: {
+  locale: 'zh' | 'en';
+  title: string;
+  body: string;
+  summary: ActiveSummary;
+  tone: 'amber' | 'cyan';
+  delta?: number;
+}) {
+  const toneClass = tone === 'amber'
+    ? 'border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,214,102,0.18),rgba(255,255,255,0.82))] dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.09),rgba(16,18,24,0.95))]'
+    : 'border-cyan-300/60 bg-[linear-gradient(180deg,rgba(125,225,255,0.16),rgba(255,255,255,0.82))] dark:bg-[linear-gradient(180deg,rgba(84,212,255,0.08),rgba(16,18,24,0.95))]';
+
+  return (
+    <div className={cn('rounded-[28px] border p-5 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.26)]', toneClass)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{title}</div>
+          <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{body}</p>
+        </div>
+        <div className="deck-pill text-[10px] tracking-[0.18em]">CEFR {summary.cefr}</div>
+      </div>
+
+      <div className="mt-4 flex items-end gap-3">
+        <div className="font-mono text-5xl font-semibold tracking-[-0.05em] text-zinc-950 dark:text-zinc-50">{summary.score}</div>
+        <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{summary.band}</div>
+        {typeof delta === 'number' && delta > 0 ? (
+          <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-red-600 dark:text-red-300">
+            {locale === 'zh' ? `+${delta} 速度差` : `+${delta} speed gap`}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <ScoreMetric label={locale === 'zh' ? '原始分' : 'Raw'} value={`${summary.rawCorrect}`} compact />
+        <ScoreMetric label={locale === 'zh' ? '准确率' : 'Accuracy'} value={`${summary.accuracy}%`} compact />
+        <ScoreMetric label={locale === 'zh' ? '区间' : 'Range'} value={summary.interval} compact />
+      </div>
+    </div>
+  );
+}
 
 function InsightCard({ locale, insights }: { locale: 'zh' | 'en'; insights: string[] }) {
   return (

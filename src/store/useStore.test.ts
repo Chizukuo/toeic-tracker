@@ -129,6 +129,7 @@ describe('useStore snapshot compatibility', () => {
       forcedSubmit: true,
       timedOut: true,
       unfinishedQuestions: 4,
+      resolvedUnfinished: false,
       completedAt: '2026-03-11T12:00:00.000Z',
     };
 

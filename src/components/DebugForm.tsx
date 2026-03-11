@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { getCopy, translatePart, translateReason } from '@/lib/i18n';
 import {
+  hasResolvedUnfinished,
   READING_LAP_SEGMENTS,
   formatMinutes,
   getPartsForType,
@@ -21,23 +22,43 @@ import { useStore } from '@/store/useStore';
 
 export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
   const saveDiagnostics = useStore((state) => state.saveDiagnostics);
+  const saveOvertimeDiagnostics = useStore((state) => state.saveOvertimeDiagnostics);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const parts = useMemo(() => getPartsForType(activeSession.type), [activeSession.type]);
   const reasonOptions = useMemo(() => getReasonsForType(activeSession.type), [activeSession.type]);
 
   const [mistakes, setMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.mistakes);
+  const [overtimeMistakes, setOvertimeMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.overtimeMistakes ?? {});
   const [reasons, setReasons] = useState<string[]>(activeSession.reasons);
   const [saved, setSaved] = useState(false);
+  const [overtimeSaved, setOvertimeSaved] = useState(false);
+
+  const unresolvedBacklog = activeSession.type === 'R'
+    && (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0
+    && !hasResolvedUnfinished(activeSession);
 
   const totalMistakes = useMemo(
     () => sumMistakes({ ...activeSession, mistakes }),
     [activeSession, mistakes]
   );
 
+  const totalOvertimeMistakes = useMemo(
+    () => Object.values(overtimeMistakes).reduce((sum, value) => sum + (value ?? 0), 0),
+    [overtimeMistakes]
+  );
+
   const updateMistake = (part: MistakeKey, value: string) => {
     const parsed = Number(value);
     setMistakes((current) => ({
+      ...current,
+      [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+    }));
+  };
+
+  const updateOvertimeMistake = (part: MistakeKey, value: string) => {
+    const parsed = Number(value);
+    setOvertimeMistakes((current) => ({
       ...current,
       [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
     }));
@@ -57,6 +78,23 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
     });
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
+  };
+
+  const handleSaveOvertime = () => {
+    const overtimeStartedAt = activeSession.timerRuntime?.overtimeStartedAt
+      ? new Date(activeSession.timerRuntime.overtimeStartedAt).getTime()
+      : undefined;
+    const overtimeElapsedMs = activeSession.timerSummary?.overtimeElapsedMs
+      ?? (overtimeStartedAt ? Math.max(Date.now() - overtimeStartedAt, 0) : undefined);
+
+    saveOvertimeDiagnostics(activeSession.id, {
+      overtimeMistakes,
+      resolvedUnfinished: true,
+      overtimeElapsedMs,
+      status: 'debugged',
+    });
+    setOvertimeSaved(true);
+    window.setTimeout(() => setOvertimeSaved(false), 1600);
   };
 
   return (
@@ -87,6 +125,24 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
             }
           />
         </div>
+
+        {unresolvedBacklog && (
+          <div className="rounded-[22px] border border-red-500/20 bg-red-500/8 p-4 dark:bg-red-500/10">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-red-600 dark:text-red-300">
+              {locale === 'zh' ? 'Overtime Review Mode' : 'Overtime Review Mode'}
+            </div>
+            <div className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              {locale === 'zh'
+                ? `这套题还有 ${activeSession.timerSummary?.unfinishedQuestions ?? 0} 题是在超时后补做的。`
+                : `${activeSession.timerSummary?.unfinishedQuestions ?? 0} items in this set were resolved after the time limit.`}
+            </div>
+            <p className="mt-2 text-xs leading-6 text-zinc-600 dark:text-zinc-300">
+              {locale === 'zh'
+                ? '下面这组输入框只记录超时后补做时真正做错的题目，并会写入潜力分，不再反向污染严格模考分。'
+                : 'The overtime fields below only record mistakes made while resolving unfinished items after time expired. They feed the potential score without contaminating the strict mock score.'}
+            </p>
+          </div>
+        )}
 
         {activeSession.type === 'R' && (
           <div className="deck-surface-soft p-4">
@@ -140,6 +196,39 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
           </div>
         </div>
 
+        {unresolvedBacklog && (
+          <div>
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+                {locale === 'zh' ? '超时后补录错题' : 'Overtime Mistakes'}
+              </div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
+                {locale === 'zh' ? `已录 ${totalOvertimeMistakes}` : `${totalOvertimeMistakes} logged`}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {parts.map((part) => (
+                <label key={`overtime-${part}`} className="deck-surface-soft border-red-500/10 p-3 transition-colors hover:border-red-300/40 dark:hover:border-red-300/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
+                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
+                      {overtimeMistakes[part] ?? 0}
+                    </div>
+                  </div>
+                  <Input
+                    type="number"
+                    min="0"
+                    className="mt-2 h-9 bg-white text-sm dark:bg-zinc-950"
+                    value={overtimeMistakes[part] ?? ''}
+                    onChange={(event) => updateOvertimeMistake(part, event.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.rootCauseTags}</div>
@@ -180,6 +269,29 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
             {saved ? `${copy.saveDiagnostics} OK` : `${copy.saveDiagnostics} ${copy.markDebugged}`}
           </Button>
         </div>
+
+        {unresolvedBacklog && (
+          <div className="deck-surface-strong border border-red-500/10 p-3">
+            <div className="mb-3 flex items-center justify-between gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span>
+                {locale === 'zh'
+                  ? '保存后会写入 overtimeMistakes，并把这套题从未完成列表中移除。'
+                  : 'Saving writes overtimeMistakes and removes this set from the unfinished queue.'}
+              </span>
+              <span className="font-mono uppercase tracking-[0.2em]">{totalOvertimeMistakes}</span>
+            </div>
+            <Button size="sm" onClick={handleSaveOvertime} className="w-full bg-red-500 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-red-600">
+              {overtimeSaved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
+              {overtimeSaved
+                ? locale === 'zh'
+                  ? '已保存加时补录'
+                  : 'Overtime Saved'
+                : locale === 'zh'
+                  ? '保存加时补录'
+                  : 'Save Overtime Review'}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

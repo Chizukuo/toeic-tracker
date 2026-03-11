@@ -27,6 +27,7 @@ describe('toeic scoring rules', () => {
       forcedSubmit: true,
       timedOut: true,
       unfinishedQuestions: 7,
+      resolvedUnfinished: false,
       completedAt: '2026-03-11T09:00:00.000Z',
     };
 
@@ -83,6 +84,7 @@ describe('toeic scoring rules', () => {
       forcedSubmit: false,
       timedOut: false,
       unfinishedQuestions: 0,
+      resolvedUnfinished: true,
       completedAt: '2026-03-11T10:00:00.000Z',
     };
 
@@ -97,6 +99,7 @@ describe('toeic scoring rules', () => {
       forcedSubmit: true,
       timedOut: true,
       unfinishedQuestions: 3,
+      resolvedUnfinished: false,
       completedAt: '2026-03-11T11:00:00.000Z',
     };
 
@@ -132,6 +135,7 @@ describe('toeic scoring rules', () => {
       forcedSubmit: true,
       timedOut: true,
       unfinishedQuestions: 5,
+      resolvedUnfinished: false,
       completedAt: '2026-03-11T08:50:00.000Z',
     };
 
@@ -143,5 +147,40 @@ describe('toeic scoring rules', () => {
     expect(analyticsConfidence.unfinishedSessions).toBe(1);
     expect(analyticsConfidence.issues).toContain('sparse-history');
     expect(analyticsConfidence.issues).toContain('missing-review');
+  });
+
+  it('separates strict and potential reading estimates after overtime review', () => {
+    const reading = createInitialSessions().find((session) => session.id === 'R5');
+
+    if (!reading) {
+      throw new Error('Missing R5 session fixture');
+    }
+
+    reading.status = 'debugged';
+    reading.mistakes = {
+      'Part 5': 3,
+      'Part 6': 2,
+    };
+    reading.overtimeMistakes = {
+      'Part 7 Single': 2,
+    };
+    reading.timerSummary = {
+      totalElapsedMs: 75 * 60 * 1000,
+      forcedSubmit: true,
+      timedOut: true,
+      unfinishedQuestions: 6,
+      resolvedUnfinished: true,
+      overtimeElapsedMs: 12 * 60 * 1000,
+      completedAt: '2026-03-11T12:00:00.000Z',
+    };
+
+    const strict = estimateToeicCombinedScore(undefined, reading, 'strict');
+    const potential = estimateToeicCombinedScore(undefined, reading, 'potential');
+    const confidence = getSessionDataConfidence(reading);
+
+    expect(potential.reading?.rawCorrect).toBeGreaterThan(strict.reading?.rawCorrect ?? 0);
+    expect(strict.reading?.unfinishedPenalty).toBe(6);
+    expect(potential.reading?.unfinishedPenalty).toBe(0);
+    expect(confidence.issues).not.toContain('unfinished-backlog');
   });
 });

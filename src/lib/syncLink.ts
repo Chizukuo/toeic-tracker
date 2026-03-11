@@ -36,12 +36,16 @@ const SESSION_FLAG_LAP_TIMES = 8;
 const SESSION_FLAG_TIMER_SUMMARY = 16;
 const SESSION_FLAG_TIMER_RUNTIME = 32;
 const SESSION_FLAG_UPDATED_AT = 64;
+const SESSION_FLAG_OVERTIME_MISTAKES = 128;
 
 const TIMER_RUNTIME_FLAG_LAP_STARTED_AT = 1;
 const TIMER_RUNTIME_FLAG_LAP_TIMES = 2;
 const TIMER_RUNTIME_FLAG_PENDING_SUBMIT = 4;
 const TIMER_RUNTIME_FLAG_UNFINISHED_DRAFT = 8;
 const TIMER_RUNTIME_FLAG_TIME_LEFT = 16;
+const TIMER_RUNTIME_FLAG_IS_OVERTIME = 32;
+const TIMER_RUNTIME_FLAG_OVERTIME_STARTED_AT = 64;
+const TIMER_RUNTIME_FLAG_OVERTIME_ELAPSED = 128;
 
 const METADATA_FLAG_OVERRIDE = 1;
 const DEFAULT_MINIMUM_READER_VERSION = 1;
@@ -49,7 +53,7 @@ const DEFAULT_MINIMUM_READER_VERSION = 1;
 type StatusCode = 0 | 1 | 2;
 type LocaleCode = 0 | 1;
 
-type CompactTimerSummary = [number, number, number, string];
+type CompactTimerSummary = [number, number, number, string, number?, number?];
 type CompactTimerRuntime = [string, number, number, ...(string | number | number[])[]];
 type CompactSessionDelta = [number, number, ...(number | number[] | CompactTimerSummary | CompactTimerRuntime | string)[]];
 type CompactHistoricalScore = [string, number, number, number, number, string, string?];
@@ -268,9 +272,12 @@ function encodeTimerSummary(snapshot: SprintSnapshot['data']['sessions'][number]
 
   return [
     snapshot.totalElapsedMs,
-    (snapshot.forcedSubmit ? 1 : 0) | (snapshot.timedOut ? 2 : 0),
+    (snapshot.forcedSubmit ? 1 : 0) |
+      (snapshot.timedOut ? 2 : 0) |
+      (snapshot.resolvedUnfinished ? 4 : 0),
     snapshot.unfinishedQuestions,
     encodeInstant(snapshot.completedAt, anchor),
+    snapshot.overtimeElapsedMs,
   ] satisfies CompactTimerSummary;
 }
 
@@ -284,7 +291,9 @@ function decodeTimerSummary(summary: CompactTimerSummary | undefined, anchor: st
     forcedSubmit: Boolean(summary[1] & 1),
     timedOut: Boolean(summary[1] & 2),
     unfinishedQuestions: summary[2],
+    resolvedUnfinished: Boolean(summary[1] & 4),
     completedAt: decodeInstant(summary[3], anchor) ?? new Date(0).toISOString(),
+    ...(typeof summary[4] === 'number' ? { overtimeElapsedMs: summary[4] } : {}),
   };
 }
 
@@ -325,6 +334,20 @@ function encodeTimerRuntime(snapshot: SprintSnapshot['data']['sessions'][number]
     payload.push(snapshot.timeLeftMs);
   }
 
+  if (snapshot.isOvertime) {
+    flags |= TIMER_RUNTIME_FLAG_IS_OVERTIME;
+  }
+
+  if (snapshot.overtimeStartedAt) {
+    flags |= TIMER_RUNTIME_FLAG_OVERTIME_STARTED_AT;
+    payload.push(encodeInstant(snapshot.overtimeStartedAt, anchor));
+  }
+
+  if (snapshot.overtimeElapsedMs !== undefined) {
+    flags |= TIMER_RUNTIME_FLAG_OVERTIME_ELAPSED;
+    payload.push(snapshot.overtimeElapsedMs);
+  }
+
   return [payload[0] as string, payload[1] as number, flags, ...payload.slice(2)] satisfies CompactTimerRuntime;
 }
 
@@ -351,24 +374,49 @@ function decodeTimerRuntime(runtime: CompactTimerRuntime | undefined, anchor: st
     return Array.isArray(value) ? value.filter((item): item is number => typeof item === 'number') : [];
   };
 
-  return {
+  const decoded = {
     startedAt: decodeInstant(runtime[0], anchor) ?? new Date(0).toISOString(),
-    lapStartedAt: flags & TIMER_RUNTIME_FLAG_LAP_STARTED_AT ? decodeInstant(nextString(), anchor) : undefined,
     currentLapIndex: runtime[1] ?? 0,
-    readingLapTimes:
-      flags & TIMER_RUNTIME_FLAG_LAP_TIMES
-        ? decodeNumberPairs(nextNumberArray(), LAP_KEYS)
-        : {},
-    pendingSubmit:
-      flags & TIMER_RUNTIME_FLAG_PENDING_SUBMIT
-        ? {
-            forcedSubmit: Boolean(nextNumber() & 1),
-            timedOut: Boolean((runtime[cursor - 1] as number) & 2),
-          }
-        : undefined,
-    unfinishedQuestionsDraft: flags & TIMER_RUNTIME_FLAG_UNFINISHED_DRAFT ? nextString() || undefined : undefined,
-    timeLeftMs: flags & TIMER_RUNTIME_FLAG_TIME_LEFT ? nextNumber() : undefined,
+    readingLapTimes: {} as ReturnType<typeof decodeNumberPairs>,
   };
+
+  if (flags & TIMER_RUNTIME_FLAG_LAP_STARTED_AT) {
+    decoded.lapStartedAt = decodeInstant(nextString(), anchor) ?? new Date(0).toISOString();
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_LAP_TIMES) {
+    decoded.readingLapTimes = decodeNumberPairs(nextNumberArray(), LAP_KEYS);
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_PENDING_SUBMIT) {
+    const pendingValue = nextNumber();
+    decoded.pendingSubmit = {
+      forcedSubmit: Boolean(pendingValue & 1),
+      timedOut: Boolean(pendingValue & 2),
+    };
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_UNFINISHED_DRAFT) {
+    decoded.unfinishedQuestionsDraft = nextString() || undefined;
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_TIME_LEFT) {
+    decoded.timeLeftMs = nextNumber();
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_IS_OVERTIME) {
+    decoded.isOvertime = true;
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_OVERTIME_STARTED_AT) {
+    decoded.overtimeStartedAt = decodeInstant(nextString(), anchor) ?? new Date(0).toISOString();
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_OVERTIME_ELAPSED) {
+    decoded.overtimeElapsedMs = nextNumber();
+  }
+
+  return decoded;
 }
 
 function decodeLegacyTimerSummary(summary: CompactTimerSummary | undefined) {
@@ -381,6 +429,7 @@ function decodeLegacyTimerSummary(summary: CompactTimerSummary | undefined) {
     forcedSubmit: Boolean(summary[1] & 1),
     timedOut: Boolean(summary[1] & 2),
     unfinishedQuestions: summary[2],
+    resolvedUnfinished: false,
     completedAt: decodeInstant(summary[3]) ?? new Date(0).toISOString(),
   };
 }
@@ -474,6 +523,7 @@ function hasSessionDelta(session: SprintSnapshot['data']['sessions'][number], in
   return (
     session.status !== base.status ||
     Object.keys(session.mistakes).length > 0 ||
+    Object.keys(session.overtimeMistakes ?? {}).length > 0 ||
     session.reasons.length > 0 ||
     Object.keys(session.readingLapTimes).length > 0 ||
     Boolean(session.timerSummary) ||
@@ -494,6 +544,7 @@ function encodeSessions(snapshot: SprintSnapshot) {
     const mistakes = encodeNumberPairs(session.mistakes, MISTAKE_KEYS);
     const reasons = encodeReasons(session.reasons);
     const lapTimes = encodeNumberPairs(session.readingLapTimes, LAP_KEYS);
+    const overtimeMistakes = encodeNumberPairs(session.overtimeMistakes ?? {}, MISTAKE_KEYS);
     let flags = 0;
     const payload: Array<number | number[] | CompactTimerSummary | CompactTimerRuntime | string> = [];
 
@@ -527,6 +578,11 @@ function encodeSessions(snapshot: SprintSnapshot) {
       payload.push(encodeTimerRuntime(session.timerRuntime, snapshot.exportedAt)!);
     }
 
+    if (overtimeMistakes.length > 0) {
+      flags |= SESSION_FLAG_OVERTIME_MISTAKES;
+      payload.push(overtimeMistakes);
+    }
+
     if (session.updatedAt) {
       flags |= SESSION_FLAG_UPDATED_AT;
       payload.push(encodeInstant(session.updatedAt, snapshot.exportedAt));
@@ -540,6 +596,7 @@ function decodeSessions(compactSessions: CompactSessionDelta[], anchor: string) 
   const decoded = SESSION_DEFAULTS.map((session) => ({
     ...session,
     mistakes: { ...session.mistakes },
+    overtimeMistakes: session.overtimeMistakes ? { ...session.overtimeMistakes } : undefined,
     reasons: [...session.reasons],
     readingLapTimes: { ...session.readingLapTimes },
   }));
@@ -566,12 +623,16 @@ function decodeSessions(compactSessions: CompactSessionDelta[], anchor: string) 
     const lapTimes = flags & SESSION_FLAG_LAP_TIMES ? nextValue() : undefined;
     const timerSummary = flags & SESSION_FLAG_TIMER_SUMMARY ? nextValue() : undefined;
     const timerRuntime = flags & SESSION_FLAG_TIMER_RUNTIME ? nextValue() : undefined;
+    const overtimeMistakes = flags & SESSION_FLAG_OVERTIME_MISTAKES ? nextValue() : undefined;
     const updatedAt = flags & SESSION_FLAG_UPDATED_AT ? nextValue() : undefined;
 
     const nextSession: SprintSnapshot['data']['sessions'][number] = {
       ...base,
       status: nextStatus ?? base.status,
       mistakes: Array.isArray(mistakes) ? decodeNumberPairs(mistakes as number[], MISTAKE_KEYS) : {},
+      overtimeMistakes: Array.isArray(overtimeMistakes)
+        ? decodeNumberPairs(overtimeMistakes as number[], MISTAKE_KEYS)
+        : undefined,
       reasons: Array.isArray(reasons) ? decodeReasons(reasons.filter((item): item is number => typeof item === 'number') as number[]) : [],
       readingLapTimes: Array.isArray(lapTimes) ? decodeNumberPairs(lapTimes as number[], LAP_KEYS) : {},
     };

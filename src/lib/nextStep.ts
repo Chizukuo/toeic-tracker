@@ -1,6 +1,8 @@
 import { formatSessionTitle, translatePart, type Locale } from '@/lib/i18n';
 import {
+  getSessionTypeForPart,
   getPartsForType,
+  hasResolvedUnfinished,
   PART_QUESTION_COUNTS,
   type MistakeKey,
   type SessionRecord,
@@ -125,7 +127,12 @@ export function getNextStepRecommendation({
 
 function getBacklogSession(sessions: SessionRecord[]) {
   return sessions
-    .filter((session) => session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0)
+    .filter(
+      (session) =>
+        session.type === 'R' &&
+        (session.timerSummary?.unfinishedQuestions ?? 0) > 0 &&
+        !hasResolvedUnfinished(session)
+    )
     .sort((left, right) => {
       const unfinishedDelta = (right.timerSummary?.unfinishedQuestions ?? 0) - (left.timerSummary?.unfinishedQuestions ?? 0);
       if (unfinishedDelta !== 0) {
@@ -144,7 +151,7 @@ function getWeaknessPlan(locale: Locale, sessions: SessionRecord[]): NextStepRec
     return null;
   }
 
-  const targetType = weakestPart.startsWith('Part 1') || weakestPart.startsWith('Part 2') || weakestPart.startsWith('Part 3') || weakestPart.startsWith('Part 4') ? 'L' : 'R';
+  const targetType = getSessionTypeForPart(weakestPart);
   const candidate = sessions.find((session) => session.type === targetType && session.status !== 'debugged');
 
   if (!candidate) {

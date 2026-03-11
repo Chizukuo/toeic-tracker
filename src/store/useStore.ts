@@ -55,6 +55,15 @@ interface AppState {
       status?: SessionStatus;
     }
   ) => void;
+  saveOvertimeDiagnostics: (
+    sessionId: string,
+    payload: {
+      overtimeMistakes: Partial<Record<MistakeKey, number>>;
+      resolvedUnfinished: boolean;
+      overtimeElapsedMs?: number;
+      status?: SessionStatus;
+    }
+  ) => void;
   exportSnapshot: () => SprintSnapshot;
   importSnapshot: (snapshot: unknown) => ImportSnapshotResult;
   resetProgress: () => void;
@@ -124,8 +133,15 @@ export const useStore = create<AppState>()(
                   ...session,
                   ...data,
                   mistakes: data.mistakes ?? session.mistakes,
+                  overtimeMistakes: data.overtimeMistakes ?? session.overtimeMistakes,
                   reasons: data.reasons ?? session.reasons,
                   readingLapTimes: data.readingLapTimes ?? session.readingLapTimes,
+                  timerSummary: data.timerSummary
+                    ? {
+                        ...session.timerSummary,
+                        ...data.timerSummary,
+                      }
+                    : session.timerSummary,
                   updatedAt: new Date().toISOString(),
                 }
               : session
@@ -140,6 +156,28 @@ export const useStore = create<AppState>()(
                   mistakes: payload.mistakes,
                   reasons: payload.reasons,
                   status: payload.status ?? 'debugged',
+                  updatedAt: new Date().toISOString(),
+                }
+              : session
+          ),
+        })),
+      saveOvertimeDiagnostics: (sessionId, payload) =>
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  overtimeMistakes: payload.overtimeMistakes,
+                  status: payload.status ?? 'debugged',
+                  timerSummary: session.timerSummary
+                    ? {
+                        ...session.timerSummary,
+                        resolvedUnfinished: payload.resolvedUnfinished,
+                        overtimeElapsedMs:
+                          payload.overtimeElapsedMs ?? session.timerSummary.overtimeElapsedMs,
+                      }
+                    : session.timerSummary,
+                  timerRuntime: undefined,
                   updatedAt: new Date().toISOString(),
                 }
               : session

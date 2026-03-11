@@ -229,6 +229,7 @@ describe('syncLink helpers', () => {
             forcedSubmit: true,
             timedOut: false,
             unfinishedQuestions: 6,
+            resolvedUnfinished: false,
             completedAt: '2026-03-11T09:30:45.000Z',
           },
           timerRuntime: {

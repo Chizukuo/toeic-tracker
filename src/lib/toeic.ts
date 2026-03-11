@@ -13,6 +13,8 @@ export type TimerSummary = {
 	forcedSubmit: boolean;
 	timedOut: boolean;
 	unfinishedQuestions: number;
+	resolvedUnfinished: boolean;
+	overtimeElapsedMs?: number;
 	completedAt: string;
 };
 
@@ -21,6 +23,9 @@ export type TimerRuntimeState = {
 	lapStartedAt?: string;
 	currentLapIndex: number;
 	readingLapTimes: Partial<Record<ReadingLapKey, number>>;
+	isOvertime?: boolean;
+	overtimeStartedAt?: string;
+	overtimeElapsedMs?: number;
 	pendingSubmit?: {
 		forcedSubmit: boolean;
 		timedOut: boolean;
@@ -42,6 +47,7 @@ export type SessionBlueprint = {
 export type SessionRecord = SessionBlueprint & {
 	status: SessionStatus;
 	mistakes: Partial<Record<MistakeKey, number>>;
+	overtimeMistakes?: Partial<Record<MistakeKey, number>>;
 	reasons: string[];
 	readingLapTimes: Partial<Record<ReadingLapKey, number>>;
 	timerSummary?: TimerSummary;
@@ -103,6 +109,7 @@ type SectionBiasProfile = {
 export type ToeicSectionEstimate = {
 	available: boolean;
 	type: SessionType;
+	scoringMode: "strict" | "potential";
 	rawCorrect: number;
 	adjustedRawCorrect: number;
 	scaled: number;
@@ -114,11 +121,14 @@ export type ToeicSectionEstimate = {
 	strongestPart?: MistakeKey;
 	weakestPart?: MistakeKey;
 	unfinishedPenalty: number;
+	resolvedUnfinished: boolean;
+	overtimeElapsedMs?: number;
 	responsePattern: "normal" | "aberrant";
 };
 
 export type ToeicCombinedEstimate = {
 	available: boolean;
+	scoringMode: "strict" | "potential";
 	listening?: ToeicSectionEstimate;
 	reading?: ToeicSectionEstimate;
 	total: number;
@@ -146,6 +156,8 @@ export const READING_PARTS: ReadingPartKey[] = [
 	"Part 7 Single",
 	"Part 7 Multiple",
 ];
+
+const LISTENING_PART_SET = new Set<MistakeKey>(LISTENING_PARTS);
 
 export const LISTENING_TAGS = [
 	"词汇盲区",
@@ -311,6 +323,9 @@ export function createInitialSessions(): SessionRecord[] {
 	return INITIAL_SESSIONS_TEMPLATE.map((session) => ({
 		...session,
 		mistakes: { ...session.mistakes },
+		overtimeMistakes: session.overtimeMistakes
+			? { ...session.overtimeMistakes }
+			: undefined,
 		reasons: [...session.reasons],
 		readingLapTimes: { ...session.readingLapTimes },
 	}));
@@ -322,6 +337,10 @@ export function getTargetDurationMs(type: SessionType) {
 
 export function getPartsForType(type: SessionType) {
 	return type === "L" ? LISTENING_PARTS : READING_PARTS;
+}
+
+export function getSessionTypeForPart(part: MistakeKey): SessionType {
+	return LISTENING_PART_SET.has(part) ? "L" : "R";
 }
 
 export function getQuestionCountForType(type: SessionType) {
@@ -356,13 +375,37 @@ export function sumMistakes(record: SessionRecord) {
 	return Object.values(record.mistakes).reduce((sum, value) => sum + (value ?? 0), 0);
 }
 
-export function getCorrectAnswers(record: SessionRecord) {
-	const totalQuestions = getQuestionCountForType(record.type);
-	const mistakeCount = getPartsForType(record.type).reduce(
-		(sum, part) => sum + (record.mistakes[part] ?? 0),
+export function sumOvertimeMistakes(record: SessionRecord) {
+	return Object.values(record.overtimeMistakes ?? {}).reduce(
+		(sum, value) => sum + (value ?? 0),
 		0
 	);
-	const unfinishedPenalty = getUnfinishedPenalty(record);
+}
+
+export function hasResolvedUnfinished(record: SessionRecord) {
+	if (record.type !== "R") {
+		return true;
+	}
+
+	if ((record.timerSummary?.unfinishedQuestions ?? 0) <= 0) {
+		return true;
+	}
+
+	return Boolean(record.timerSummary?.resolvedUnfinished);
+}
+
+export function getCorrectAnswers(
+	record: SessionRecord,
+	mode: "strict" | "potential" = "strict"
+) {
+	const totalQuestions = getQuestionCountForType(record.type);
+	const mistakeSource = mode === "potential"
+		? mergeMistakeSources(record)
+		: record.mistakes;
+	const mistakeCount = getPartsForType(record.type).reduce((sum, part) => {
+		return sum + (mistakeSource[part] ?? 0);
+	}, 0);
+	const unfinishedPenalty = mode === "strict" ? getUnfinishedPenalty(record) : 0;
 
 	return Math.min(totalQuestions, Math.max(totalQuestions - mistakeCount - unfinishedPenalty, 0));
 }
@@ -375,9 +418,12 @@ export function getUnfinishedPenalty(record: SessionRecord) {
 	return Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
 }
 
-export function getIncorrectAnswers(record: SessionRecord) {
+export function getIncorrectAnswers(
+	record: SessionRecord,
+	mode: "strict" | "potential" = "strict"
+) {
 	const totalQuestions = getQuestionCountForType(record.type);
-	const rawCorrect = getCorrectAnswers(record);
+	const rawCorrect = getCorrectAnswers(record, mode);
 
 	return Math.max(totalQuestions - rawCorrect, 0);
 }
@@ -389,6 +435,7 @@ export function hasRecordedSessionData(record: SessionRecord) {
 		Boolean(record.timerSummary) ||
 		Boolean(record.timerRuntime) ||
 		Object.keys(record.readingLapTimes).length > 0 ||
+		sumOvertimeMistakes(record) > 0 ||
 		record.reasons.length > 0
 	);
 }
@@ -408,7 +455,7 @@ export function getSessionDataConfidence(record: SessionRecord): DataConfidence 
 		issues.push("missing-review");
 	}
 
-	if (record.type === "R" && getUnfinishedPenalty(record) > 0) {
+	if (record.type === "R" && getUnfinishedPenalty(record) > 0 && !hasResolvedUnfinished(record)) {
 		issues.push("unfinished-backlog");
 	}
 
@@ -476,7 +523,7 @@ export function getAnalyticsDataConfidence(sessions: SessionRecord[]): Analytics
 			inProgressSessions += 1;
 		}
 
-		if (session.type === "R" && getUnfinishedPenalty(session) > 0) {
+		if (session.type === "R" && getUnfinishedPenalty(session) > 0 && !hasResolvedUnfinished(session)) {
 			unfinishedSessions += 1;
 		}
 
@@ -529,13 +576,24 @@ function roundToNearestFive(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, Math.round(value / 5) * 5));
 }
 
-function buildPartMistakeMap(record: SessionRecord) {
+function mergeMistakeSources(record: SessionRecord) {
 	const parts = getPartsForType(record.type);
-	const mistakes = Object.fromEntries(
-		parts.map((part) => [part, Math.max(0, record.mistakes[part] ?? 0)])
-	) as Record<MistakeKey, number>;
 
-	if (record.type === "R") {
+	return Object.fromEntries(
+		parts.map((part) => [
+			part,
+			Math.max(0, (record.mistakes[part] ?? 0) + (record.overtimeMistakes?.[part] ?? 0)),
+		])
+	) as Record<MistakeKey, number>;
+}
+
+function buildPartMistakeMap(record: SessionRecord, mode: "strict" | "potential" = "strict") {
+	const parts = getPartsForType(record.type);
+	const mistakes = (mode === "potential" ? mergeMistakeSources(record) : Object.fromEntries(
+		parts.map((part) => [part, Math.max(0, record.mistakes[part] ?? 0)])
+	)) as Record<MistakeKey, number>;
+
+	if (record.type === "R" && mode === "strict") {
 		let remainingUnfinished = Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
 		const fallbackOrder: ReadingPartKey[] = [
 			"Part 7 Multiple",
@@ -565,6 +623,13 @@ function buildPartMistakeMap(record: SessionRecord) {
 
 export function getSessionPartLossMap(record: SessionRecord) {
 	return buildPartMistakeMap(record);
+}
+
+export function getSessionPartLossMapByMode(
+	record: SessionRecord,
+	mode: "strict" | "potential"
+) {
+	return buildPartMistakeMap(record, mode);
 }
 
 function interpolateScaledScore(rawCorrect: number, anchors: readonly ScoreCheckpoint[]) {
@@ -641,11 +706,14 @@ export function getCombinedEstimateBand(score: number) {
 	return formatEstimateBandFromThresholds(score, CEFR_THRESHOLDS.map((threshold) => ({ minimum: threshold.total })), 10, 990);
 }
 
-export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEstimate {
+export function estimateToeicSessionScore(
+	record: SessionRecord,
+	mode: "strict" | "potential" = "strict"
+): ToeicSectionEstimate {
 	const parts = getPartsForType(record.type);
 	const totalQuestions = getQuestionCountForType(record.type);
 	const config = PEASEA_SECTION_CONFIG[record.type];
-	const partMistakes = buildPartMistakeMap(record);
+	const partMistakes = buildPartMistakeMap(record, mode);
 	const totalMistakes = parts.reduce((sum, part) => sum + partMistakes[part], 0);
 	const rawCorrect = Math.max(totalQuestions - totalMistakes, 0);
 	const basicMistakes = config.basicParts.reduce((sum, part) => sum + partMistakes[part], 0);
@@ -692,6 +760,7 @@ export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEs
 	return {
 		available,
 		type: record.type,
+		scoringMode: mode,
 		rawCorrect,
 		adjustedRawCorrect: Number(adjustedRawCorrect.toFixed(1)),
 		scaled,
@@ -710,17 +779,30 @@ export function estimateToeicSessionScore(record: SessionRecord): ToeicSectionEs
 		partStats,
 		strongestPart,
 		weakestPart,
-		unfinishedPenalty: record.type === "R" ? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0) : 0,
+		unfinishedPenalty:
+			record.type === "R" && mode === "strict"
+				? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0)
+				: 0,
+		resolvedUnfinished: hasResolvedUnfinished(record),
+		overtimeElapsedMs: record.timerSummary?.overtimeElapsedMs,
 		responsePattern: deltaRaw < 0 ? "aberrant" : "normal",
+	};
+}
+
+export function estimateToeicSessionDualScore(record: SessionRecord) {
+	return {
+		strict: estimateToeicSessionScore(record, "strict"),
+		potential: estimateToeicSessionScore(record, "potential"),
 	};
 }
 
 export function estimateToeicCombinedScore(
 	listeningRecord?: SessionRecord,
-	readingRecord?: SessionRecord
+	readingRecord?: SessionRecord,
+	mode: "strict" | "potential" = "strict"
 ): ToeicCombinedEstimate {
-	const listening = listeningRecord ? estimateToeicSessionScore(listeningRecord) : undefined;
-	const reading = readingRecord ? estimateToeicSessionScore(readingRecord) : undefined;
+	const listening = listeningRecord ? estimateToeicSessionScore(listeningRecord, mode) : undefined;
+	const reading = readingRecord ? estimateToeicSessionScore(readingRecord, mode) : undefined;
 	const available = Boolean(listening?.available && reading?.available);
 	const total = available ? (listening?.scaled ?? 0) + (reading?.scaled ?? 0) : 0;
 	const sem = roundToNearestFive(
@@ -733,6 +815,7 @@ export function estimateToeicCombinedScore(
 
 	return {
 		available,
+		scoringMode: mode,
 		listening,
 		reading,
 		total,
@@ -754,6 +837,16 @@ export function estimateToeicCombinedScore(
 			? Number(((((listening?.rawCorrect ?? 0) + (reading?.rawCorrect ?? 0)) / 200) * 100).toFixed(1))
 			: 0,
 		sem,
+	};
+}
+
+export function estimateToeicCombinedDualScore(
+	listeningRecord?: SessionRecord,
+	readingRecord?: SessionRecord
+) {
+	return {
+		strict: estimateToeicCombinedScore(listeningRecord, readingRecord, "strict"),
+		potential: estimateToeicCombinedScore(listeningRecord, readingRecord, "potential"),
 	};
 }
 
@@ -802,8 +895,8 @@ export function getWorstPartLabel(sessions: SessionRecord[]) {
 	let worstRate = -1;
 
 	for (const part of [...LISTENING_PARTS, ...READING_PARTS]) {
-		const matchingSessions = completed.filter((session) =>
-			getPartsForType(session.type).includes(part as never)
+		const matchingSessions = completed.filter(
+			(session) => session.type === getSessionTypeForPart(part)
 		);
 
 		if (matchingSessions.length === 0) {
@@ -844,7 +937,14 @@ export function mergeSessionWithDefaults(
 		...blueprint,
 		...incoming,
 		mistakes: incoming.mistakes ?? {},
+		overtimeMistakes: incoming.overtimeMistakes ?? undefined,
 		reasons: incoming.reasons ?? [],
 		readingLapTimes: incoming.readingLapTimes ?? {},
+		timerSummary: incoming.timerSummary
+			? {
+				...incoming.timerSummary,
+				resolvedUnfinished: incoming.timerSummary.resolvedUnfinished ?? false,
+			}
+			: undefined,
 	} as SessionRecord;
 }

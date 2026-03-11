@@ -20,6 +20,7 @@ describe('next step recommendation engine', () => {
       forcedSubmit: true,
       timedOut: true,
       unfinishedQuestions: 6,
+      resolvedUnfinished: false,
       completedAt: '2026-03-11T09:00:00.000Z',
     };
 
@@ -82,6 +83,34 @@ describe('next step recommendation engine', () => {
 
     expect(recommendation.kind).toBe('reinforce-weakness');
     expect(recommendation.targetSessionId).toBe('R2');
+    expect(recommendation.href).toBe('/timer');
+  });
+
+  it('keeps weakness reinforcement on listening sessions for listening hotspots', () => {
+    const sessions = createInitialSessions();
+    const active = sessions.find((session) => session.id === 'R1');
+    const completedListening = sessions.find((session) => session.id === 'L1');
+    const targetListening = sessions.find((session) => session.id === 'L2');
+
+    if (!active || !completedListening || !targetListening) {
+      throw new Error('Missing listening weakness fixtures');
+    }
+
+    active.status = 'debugged';
+    completedListening.status = 'debugged';
+    completedListening.mistakes = {
+      'Part 2': 12,
+    };
+
+    const recommendation = getNextStepRecommendation({
+      locale: 'en',
+      sessions,
+      activeSessionId: 'R1',
+      historicalScoreCount: 2,
+    });
+
+    expect(recommendation.kind).toBe('reinforce-weakness');
+    expect(recommendation.targetSessionId).toBe('L2');
     expect(recommendation.href).toBe('/timer');
   });
 
