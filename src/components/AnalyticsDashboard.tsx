@@ -289,7 +289,7 @@ function WeaknessRadarCard({
                         domain={[0, radarScale.maxDomain]}
                         axisLine={false}
                         tick={{ fill: '#a1a1aa', fontSize: 10 }}
-                        ticks={radarScale.ticks}
+                        tickCount={radarScale.tickCount}
                         tickFormatter={(value) => `${value}%`}
                       />
                       <Radar
@@ -706,7 +706,7 @@ function getAdaptiveRadarScale(data: RadarPoint[]) {
   if (recordedPoints.length === 0) {
     return {
       maxDomain: 100,
-      ticks: [0, 20, 40, 60, 80, 100],
+      tickCount: 6,
     };
   }
 
@@ -716,11 +716,11 @@ function getAdaptiveRadarScale(data: RadarPoint[]) {
   const paddedMax = maxValue < 10 ? maxValue * 1.35 : maxValue * 1.18;
   const roundedMax = roundRadarDomain(Math.max(paddedMax, 20));
   const tickStep = getRadarTickStep(roundedMax);
-  const ticks = Array.from({ length: Math.floor(roundedMax / tickStep) + 1 }, (_, index) => index * tickStep);
+  const tickCount = Math.floor(roundedMax / tickStep) + 1;
 
   return {
     maxDomain: roundedMax,
-    ticks,
+    tickCount,
   };
 }
 

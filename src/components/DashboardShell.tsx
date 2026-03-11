@@ -274,14 +274,14 @@ export function DashboardShell({
               </div>
             </div>
 
-            <div className="sticky top-3 z-20 mt-4 rounded-[28px] border border-white/65 bg-white/62 p-3 shadow-[0_20px_70px_-46px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/86 dark:shadow-[0_24px_80px_-50px_rgba(0,0,0,0.75)]">
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-3">
+            <div className="sticky top-3 z-20 mt-4 rounded-[24px] border border-white/60 bg-white/52 px-3 py-2 shadow-[0_14px_50px_-40px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-white/8 dark:bg-zinc-950/78 dark:shadow-[0_18px_60px_-42px_rgba(0,0,0,0.7)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-2">
                 <div className="min-w-0">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500/80 dark:text-zinc-400/80">
                     {variant === 'hero' ? (locale === 'zh' ? '页面入口' : 'Workspace Pages') : (locale === 'zh' ? '当前位置' : 'Current Page')}
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                    <span className="inline-flex size-2 rounded-full bg-amber-500" />
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500/90" />
                     <span className="truncate">{currentNavItem.label}</span>
                   </div>
                 </div>
@@ -290,7 +290,7 @@ export function DashboardShell({
                   {previousNavItem ? (
                     <Link
                       href={previousNavItem.href}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-200/80 bg-white/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/8 dark:bg-zinc-950/74 dark:text-zinc-400 dark:hover:border-white/12 dark:hover:text-zinc-100"
+                      className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/66 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400 dark:hover:border-white/12 dark:hover:text-zinc-100"
                     >
                       <ArrowLeft className="size-3.5" />
                       <span>{locale === 'zh' ? '上一页' : 'Prev'}</span>
@@ -300,7 +300,7 @@ export function DashboardShell({
                   {nextNavItem ? (
                     <Link
                       href={nextNavItem.href}
-                      className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                      className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
                     >
                       <span>{locale === 'zh' ? '下一页' : 'Next'}</span>
                       <ArrowRight className="size-3.5" />
@@ -309,7 +309,7 @@ export function DashboardShell({
                 </div>
               </div>
 
-              <div className="no-scrollbar flex gap-1.5 overflow-x-auto rounded-[22px] bg-zinc-100/78 p-1.5 dark:bg-white/5">
+              <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-[18px] border border-white/50 bg-white/42 p-1 dark:border-white/6 dark:bg-white/[0.03]">
                 {navigationItems.map((item) => {
                 const isActive = pathname === item.href;
 
@@ -318,13 +318,14 @@ export function DashboardShell({
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'min-w-fit rounded-[18px] px-4 py-2.5 text-sm font-medium transition-all',
+                      'relative min-w-fit rounded-[14px] px-4 py-2 text-sm font-medium transition-all',
                       isActive
-                        ? 'bg-white text-zinc-950 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-white dark:text-zinc-950'
-                        : 'text-zinc-500 hover:bg-white/72 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-100'
+                        ? 'bg-white/88 text-zinc-950 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.28)] dark:bg-white dark:text-zinc-950'
+                        : 'text-zinc-500 hover:bg-white/55 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/7 dark:hover:text-zinc-100'
                     )}
                   >
                     <span className="whitespace-nowrap">{item.label}</span>
+                    {isActive ? <span className="absolute inset-x-3 bottom-1 h-px bg-[linear-gradient(90deg,transparent,#f59e0b,transparent)] opacity-80 dark:bg-[linear-gradient(90deg,transparent,#18181b,transparent)]" /> : null}
                   </Link>
                 );
                 })}
