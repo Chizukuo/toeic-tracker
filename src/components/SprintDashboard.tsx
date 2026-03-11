@@ -101,7 +101,7 @@ export function SprintDashboard() {
                   ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300 dark:bg-emerald-500/10'
                   : session.status === 'in-progress'
                     ? 'border-amber-400/50 bg-amber-400/10 text-amber-700 dark:text-amber-300'
-                    : 'border-zinc-200/80 bg-white/70 text-zinc-500 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400';
+                    : 'border-zinc-200/80 bg-white/70 text-zinc-500 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400';
 
               return (
                 <button
@@ -186,7 +186,7 @@ function StatusPill({
       ? 'border-amber-400/30 bg-amber-400/8 text-amber-700 dark:text-amber-300'
       : tone === 'green'
         ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
-        : 'border-zinc-200/80 bg-white/72 text-zinc-500 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400';
+        : 'border-zinc-200/80 bg-white/72 text-zinc-500 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400';
 
   return (
     <div className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em]', cls)}>

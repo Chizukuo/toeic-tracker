@@ -1,32 +1,15 @@
-'use client';
+import type { Metadata } from 'next';
 
-import dynamic from 'next/dynamic';
+import VaultPageClient from './VaultPageClient';
+import { buildPageMetadata } from '@/lib/seo';
 
-import { DashboardShell, DeferredPanelPlaceholder, SectionShell, useDashboardContext } from '@/components/DashboardShell';
-
-const DataVaultPanel = dynamic(
-  () => import('@/components/DataVaultPanel').then((module) => module.DataVaultPanel),
-  { loading: () => <DeferredPanelPlaceholder /> }
-);
+export const metadata: Metadata = buildPageMetadata({
+  title: '数据备份与同步',
+  description: '管理本地数据的导出、恢复、压缩同步链接与重置流程，让 TOEIC 冲刺记录在多设备之间保持可迁移。',
+  path: '/vault',
+  keywords: ['TOEIC backup', 'TOEIC sync', 'TOEIC local data vault'],
+});
 
 export default function VaultPage() {
-  return (
-    <DashboardShell variant="compact">
-      <VaultPageContent />
-    </DashboardShell>
-  );
-}
-
-function VaultPageContent() {
-  const { locale, copy } = useDashboardContext();
-
-  return (
-    <SectionShell
-      index="01"
-      title={copy.dataVaultTitle}
-      description={locale === 'zh' ? '备份、恢复或重置本地数据。' : 'Backup, restore, or reset local data.'}
-    >
-      <DataVaultPanel />
-    </SectionShell>
-  );
+  return <VaultPageClient />;
 }

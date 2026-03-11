@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -255,8 +256,8 @@ export function DashboardShell({
           <header className="reveal-fade pt-2 sm:pt-4">
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/65 bg-white/58 px-4 py-3 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/84 dark:shadow-[0_24px_80px_-50px_rgba(0,0,0,0.75)]">
               <div className="flex items-center gap-4">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#ffd36d_0%,#ff9a5c_100%)] shadow-[0_18px_34px_-16px_rgba(245,158,11,0.9)]">
-                  <span className="font-mono text-sm font-bold text-zinc-950">CT</span>
+                <div className="flex size-11 items-center justify-center rounded-2xl overflow-hidden shadow-[0_18px_34px_-16px_rgba(245,158,11,0.6)]">
+                  <Image src="/icon.svg" alt="TOEIC Tracker logo" width={44} height={44} priority />
                 </div>
                 <div>
                   <div className="font-mono text-[11px] uppercase tracking-[0.34em] text-amber-700 dark:text-amber-300">
@@ -290,7 +291,7 @@ export function DashboardShell({
                   {previousNavItem ? (
                     <Link
                       href={previousNavItem.href}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/66 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/8 dark:bg-white/[0.04] dark:text-zinc-400 dark:hover:border-white/12 dark:hover:text-zinc-100"
+                      className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/66 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400 dark:hover:border-white/12 dark:hover:text-zinc-100"
                     >
                       <ArrowLeft className="size-3.5" />
                       <span>{locale === 'zh' ? '上一页' : 'Prev'}</span>
@@ -309,7 +310,7 @@ export function DashboardShell({
                 </div>
               </div>
 
-              <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-[18px] border border-white/50 bg-white/42 p-1 dark:border-white/6 dark:bg-white/[0.03]">
+              <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-[18px] border border-white/50 bg-white/42 p-1 dark:border-white/6 dark:bg-white/3">
                 {navigationItems.map((item) => {
                 const isActive = pathname === item.href;
 

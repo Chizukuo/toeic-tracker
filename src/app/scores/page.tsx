@@ -1,32 +1,15 @@
-'use client';
+import type { Metadata } from 'next';
 
-import dynamic from 'next/dynamic';
+import ScoresPageClient from './ScoresPageClient';
+import { buildPageMetadata } from '@/lib/seo';
 
-import { DashboardShell, DeferredPanelPlaceholder, SectionShell, useDashboardContext } from '@/components/DashboardShell';
-
-const ScoreEstimatorPanel = dynamic(
-  () => import('@/components/ScoreEstimatorPanel').then((module) => module.ScoreEstimatorPanel),
-  { loading: () => <DeferredPanelPlaceholder /> }
-);
+export const metadata: Metadata = buildPageMetadata({
+  title: 'TOEIC 分数估算器',
+  description: '按套次查看听力、阅读与总分估算，结合未完成题与历史表现，快速判断当前冲刺阶段的分数区间。',
+  path: '/scores',
+  keywords: ['TOEIC score estimator', 'TOEIC predicted score', 'TOEIC score trend'],
+});
 
 export default function ScoresPage() {
-  return (
-    <DashboardShell variant="compact">
-      <ScoresPageContent />
-    </DashboardShell>
-  );
-}
-
-function ScoresPageContent() {
-  const { locale, copy } = useDashboardContext();
-
-  return (
-    <SectionShell
-      index="01"
-      title={copy.scoreEstimatorTitle}
-      description={locale === 'zh' ? '按套次查看听力、阅读和总分估算。' : 'View listening, reading, and total estimates.'}
-    >
-      <ScoreEstimatorPanel />
-    </SectionShell>
-  );
+  return <ScoresPageClient />;
 }

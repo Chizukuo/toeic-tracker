@@ -2,7 +2,14 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { metadataBase, siteConfig, structuredData } from "@/lib/seo";
+import {
+  defaultOpenGraphImage,
+  defaultRobots,
+  defaultTwitterImage,
+  metadataBase,
+  siteConfig,
+  structuredData,
+} from "@/lib/seo";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-sans",
@@ -17,6 +24,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   metadataBase,
+  manifest: "/manifest.webmanifest",
   title: {
     default: siteConfig.name,
     template: `%s | ${siteConfig.name}`,
@@ -24,37 +32,41 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   applicationName: siteConfig.name,
   keywords: [...siteConfig.keywords],
-  authors: [{ name: "Chizukuo" }],
-  creator: "Chizukuo",
-  publisher: "Chizukuo",
+  authors: [{ name: siteConfig.creator }],
+  creator: siteConfig.creator,
+  publisher: siteConfig.creator,
   category: "education",
+  referrer: "origin-when-cross-origin",
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: false,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: siteConfig.shortName,
+  },
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     locale: siteConfig.locale,
+    alternateLocale: ["en_US"],
     url: "/",
     siteName: siteConfig.name,
     title: siteConfig.name,
     description: siteConfig.description,
+    images: [defaultOpenGraphImage],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
+    images: [defaultTwitterImage.url],
   },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
+  robots: defaultRobots,
 };
 
 export const viewport: Viewport = {

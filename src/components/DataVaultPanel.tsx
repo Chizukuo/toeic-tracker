@@ -463,7 +463,7 @@ export function DataVaultPanel() {
 							{copy.resetDialogBody}
 						</DialogDescription>
 					</DialogHeader>
-					<DialogFooter className="!mx-0 !mb-0 rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+					<DialogFooter className="mx-0! mb-0! rounded-b-[28px] border-white/60 bg-white/70 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:border-white/8 dark:bg-white/4 sm:px-6">
 						<Button variant="outline" onClick={() => setResetOpen(false)} className="w-full sm:w-auto">
 							{copy.cancelAction}
 						</Button>
@@ -508,7 +508,7 @@ export function DataVaultPanel() {
 							</div>
 						</div>
 					) : null}
-					<DialogFooter className="!mx-0 !mb-0 rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+					<DialogFooter className="mx-0! mb-0! rounded-b-[28px] border-white/60 bg-white/70 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:border-white/8 dark:bg-white/4 sm:px-6">
 						<Button variant="outline" onClick={() => setImportOpen(false)} className="w-full sm:w-auto">
 							{copy.cancelAction}
 						</Button>
@@ -553,7 +553,7 @@ export function DataVaultPanel() {
 							</div>
 						</div>
 					) : null}
-					<DialogFooter className="!mx-0 !mb-0 rounded-b-[28px] border-white/60 bg-white/70 dark:border-white/8 dark:bg-white/[0.04] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+					<DialogFooter className="mx-0! mb-0! rounded-b-[28px] border-white/60 bg-white/70 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:border-white/8 dark:bg-white/4 sm:px-6">
 						<Button variant="outline" onClick={handleDismissSyncLink} className="w-full sm:w-auto">
 							{copy.syncDismissAction}
 						</Button>
@@ -587,9 +587,9 @@ export function DataVaultPanel() {
 
 function SyncMetric({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="rounded-[22px] border border-white/65 bg-white/78 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03] min-w-0">
+		<div className="min-w-0 rounded-[22px] border border-white/65 bg-white/78 px-4 py-3 dark:border-white/10 dark:bg-white/3">
 			<div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{label}</div>
-			<div className="mt-2 break-words text-sm font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{value}</div>
+			<div className="mt-2 wrap-break-word text-sm font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{value}</div>
 		</div>
 	);
 }

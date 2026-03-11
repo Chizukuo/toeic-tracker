@@ -1,32 +1,15 @@
-'use client';
+import type { Metadata } from 'next';
 
-import dynamic from 'next/dynamic';
+import AnalyticsPageClient from './AnalyticsPageClient';
+import { buildPageMetadata } from '@/lib/seo';
 
-import { DashboardShell, DeferredPanelPlaceholder, SectionShell, useDashboardContext } from '@/components/DashboardShell';
-
-const AnalyticsDashboard = dynamic(
-  () => import('@/components/AnalyticsDashboard').then((module) => module.AnalyticsDashboard),
-  { loading: () => <DeferredPanelPlaceholder /> }
-);
+export const metadata: Metadata = buildPageMetadata({
+  title: '趋势分析与短板诊断',
+  description: '集中查看 TOEIC 听力与阅读的趋势变化、薄弱环节和高频错因，让复盘从单题修正升级为结构性诊断。',
+  path: '/analytics',
+  keywords: ['TOEIC analytics', 'TOEIC weakness analysis', 'TOEIC review dashboard'],
+});
 
 export default function AnalyticsPage() {
-  return (
-    <DashboardShell variant="compact">
-      <AnalyticsPageContent />
-    </DashboardShell>
-  );
-}
-
-function AnalyticsPageContent() {
-  const { locale, copy } = useDashboardContext();
-
-  return (
-    <SectionShell
-      index="01"
-      title={copy.analyticsTitle}
-      description={locale === 'zh' ? '查看趋势、短板和高频错因。' : 'Review trend, weak spots, and root causes.'}
-    >
-      <AnalyticsDashboard />
-    </SectionShell>
-  );
+  return <AnalyticsPageClient />;
 }

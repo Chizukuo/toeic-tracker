@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
+
 export const DEFAULT_SITE_URL = "https://toeic-tracker.pages.dev";
 
 export const siteConfig = {
   name: "Cheese TOEIC Command Deck",
   shortName: "TOEIC Deck",
+  creator: "Chizukuo",
   description:
     "TOEIC 20天冲刺训练看板，集中管理听力与阅读练习进度、严格计时、错题复盘、未完成题追踪与实时估分。",
   locale: "zh_CN",
@@ -34,6 +37,88 @@ function normalizeSiteUrl(value: string | undefined) {
 export const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 export const metadataBase = new URL(siteUrl);
 
+export const defaultRobots: Metadata["robots"] = {
+  index: true,
+  follow: true,
+  googleBot: {
+    index: true,
+    follow: true,
+    "max-image-preview": "large",
+    "max-snippet": -1,
+    "max-video-preview": -1,
+  },
+};
+
+export const defaultOpenGraphImage = {
+  url: "/opengraph-image",
+  width: 1200,
+  height: 630,
+  alt: "Cheese TOEIC Command Deck share image",
+} as const;
+
+export const defaultTwitterImage = {
+  url: "/twitter-image",
+  width: 1200,
+  height: 630,
+  alt: "Cheese TOEIC Command Deck Twitter card",
+} as const;
+
+function normalizePath(path: string) {
+  if (!path || path === "/") {
+    return "/";
+  }
+
+  const trimmed = path.trim().replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
+  return trimmed ? `/${trimmed}` : "/";
+}
+
+function formatSocialTitle(title: string) {
+  return title === siteConfig.name ? title : `${title} | ${siteConfig.name}`;
+}
+
+type PageMetadataInput = {
+  title: string;
+  description: string;
+  path?: string;
+  keywords?: string[];
+};
+
+export function buildPageMetadata({
+  title,
+  description,
+  path = "/",
+  keywords = [],
+}: PageMetadataInput): Metadata {
+  const canonicalPath = normalizePath(path);
+  const socialTitle = formatSocialTitle(title);
+
+  return {
+    title,
+    description,
+    keywords: [...siteConfig.keywords, ...keywords],
+    alternates: {
+      canonical: canonicalPath,
+    },
+    robots: defaultRobots,
+    openGraph: {
+      type: "website",
+      locale: siteConfig.locale,
+      alternateLocale: ["en_US"],
+      url: canonicalPath,
+      siteName: siteConfig.name,
+      title: socialTitle,
+      description,
+      images: [defaultOpenGraphImage],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: socialTitle,
+      description,
+      images: [defaultTwitterImage.url],
+    },
+  };
+}
+
 export const structuredData = [
   {
     "@context": "https://schema.org",
@@ -47,10 +132,12 @@ export const structuredData = [
     "@context": "https://schema.org",
     "@type": "WebApplication",
     name: siteConfig.name,
+    headline: siteConfig.description,
     applicationCategory: "EducationalApplication",
     operatingSystem: "Web",
     url: siteUrl,
     description: siteConfig.description,
+    image: `${siteUrl}${defaultOpenGraphImage.url}`,
     inLanguage: ["zh-CN", "en"],
     offers: {
       "@type": "Offer",

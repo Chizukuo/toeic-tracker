@@ -1,32 +1,15 @@
-'use client';
+import type { Metadata } from 'next';
 
-import dynamic from 'next/dynamic';
+import UnfinishedPageClient from './UnfinishedPageClient';
+import { buildPageMetadata } from '@/lib/seo';
 
-import { DashboardShell, DeferredPanelPlaceholder, SectionShell, useDashboardContext } from '@/components/DashboardShell';
-
-const UnfinishedTrackerPanel = dynamic(
-  () => import('@/components/UnfinishedTrackerPanel').then((module) => module.UnfinishedTrackerPanel),
-  { loading: () => <DeferredPanelPlaceholder /> }
-);
+export const metadata: Metadata = buildPageMetadata({
+  title: '未完成题追踪',
+  description: '集中查看超时后遗留的阅读题、影响分值与待补动作，避免未完成题在复盘链路里继续被忽略。',
+  path: '/unfinished',
+  keywords: ['TOEIC unfinished questions', 'TOEIC timeout review', 'TOEIC reading backlog'],
+});
 
 export default function UnfinishedPage() {
-  return (
-    <DashboardShell variant="compact">
-      <UnfinishedPageContent />
-    </DashboardShell>
-  );
-}
-
-function UnfinishedPageContent() {
-  const { locale, copy } = useDashboardContext();
-
-  return (
-    <SectionShell
-      index="01"
-      title={copy.unfinishedTrackerTitle}
-      description={locale === 'zh' ? '集中处理超时后遗留的题目。' : 'Handle leftover questions from timed runs.'}
-    >
-      <UnfinishedTrackerPanel />
-    </SectionShell>
-  );
+  return <UnfinishedPageClient />;
 }
