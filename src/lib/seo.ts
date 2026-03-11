@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 export const DEFAULT_SITE_URL = "https://toeic-tracker.pages.dev";
+export const ASSET_VERSION = "20260311";
 
 export const siteConfig = {
   name: "Cheese TOEIC Command Deck",
@@ -37,6 +38,17 @@ function normalizeSiteUrl(value: string | undefined) {
 export const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 export const metadataBase = new URL(siteUrl);
 
+export const defaultIcon = {
+  url: `/icon.svg?v=${ASSET_VERSION}`,
+  type: "image/svg+xml",
+} as const;
+
+export const defaultAppleIcon = {
+  url: `/apple-icon?v=${ASSET_VERSION}`,
+  sizes: "180x180",
+  type: "image/png",
+} as const;
+
 export const defaultRobots: Metadata["robots"] = {
   index: true,
   follow: true,
@@ -50,17 +62,19 @@ export const defaultRobots: Metadata["robots"] = {
 };
 
 export const defaultOpenGraphImage = {
-  url: "/opengraph-image",
+  url: `/opengraph-image?v=${ASSET_VERSION}`,
   width: 1200,
   height: 630,
   alt: "Cheese TOEIC Command Deck share image",
+  type: "image/png",
 } as const;
 
 export const defaultTwitterImage = {
-  url: "/twitter-image",
+  url: `/twitter-image?v=${ASSET_VERSION}`,
   width: 1200,
   height: 630,
   alt: "Cheese TOEIC Command Deck Twitter card",
+  type: "image/png",
 } as const;
 
 function normalizePath(path: string) {
@@ -114,7 +128,7 @@ export function buildPageMetadata({
       card: "summary_large_image",
       title: socialTitle,
       description,
-      images: [defaultTwitterImage.url],
+      images: [defaultTwitterImage],
     },
   };
 }

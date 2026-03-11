@@ -3,6 +3,8 @@ import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import {
+  defaultAppleIcon,
+  defaultIcon,
   defaultOpenGraphImage,
   defaultRobots,
   defaultTwitterImage,
@@ -47,6 +49,14 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: siteConfig.shortName,
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      defaultIcon,
+    ],
+    shortcut: ["/favicon.ico"],
+    apple: [defaultAppleIcon],
+  },
   alternates: {
     canonical: "/",
   },
@@ -64,7 +74,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
-    images: [defaultTwitterImage.url],
+    images: [defaultTwitterImage],
   },
   robots: defaultRobots,
 };
