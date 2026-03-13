@@ -374,7 +374,7 @@ function decodeTimerRuntime(runtime: CompactTimerRuntime | undefined, anchor: st
     return Array.isArray(value) ? value.filter((item): item is number => typeof item === 'number') : [];
   };
 
-  const decoded = {
+  const decoded: NonNullable<SprintSnapshot['data']['sessions'][number]['timerRuntime']> = {
     startedAt: decodeInstant(runtime[0], anchor) ?? new Date(0).toISOString(),
     currentLapIndex: runtime[1] ?? 0,
     readingLapTimes: {} as ReturnType<typeof decodeNumberPairs>,
@@ -593,7 +593,7 @@ function encodeSessions(snapshot: SprintSnapshot) {
 }
 
 function decodeSessions(compactSessions: CompactSessionDelta[], anchor: string) {
-  const decoded = SESSION_DEFAULTS.map((session) => ({
+  const decoded: SprintSnapshot['data']['sessions'] = SESSION_DEFAULTS.map((session) => ({
     ...session,
     mistakes: { ...session.mistakes },
     overtimeMistakes: session.overtimeMistakes ? { ...session.overtimeMistakes } : undefined,

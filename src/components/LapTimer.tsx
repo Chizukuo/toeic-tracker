@@ -242,11 +242,16 @@ export function LapTimer({ session }: { session: SessionRecord }) {
   });
 
   const syncPendingSubmitDraft = useEffectEvent(() => {
+    const runtime = session.timerRuntime;
+    if (!runtime) {
+      return;
+    }
+
     patchSession(session.id, {
       timerRuntime: {
-        ...session.timerRuntime,
+        ...runtime,
         unfinishedQuestionsDraft: unfinishedQuestions,
-        pendingSubmit,
+        pendingSubmit: pendingSubmit ?? undefined,
       },
     });
   });
