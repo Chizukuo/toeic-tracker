@@ -68,6 +68,7 @@ export function DashboardShell({
   const sessions = useStore((state) => state.sessions);
   const ensureInitialized = useStore((state) => state.ensureInitialized);
   const activeSessionId = useStore((state) => state.activeSessionId);
+  const selectSession = useStore((state) => state.selectSession);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const pathname = usePathname();
@@ -130,6 +131,55 @@ export function DashboardShell({
 
   const activeSession = homeMetrics.activeSession;
   const timedOutFlag = Boolean(activeSession.timerSummary?.timedOut);
+  const unresolvedBacklog =
+    activeSession.type === 'R' &&
+    (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0 &&
+    !activeSession.timerSummary?.resolvedUnfinished;
+  const isTimingActive = Boolean(activeSession.timerRuntime?.startedAt) && !activeSession.timerSummary;
+  const isOvertimeActive = Boolean(activeSession.timerRuntime?.isOvertime);
+
+  const nextSession = sessions.find((session) => session.status !== 'debugged' && session.id !== activeSession.id);
+
+  const primaryTask = isOvertimeActive
+    ? {
+        stage: locale === 'zh' ? '补录中' : 'Overtime',
+        title: locale === 'zh' ? '继续加时补录，完成后再保存复盘' : 'Continue overtime resolution, then save review',
+        helper: locale === 'zh' ? '严格分已锁定，当前只影响潜力分。' : 'Strict score is locked. Current work only affects potential score.',
+        href: '/timer',
+        cta: locale === 'zh' ? '继续补录' : 'Resume Overtime',
+      }
+    : isTimingActive
+      ? {
+          stage: locale === 'zh' ? '计时中' : 'Timing',
+          title: locale === 'zh' ? '当前计时进行中，优先完成本套操作' : 'The active timer is running, finish this set first',
+          helper: locale === 'zh' ? '结束后会自动进入复盘录入。' : 'You will move directly into review input after the run.',
+          href: '/timer',
+          cta: locale === 'zh' ? '返回计时页' : 'Back To Timer',
+        }
+      : unresolvedBacklog || (activeSession.timerSummary && activeSession.status !== 'debugged')
+        ? {
+            stage: locale === 'zh' ? '待复盘' : 'Review',
+            title: locale === 'zh' ? '本套已完成计时，下一步是录入错题并完成复盘' : 'Timing is done. Log mistakes and complete review next',
+            helper: locale === 'zh' ? '未录入前，趋势和估分可信度会下降。' : 'Trends and estimates remain less reliable until review is saved.',
+            href: '/timer',
+            cta: locale === 'zh' ? '去录入复盘' : 'Open Review',
+          }
+        : activeSession.status === 'debugged' && nextSession
+          ? {
+              stage: locale === 'zh' ? '下一套' : 'Next Set',
+              title: locale === 'zh' ? `当前已完成，建议切换到 ${nextSession.label}` : `Current set is done. Move to ${nextSession.label}`,
+              helper: locale === 'zh' ? '保持连续节奏，比频繁切页更重要。' : 'Maintaining momentum matters more than bouncing across pages.',
+              href: '/timer',
+              cta: locale === 'zh' ? `切换到 ${nextSession.label}` : `Switch To ${nextSession.label}`,
+              targetSessionId: nextSession.id,
+            }
+          : {
+              stage: locale === 'zh' ? '准备开始' : 'Ready',
+              title: locale === 'zh' ? '当前套题可直接开始严格计时' : 'The current set is ready for strict timing',
+              helper: locale === 'zh' ? '先开始，再在结束后统一处理复盘。' : 'Start first, then complete review in one pass after finishing.',
+              href: '/timer',
+              cta: locale === 'zh' ? '开始本套计时' : 'Start Timer',
+            };
 
   const focusSignals = [
     {
@@ -307,6 +357,34 @@ export function DashboardShell({
                       <ArrowRight className="size-3.5" />
                     </Link>
                   ) : null}
+                </div>
+              </div>
+
+              <div className="mb-2 rounded-[18px] border border-zinc-200/75 bg-white/78 px-3 py-2.5 dark:border-white/8 dark:bg-zinc-950/70">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500/85 dark:text-zinc-400/85">
+                      {locale === 'zh' ? '主任务' : 'Primary Task'}
+                      <span className="ml-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] tracking-[0.18em] text-amber-700 dark:text-amber-300">
+                        {primaryTask.stage}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">{primaryTask.title}</div>
+                    <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{primaryTask.helper}</div>
+                  </div>
+
+                  <Link
+                    href={primaryTask.href}
+                    onClick={() => {
+                      if (primaryTask.targetSessionId) {
+                        selectSession(primaryTask.targetSessionId);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  >
+                    <span>{primaryTask.cta}</span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
                 </div>
               </div>
 

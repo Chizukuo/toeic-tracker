@@ -25,12 +25,20 @@ import {
   type ReadingLapKey,
   type SessionRecord,
 } from '@/lib/toeic';
+import { trackUXEvent } from '@/lib/uxEvent';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
 type PendingSubmit = {
   forcedSubmit: boolean;
   timedOut: boolean;
+};
+
+type LapUndoState = {
+  previousLapTimes: Partial<Record<ReadingLapKey, number>>;
+  previousLapIndex: number;
+  previousLapStartedAtMs: number;
+  capturedLapKey: ReadingLapKey;
 };
 
 type InitialTimerState = {
@@ -124,7 +132,15 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
   };
 }
 
-export function LapTimer({ session }: { session: SessionRecord }) {
+export function LapTimer({
+  session,
+  onFocusModeChange,
+  onStrictAttemptSaved,
+}: {
+  session: SessionRecord;
+  onFocusModeChange?: (enabled: boolean) => void;
+  onStrictAttemptSaved?: (sessionId: string) => void;
+}) {
   const patchSession = useStore((state) => state.patchSession);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
@@ -142,6 +158,8 @@ export function LapTimer({ session }: { session: SessionRecord }) {
   const [isOvertime, setIsOvertime] = useState(initialState.isOvertime);
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(initialState.showTimeoutDialog);
+  const [lapUndo, setLapUndo] = useState<LapUndoState | null>(null);
+  const [awaitingFinalConfirm, setAwaitingFinalConfirm] = useState(false);
 
   const startedAtRef = useRef<number | null>(initialState.startedAtMs);
   const lapStartedAtRef = useRef<number | null>(initialState.lapStartedAtMs);
@@ -191,6 +209,8 @@ export function LapTimer({ session }: { session: SessionRecord }) {
     setPendingSubmit(null);
     setIsOvertime(false);
     setShowTimeoutDialog(false);
+    setLapUndo(null);
+    setAwaitingFinalConfirm(false);
   }
 
   function commitStrictAttempt(options: PendingSubmit & {
@@ -224,8 +244,26 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       resetLocalTimerState();
       setTimeLeft(totalDurationMs);
       setUnfinishedQuestions(options.unfinishedCount > 0 ? String(options.unfinishedCount) : '');
+      onStrictAttemptSaved?.(session.id);
+      trackUXEvent('strict_attempt_saved', session.id);
     }
   }
+
+  useEffect(() => {
+    onFocusModeChange?.(timerRunning && !overtimeMode);
+  }, [onFocusModeChange, overtimeMode, timerRunning]);
+
+  useEffect(() => {
+    if (!lapUndo) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLapUndo(null);
+    }, 6000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [lapUndo]);
 
   const handleTimeoutReached = useEffectEvent(() => {
     if (isListening) {
@@ -320,6 +358,8 @@ export function LapTimer({ session }: { session: SessionRecord }) {
     setIsOvertime(false);
     setOvertimeElapsedMs(0);
     setUnfinishedQuestions('');
+    setLapUndo(null);
+    setAwaitingFinalConfirm(false);
 
     patchSession(session.id, {
       status: 'in-progress',
@@ -333,10 +373,17 @@ export function LapTimer({ session }: { session: SessionRecord }) {
         unfinishedQuestionsDraft: '',
       },
     });
+
+    trackUXEvent('timer_started', session.id);
   };
 
   const captureLap = () => {
     if (!currentSegment || !lapStartedAtRef.current) {
+      return;
+    }
+
+    if (currentLapIndex === READING_LAP_SEGMENTS.length - 1 && !awaitingFinalConfirm) {
+      setAwaitingFinalConfirm(true);
       return;
     }
 
@@ -347,9 +394,12 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       [currentSegment.key]: lapElapsed,
     };
 
+    setAwaitingFinalConfirm(false);
+
     setReadingLapTimes(nextLapTimes);
 
     if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
+      setLapUndo(null);
       patchSession(session.id, {
         status: 'in-progress',
         readingLapTimes: nextLapTimes,
@@ -362,6 +412,13 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       });
       return;
     }
+
+    setLapUndo({
+      previousLapTimes: readingLapTimes,
+      previousLapIndex: currentLapIndex,
+      previousLapStartedAtMs: lapStartedAtRef.current,
+      capturedLapKey: currentSegment.key,
+    });
 
     lapStartedAtRef.current = now;
     setCurrentLapIndex((value) => value + 1);
@@ -378,6 +435,35 @@ export function LapTimer({ session }: { session: SessionRecord }) {
     });
   };
 
+  const undoLastLapCapture = () => {
+    if (!lapUndo || !timerRunning || overtimeMode) {
+      return;
+    }
+
+    setReadingLapTimes(lapUndo.previousLapTimes);
+    setCurrentLapIndex(lapUndo.previousLapIndex);
+    lapStartedAtRef.current = lapUndo.previousLapStartedAtMs;
+    setLapUndo(null);
+    setAwaitingFinalConfirm(false);
+
+    patchSession(session.id, {
+      status: 'in-progress',
+      readingLapTimes: lapUndo.previousLapTimes,
+      timerRuntime: {
+        startedAt: new Date(startedAtRef.current ?? Date.now()).toISOString(),
+        lapStartedAt: new Date(lapUndo.previousLapStartedAtMs).toISOString(),
+        currentLapIndex: lapUndo.previousLapIndex,
+        readingLapTimes: lapUndo.previousLapTimes,
+        unfinishedQuestionsDraft: unfinishedQuestions,
+        timeLeftMs: Math.max(timeLeft, 0),
+      },
+    });
+  };
+
+  const cancelFinalLapConfirm = () => {
+    setAwaitingFinalConfirm(false);
+  };
+
   const submitForced = () => {
     if (isListening) {
       commitStrictAttempt({ forcedSubmit: true, timedOut: false, unfinishedCount: 0 });
@@ -386,6 +472,8 @@ export function LapTimer({ session }: { session: SessionRecord }) {
 
     const nextPending = { forcedSubmit: true, timedOut: false } satisfies PendingSubmit;
     setIsRunning(false);
+    setLapUndo(null);
+    setAwaitingFinalConfirm(false);
     setPendingSubmit(nextPending);
     persistRuntime({ pendingSubmit: nextPending, timeLeftMs: timeLeft });
   };
@@ -439,6 +527,8 @@ export function LapTimer({ session }: { session: SessionRecord }) {
     overtimeStartedAtRef.current = now;
     setIsOvertime(true);
     setIsRunning(true);
+    setLapUndo(null);
+    setAwaitingFinalConfirm(false);
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
     setTimeLeft(0);
@@ -565,14 +655,34 @@ export function LapTimer({ session }: { session: SessionRecord }) {
               variant="outline"
               size="sm"
               onClick={captureLap}
-              className="border-amber-400/40 font-mono text-xs uppercase tracking-[0.16em] text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-400/10"
+              className={cn(
+                'border-amber-400/40 font-mono text-xs uppercase tracking-[0.16em] text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-400/10',
+                awaitingFinalConfirm && currentLapIndex === READING_LAP_SEGMENTS.length - 1
+                  ? 'border-red-500/40 text-red-600 hover:bg-red-500/8 dark:text-red-300'
+                  : ''
+              )}
             >
               <Flag className="mr-1.5 size-3.5" />
-              {copy.lapAction(currentSegment.shortLabel)}
+              {awaitingFinalConfirm && currentLapIndex === READING_LAP_SEGMENTS.length - 1
+                ? locale === 'zh'
+                  ? '确认完成最后分段并提交成绩'
+                  : 'Confirm Final Lap & Submit'
+                : copy.lapAction(currentSegment.shortLabel)}
             </Button>
           )}
 
-          {timerRunning && !overtimeMode && (
+          {awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={cancelFinalLapConfirm}
+              className="border border-zinc-300/70 font-mono text-xs uppercase tracking-[0.16em] text-zinc-600 hover:bg-zinc-200/40 dark:border-white/12 dark:text-zinc-300 dark:hover:bg-white/8"
+            >
+              {locale === 'zh' ? '返回最后分段' : 'Back To Final Lap'}
+            </Button>
+          )}
+
+          {timerRunning && !overtimeMode && !(awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1) && (
             <Button
               variant="ghost"
               size="sm"
@@ -584,6 +694,33 @@ export function LapTimer({ session }: { session: SessionRecord }) {
             </Button>
           )}
         </div>
+
+        {lapUndo && !isListening && timerRunning && !overtimeMode && (
+          <div className="mt-3 rounded-[18px] border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] leading-5 text-zinc-700 dark:text-zinc-300">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {locale === 'zh'
+                  ? `刚刚记录了 ${translatePart(locale, lapUndo.capturedLapKey)}。如误触，可撤销。`
+                  : `Recorded ${translatePart(locale, lapUndo.capturedLapKey)}. Undo if this was a mistap.`}
+              </span>
+              <button
+                type="button"
+                onClick={undoLastLapCapture}
+                className="rounded-full border border-amber-500/30 bg-white/75 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700 transition-colors hover:bg-amber-50 dark:bg-zinc-950/75 dark:text-amber-300"
+              >
+                {locale === 'zh' ? '撤销打点' : 'Undo Lap'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1 && (
+          <div className="mt-3 rounded-[18px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-700 dark:text-red-300">
+            {locale === 'zh'
+              ? '这是“完成最后分段后提交整套成绩”，不是提前交卷。请再次确认。'
+              : 'This action submits the full attempt after final-lap completion, not an early submit. Confirm to continue.'}
+          </div>
+        )}
       </div>
 
       {!isListening && (

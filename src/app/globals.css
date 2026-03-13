@@ -176,6 +176,56 @@
     background: oklch(0.8 0.16 85 / 30%);
     color: inherit;
   }
+
+  a[href],
+  button,
+  [role="button"],
+  summary,
+  label[for] {
+    cursor: pointer;
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  @media (hover: hover) {
+    a[href]:not([aria-disabled="true"]):not(:disabled):hover,
+    button:not([aria-disabled="true"]):not(:disabled):hover,
+    [role="button"]:not([aria-disabled="true"]):hover,
+    summary:hover,
+    label[for]:hover {
+      transform: translateY(-1px);
+    }
+  }
+
+  a[href]:not([aria-disabled="true"]):not(:disabled):active,
+  button:not([aria-disabled="true"]):not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  summary:active,
+  label[for]:active {
+    transform: translateY(0) scale(0.985);
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  select {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {
@@ -426,3 +476,31 @@ html.theme-switching::view-transition-old(root) {
 }
 .timer-glow-amber { animation: timerGlow 2s ease-in-out infinite; }
 .timer-glow-red   { animation: redGlow 1.5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal-fade,
+  .timer-glow-amber,
+  .timer-glow-red {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  a[href],
+  button,
+  [role="button"],
+  summary,
+  label[for] {
+    transform: none !important;
+  }
+}

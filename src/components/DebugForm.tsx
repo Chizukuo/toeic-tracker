@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Check, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,42 @@ import {
   type MistakeKey,
   type SessionRecord,
 } from '@/lib/toeic';
+import { trackUXEvent } from '@/lib/uxEvent';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
-export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
+function sameStringArray(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameNumberRecord<T extends string>(
+  left: Partial<Record<T, number>>,
+  right: Partial<Record<T, number>>
+) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key) => left[key as T] === right[key as T]);
+}
+
+export function DebugForm({
+  activeSession,
+  autoFocusToken = 0,
+  onReviewSaved,
+  onReviewUndone,
+}: {
+  activeSession: SessionRecord;
+  autoFocusToken?: number;
+  onReviewSaved?: (nextStep: 'unfinished' | 'analytics') => void;
+  onReviewUndone?: () => void;
+}) {
   const saveDiagnostics = useStore((state) => state.saveDiagnostics);
   const saveOvertimeDiagnostics = useStore((state) => state.saveOvertimeDiagnostics);
+  const patchSession = useStore((state) => state.patchSession);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const parts = useMemo(() => getPartsForType(activeSession.type), [activeSession.type]);
@@ -33,6 +63,14 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
   const [reasons, setReasons] = useState<string[]>(activeSession.reasons);
   const [saved, setSaved] = useState(false);
   const [overtimeSaved, setOvertimeSaved] = useState(false);
+  const [undoVisible, setUndoVisible] = useState(false);
+  const undoTimerRef = useRef<number | null>(null);
+  const undoPayloadRef = useRef<{
+    mistakes: Partial<Record<MistakeKey, number>>;
+    reasons: string[];
+    status: SessionRecord['status'];
+  } | null>(null);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const unresolvedBacklog = activeSession.type === 'R'
     && (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0
@@ -48,12 +86,50 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
     [overtimeMistakes]
   );
 
+  const dirtyReview = useMemo(() => {
+    return (
+      !sameNumberRecord<MistakeKey>(mistakes, activeSession.mistakes) ||
+      !sameStringArray(reasons, activeSession.reasons)
+    );
+  }, [activeSession.mistakes, activeSession.reasons, mistakes, reasons]);
+
+  const dirtyOvertime = useMemo(() => {
+    return !sameNumberRecord<MistakeKey>(overtimeMistakes, activeSession.overtimeMistakes ?? {});
+  }, [activeSession.overtimeMistakes, overtimeMistakes]);
+
   const updateMistake = (part: MistakeKey, value: string) => {
     const parsed = Number(value);
     setMistakes((current) => ({
       ...current,
       [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
     }));
+  };
+
+  const focusInputAt = useCallback((index: number) => {
+    if (index < 0 || index >= parts.length) {
+      return;
+    }
+
+    const input = inputRefs.current[index];
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    input.select();
+  }, [parts.length]);
+
+  const handleMistakeInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key === 'Enter' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusInputAt(Math.min(index + 1, parts.length - 1));
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusInputAt(Math.max(index - 1, 0));
+    }
   };
 
   const updateOvertimeMistake = (part: MistakeKey, value: string) => {
@@ -70,14 +146,82 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
     );
   };
 
+  const fillEmptyMistakesWithZero = () => {
+    setMistakes((current) => {
+      const next = { ...current };
+      for (const part of parts) {
+        if (next[part] === undefined || next[part] === null) {
+          next[part] = 0;
+        }
+      }
+      return next;
+    });
+  };
+
+  const resetReviewDraft = () => {
+    setMistakes(activeSession.mistakes);
+    setReasons(activeSession.reasons);
+  };
+
+  const resetOvertimeDraft = () => {
+    setOvertimeMistakes(activeSession.overtimeMistakes ?? {});
+  };
+
   const handleSave = () => {
+    undoPayloadRef.current = {
+      mistakes: activeSession.mistakes,
+      reasons: activeSession.reasons,
+      status: activeSession.status,
+    };
+
     saveDiagnostics(activeSession.id, {
       mistakes,
       reasons,
       status: 'debugged',
     });
     setSaved(true);
+    setUndoVisible(true);
     window.setTimeout(() => setSaved(false), 1600);
+
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndoVisible(false);
+      undoPayloadRef.current = null;
+    }, 5000);
+
+    trackUXEvent('review_saved', activeSession.id);
+    onReviewSaved?.(activeSession.type === 'R' ? 'unfinished' : 'analytics');
+  };
+
+  const handleUndoSave = () => {
+    const previous = undoPayloadRef.current;
+    if (!previous) {
+      return;
+    }
+
+    saveDiagnostics(activeSession.id, {
+      mistakes: previous.mistakes,
+      reasons: previous.reasons,
+      status: previous.status,
+    });
+
+    patchSession(activeSession.id, {
+      status: previous.status,
+    });
+
+    setUndoVisible(false);
+    undoPayloadRef.current = null;
+
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+
+    trackUXEvent('review_undone', activeSession.id);
+    onReviewUndone?.();
   };
 
   const handleSaveOvertime = () => {
@@ -95,7 +239,50 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
     });
     setOvertimeSaved(true);
     window.setTimeout(() => setOvertimeSaved(false), 1600);
+    trackUXEvent('overtime_saved', activeSession.id);
+    onReviewSaved?.('analytics');
   };
+
+  const handleShortcutSave = useEffectEvent((withShift: boolean) => {
+    if (withShift && unresolvedBacklog && dirtyOvertime) {
+      handleSaveOvertime();
+      return;
+    }
+
+    if (dirtyReview) {
+      handleSave();
+    }
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!((event.ctrlKey || event.metaKey) && event.key === 'Enter')) {
+        return;
+      }
+
+      event.preventDefault();
+      handleShortcutSave(event.shiftKey);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (autoFocusToken <= 0) {
+      return;
+    }
+
+    window.setTimeout(() => focusInputAt(0), 40);
+  }, [autoFocusToken, focusInputAt]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) {
+        window.clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Card className="deck-card rounded-[26px]">
@@ -111,6 +298,17 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 p-6">
+        <div className="rounded-2xl border border-zinc-200/80 bg-white/78 px-4 py-3 dark:border-white/8 dark:bg-zinc-950/82">
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? '复盘步骤' : 'Review Steps'}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] leading-5">
+            <StepTag label={locale === 'zh' ? '1 录入错题' : '1 Mistakes'} active />
+            <StepTag label={locale === 'zh' ? '2 选择错因' : '2 Reasons'} active={reasons.length > 0} />
+            <StepTag label={locale === 'zh' ? '3 保存复盘' : '3 Save'} active={saved || activeSession.status === 'debugged'} />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <QuickInfoCard label={copy.session} value={activeSession.label} helper={activeSession.type === 'L' ? copy.listeningDiagnosis : copy.readingDiagnosis} />
           <QuickInfoCard label={copy.target} value={`${activeSession.targetMinutes}m`} helper={copy.officialSprintTime} />
@@ -170,12 +368,25 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         <div>
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.mistakesByPart}</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-              {locale === 'zh' ? '录入错题数' : 'Enter mistake count'}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fillEmptyMistakesWithZero}
+                className="rounded-full border border-zinc-200/80 bg-white/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-800 dark:border-white/10 dark:bg-zinc-950/78 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                {locale === 'zh' ? '空值补零' : 'Fill Empty'}
+              </button>
+              <button
+                type="button"
+                onClick={resetReviewDraft}
+                className="rounded-full border border-zinc-200/80 bg-white/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-800 dark:border-white/10 dark:bg-zinc-950/78 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                {locale === 'zh' ? '恢复已保存' : 'Reset Draft'}
+              </button>
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {parts.map((part) => (
+            {parts.map((part, index) => (
               <label key={part} className="deck-surface-soft p-3 transition-colors hover:border-amber-300/60 dark:hover:border-amber-300/25">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
@@ -188,7 +399,11 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
                   min="0"
                   className="mt-2 h-9 bg-white text-sm dark:bg-zinc-950"
                   value={mistakes[part] ?? ''}
+                  ref={(element) => {
+                    inputRefs.current[index] = element;
+                  }}
                   onChange={(event) => updateMistake(part, event.target.value)}
+                  onKeyDown={(event) => handleMistakeInputKeyDown(event, index)}
                   placeholder="0"
                 />
               </label>
@@ -232,10 +447,21 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
         <div>
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.rootCauseTags}</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-              {locale === 'zh' ? `已选 ${reasons.length}` : `${reasons.length} selected`}
-            </div>
+            <button
+              type="button"
+              onClick={() => setReasons([])}
+              className="rounded-full border border-zinc-200/80 bg-white/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-800 dark:border-white/10 dark:bg-zinc-950/78 dark:text-zinc-400 dark:hover:text-zinc-100"
+            >
+              {locale === 'zh' ? `清空标签 (${reasons.length})` : `Clear (${reasons.length})`}
+            </button>
           </div>
+          {totalMistakes > 0 && reasons.length === 0 && (
+            <div className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+              {locale === 'zh'
+                ? '建议至少选择 1 个错因标签，后续趋势分析会更准确。'
+                : 'Select at least one root-cause tag for more reliable trend analysis.'}
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {reasonOptions.map((reason) => {
               const active = reasons.includes(reason);
@@ -264,10 +490,29 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
             <span>{locale === 'zh' ? '保存后会将当前套题标记为已完成复盘。' : 'Saving will mark this set as reviewed.'}</span>
             <span className="font-mono uppercase tracking-[0.2em]">{totalMistakes}</span>
           </div>
-          <Button size="sm" onClick={handleSave} className="w-full bg-zinc-950 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200">
+          <div className="mb-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+            {locale === 'zh'
+              ? '快捷键: Ctrl/Cmd + Enter 保存复盘，Shift + Ctrl/Cmd + Enter 保存加时复盘'
+              : 'Shortcut: Ctrl/Cmd + Enter saves review, Shift + Ctrl/Cmd + Enter saves overtime review'}
+          </div>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!dirtyReview}
+            className="w-full bg-zinc-950 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-55 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+          >
             {saved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
-            {saved ? `${copy.saveDiagnostics} OK` : `${copy.saveDiagnostics} ${copy.markDebugged}`}
+            {saved ? `${copy.saveDiagnostics} OK` : !dirtyReview ? (locale === 'zh' ? '暂无变更' : 'No Changes') : `${copy.saveDiagnostics} ${copy.markDebugged}`}
           </Button>
+
+          {undoVisible && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11px] text-zinc-700 dark:text-zinc-300">
+              <span>{locale === 'zh' ? '已保存，可在 5 秒内撤销。' : 'Saved. You can undo within 5 seconds.'}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={handleUndoSave} className="h-7 px-2 text-[11px]">
+                {locale === 'zh' ? '撤销' : 'Undo'}
+              </Button>
+            </div>
+          )}
         </div>
 
         {unresolvedBacklog && (
@@ -280,20 +525,50 @@ export function DebugForm({ activeSession }: { activeSession: SessionRecord }) {
               </span>
               <span className="font-mono uppercase tracking-[0.2em]">{totalOvertimeMistakes}</span>
             </div>
-            <Button size="sm" onClick={handleSaveOvertime} className="w-full bg-red-500 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-red-600">
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={resetOvertimeDraft}
+                className="rounded-full border border-red-500/25 bg-white/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-red-600 transition-colors hover:bg-red-500/8 dark:border-red-500/30 dark:bg-zinc-950/78 dark:text-red-300"
+              >
+                {locale === 'zh' ? '恢复已保存' : 'Reset Draft'}
+              </button>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleSaveOvertime}
+              disabled={!dirtyOvertime}
+              className="w-full bg-red-500 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-55"
+            >
               {overtimeSaved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
               {overtimeSaved
                 ? locale === 'zh'
                   ? '已保存加时补录'
                   : 'Overtime Saved'
                 : locale === 'zh'
-                  ? '保存加时补录'
-                  : 'Save Overtime Review'}
+                  ? !dirtyOvertime
+                    ? '加时无变更'
+                    : '保存加时补录'
+                  : !dirtyOvertime
+                    ? 'No Overtime Changes'
+                    : 'Save Overtime Review'}
             </Button>
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function StepTag({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span
+      className={active
+        ? 'rounded-full border border-amber-400/35 bg-amber-400/12 px-2.5 py-1 font-mono tracking-[0.12em] text-amber-700 dark:text-amber-300'
+        : 'rounded-full border border-zinc-200/85 bg-white/80 px-2.5 py-1 font-mono tracking-[0.12em] text-zinc-500 dark:border-white/8 dark:bg-zinc-950/70 dark:text-zinc-400'}
+    >
+      {label}
+    </span>
   );
 }
 
