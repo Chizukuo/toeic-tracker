@@ -213,4 +213,55 @@ describe('useStore snapshot compatibility', () => {
     expect(nextState.historicalScores).toHaveLength(1);
     expect(nextState.historicalScores[0].total).toBe(700);
   });
+
+  it('skips no-op session patches so timer draft sync cannot loop on unchanged state', () => {
+    const before = useStore.getState().sessions.find((session) => session.id === 'R1');
+
+    if (!before) {
+      throw new Error('Missing R1 fixture');
+    }
+
+    useStore.getState().patchSession('R1', {
+      status: 'in-progress',
+      timerRuntime: {
+        startedAt: '2026-03-13T10:00:00.000Z',
+        currentLapIndex: 0,
+        readingLapTimes: {},
+        pendingSubmit: {
+          forcedSubmit: true,
+          timedOut: true,
+        },
+        unfinishedQuestionsDraft: '6',
+        timeLeftMs: 0,
+      },
+    });
+
+    const patched = useStore.getState().sessions.find((session) => session.id === 'R1');
+
+    if (!patched) {
+      throw new Error('Missing patched R1 fixture');
+    }
+
+    const firstUpdatedAt = patched.updatedAt;
+
+    useStore.getState().patchSession('R1', {
+      status: 'in-progress',
+      timerRuntime: {
+        startedAt: '2026-03-13T10:00:00.000Z',
+        currentLapIndex: 0,
+        readingLapTimes: {},
+        pendingSubmit: {
+          forcedSubmit: true,
+          timedOut: true,
+        },
+        unfinishedQuestionsDraft: '6',
+        timeLeftMs: 0,
+      },
+    });
+
+    const afterNoOp = useStore.getState().sessions.find((session) => session.id === 'R1');
+
+    expect(afterNoOp).toBe(patched);
+    expect(afterNoOp?.updatedAt).toBe(firstUpdatedAt);
+  });
 });

@@ -3,8 +3,11 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   type MistakeKey,
+  type ReadingLapKey,
   type SessionRecord,
   type SessionStatus,
+  type TimerRuntimeState,
+  type TimerSummary,
   createInitialSessions,
 } from '@/lib/toeic';
 import type { Locale as AppLocale } from '@/lib/i18n';
@@ -26,6 +29,89 @@ import {
 } from '@/lib/storeSnapshot';
 
 const storage = createJSONStorage(getPersistStorage);
+
+function sameStringArray(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameNumberRecord<T extends string>(
+  left: Partial<Record<T, number>> | undefined,
+  right: Partial<Record<T, number>> | undefined
+) {
+  if (left === right) {
+    return true;
+  }
+
+  const leftKeys = Object.keys(left ?? {});
+  const rightKeys = Object.keys(right ?? {});
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key) => left?.[key as T] === right?.[key as T]);
+}
+
+function samePendingSubmit(
+  left: TimerRuntimeState['pendingSubmit'],
+  right: TimerRuntimeState['pendingSubmit']
+) {
+  return left?.forcedSubmit === right?.forcedSubmit && left?.timedOut === right?.timedOut;
+}
+
+function sameTimerSummary(left: TimerSummary | undefined, right: TimerSummary | undefined) {
+  if (left === right) {
+    return true;
+  }
+
+  return (
+    left?.totalElapsedMs === right?.totalElapsedMs &&
+    left?.forcedSubmit === right?.forcedSubmit &&
+    left?.timedOut === right?.timedOut &&
+    left?.unfinishedQuestions === right?.unfinishedQuestions &&
+    left?.resolvedUnfinished === right?.resolvedUnfinished &&
+    left?.overtimeElapsedMs === right?.overtimeElapsedMs &&
+    left?.completedAt === right?.completedAt
+  );
+}
+
+function sameTimerRuntime(left: TimerRuntimeState | undefined, right: TimerRuntimeState | undefined) {
+  if (left === right) {
+    return true;
+  }
+
+  return (
+    left?.startedAt === right?.startedAt &&
+    left?.lapStartedAt === right?.lapStartedAt &&
+    left?.currentLapIndex === right?.currentLapIndex &&
+    sameNumberRecord<ReadingLapKey>(left?.readingLapTimes, right?.readingLapTimes) &&
+    left?.isOvertime === right?.isOvertime &&
+    left?.overtimeStartedAt === right?.overtimeStartedAt &&
+    left?.overtimeElapsedMs === right?.overtimeElapsedMs &&
+    samePendingSubmit(left?.pendingSubmit, right?.pendingSubmit) &&
+    left?.unfinishedQuestionsDraft === right?.unfinishedQuestionsDraft &&
+    left?.timeLeftMs === right?.timeLeftMs
+  );
+}
+
+function sameSessionRecord(left: SessionRecord, right: SessionRecord) {
+  return (
+    left.id === right.id &&
+    left.sprintDay === right.sprintDay &&
+    left.type === right.type &&
+    left.setNumber === right.setNumber &&
+    left.label === right.label &&
+    left.title === right.title &&
+    left.targetMinutes === right.targetMinutes &&
+    left.status === right.status &&
+    sameNumberRecord<MistakeKey>(left.mistakes, right.mistakes) &&
+    sameNumberRecord<MistakeKey>(left.overtimeMistakes, right.overtimeMistakes) &&
+    sameStringArray(left.reasons, right.reasons) &&
+    sameNumberRecord<ReadingLapKey>(left.readingLapTimes, right.readingLapTimes) &&
+    sameTimerSummary(left.timerSummary, right.timerSummary) &&
+    sameTimerRuntime(left.timerRuntime, right.timerRuntime)
+  );
+}
 
 interface AppState {
   sessions: SessionRecord[];
@@ -126,27 +212,42 @@ export const useStore = create<AppState>()(
           historicalScores: state.historicalScores.filter((item) => item.id !== id),
         })),
       patchSession: (sessionId, data) =>
-        set((state) => ({
-          sessions: state.sessions.map((session) =>
-            session.id === sessionId
-              ? {
-                  ...session,
-                  ...data,
-                  mistakes: data.mistakes ?? session.mistakes,
-                  overtimeMistakes: data.overtimeMistakes ?? session.overtimeMistakes,
-                  reasons: data.reasons ?? session.reasons,
-                  readingLapTimes: data.readingLapTimes ?? session.readingLapTimes,
-                  timerSummary: data.timerSummary
-                    ? {
-                        ...session.timerSummary,
-                        ...data.timerSummary,
-                      }
-                    : session.timerSummary,
-                  updatedAt: new Date().toISOString(),
-                }
-              : session
-          ),
-        })),
+        set((state) => {
+          let changed = false;
+
+          const sessions = state.sessions.map((session) => {
+            if (session.id !== sessionId) {
+              return session;
+            }
+
+            const nextSession: SessionRecord = {
+              ...session,
+              ...data,
+              mistakes: data.mistakes ?? session.mistakes,
+              overtimeMistakes: data.overtimeMistakes ?? session.overtimeMistakes,
+              reasons: data.reasons ?? session.reasons,
+              readingLapTimes: data.readingLapTimes ?? session.readingLapTimes,
+              timerSummary: data.timerSummary
+                ? {
+                    ...session.timerSummary,
+                    ...data.timerSummary,
+                  }
+                : session.timerSummary,
+            };
+
+            if (sameSessionRecord(session, nextSession)) {
+              return session;
+            }
+
+            changed = true;
+            return {
+              ...nextSession,
+              updatedAt: new Date().toISOString(),
+            };
+          });
+
+          return changed ? { sessions } : state;
+        }),
       saveDiagnostics: (sessionId, payload) =>
         set((state) => ({
           sessions: state.sessions.map((session) =>

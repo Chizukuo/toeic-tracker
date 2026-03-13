@@ -287,7 +287,13 @@ export function LapTimer({ session }: { session: SessionRecord }) {
       return;
     }
 
-    if (session.timerRuntime.unfinishedQuestionsDraft === unfinishedQuestions) {
+    const runtimePending = session.timerRuntime.pendingSubmit;
+    const sameDraft = session.timerRuntime.unfinishedQuestionsDraft === unfinishedQuestions;
+    const samePending =
+      runtimePending?.forcedSubmit === pendingSubmit.forcedSubmit &&
+      runtimePending?.timedOut === pendingSubmit.timedOut;
+
+    if (sameDraft && samePending) {
       return;
     }
 
