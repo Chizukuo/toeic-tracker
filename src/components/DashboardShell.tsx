@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import type { ComponentType, ReactNode } from 'react';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle, Clock, Database, Home, Target, BarChart2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart2, CalendarDays, CheckCircle, Clock, Database, Home, Menu, Target, Trophy, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { LocaleToggle } from '@/components/LocaleToggle';
@@ -73,6 +73,11 @@ export function DashboardShell({
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     ensureInitialized();
@@ -254,11 +259,11 @@ export function DashboardShell({
 
   const navigationItems = [
     { href: '/', label: locale === 'zh' ? '总览' : 'Overview', icon: Home },
-    { href: '/plan', label: copy.dashboardTitle, icon: Target },
+    { href: '/plan', label: copy.dashboardTitle, icon: CalendarDays },
     { href: '/timer', label: locale === 'zh' ? '计时' : 'Timer', icon: Clock },
     { href: '/unfinished', label: copy.unfinishedTrackerTitle, icon: CheckCircle },
     { href: '/analytics', label: copy.analyticsTitle, icon: BarChart2 },
-    { href: '/scores', label: copy.scoreEstimatorTitle, icon: Target },
+    { href: '/scores', label: copy.scoreEstimatorTitle, icon: Trophy },
     { href: '/vault', label: copy.dataVaultTitle, icon: Database },
   ];
 
@@ -305,8 +310,10 @@ export function DashboardShell({
            <Link href="/" aria-label={copy.appName} className="relative z-10 ml-2 flex shrink-0 items-center justify-center transition-transform hover:scale-105 active:scale-95">
              <BrandIconSvg className="size-7 opacity-90" />
           </Link>
+
           
-          <nav className="no-scrollbar flex min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:justify-center md:px-2 lg:gap-1.5">
+          
+          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
             {navigationItems.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -326,20 +333,113 @@ export function DashboardShell({
                       transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
                     />
                   )}
-                  <span className="relative z-10 flex items-center gap-2">
-                    <Icon className="size-4" />
-                    <span className="hidden md:inline-block">{item.label}</span>
-                  </span>
+                  <span className="relative z-10 hidden md:inline-block">{item.label}</span>
                 </Link>
               );
             })}
           </nav>
           
           <div className="relative z-10 mr-1 flex shrink-0 items-center gap-1 sm:gap-1.5">
-            <LocaleToggle />
-            <ThemeToggle />
+            <div className="hidden md:flex items-center gap-2">
+              <LocaleToggle />
+              <ThemeToggle />
+            </div>
+            <div className="md:hidden">
+              <button
+                type="button"
+                aria-label={locale === 'zh' ? '切换导航菜单' : 'Toggle navigation menu'}
+                aria-expanded={isMobileMenuOpen}
+                onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+                className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-zinc-200/70 bg-white/80 text-zinc-700 shadow-[0_4px_18px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-colors hover:bg-white dark:border-white/10 dark:bg-zinc-900/75 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                <motion.span
+                  key={isMobileMenuOpen ? 'close' : 'menu'}
+                  initial={{ opacity: 0, scale: 0.8, rotate: -25 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, rotate: 25 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  {isMobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+                </motion.span>
+              </button>
+            </div>
           </div>
         </header>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <>
+              <motion.button
+                type="button"
+                aria-label={locale === 'zh' ? '关闭导航菜单' : 'Close navigation menu'}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="fixed inset-0 z-40 bg-zinc-950/18 backdrop-blur-[2px] md:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              />
+
+              <motion.nav
+                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[30px] border border-white/50 bg-white/88 p-2.5 shadow-[0_16px_46px_rgba(0,0,0,0.16)] backdrop-blur-2xl md:hidden dark:border-white/10 dark:bg-zinc-900/88 dark:shadow-[0_16px_46px_rgba(0,0,0,0.52)]"
+                initial={{ opacity: 0, y: -16, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28, mass: 0.85 }}
+              >
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                    <div className="flex items-center gap-2">
+                      <LocaleToggle />
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                  {navigationItems.map((item, index) => {
+                    const isActive = pathname === item.href;
+                    const Icon = item.icon;
+                    return (
+                      <motion.div
+                        key={item.href}
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04 + 0.05, duration: 0.22, ease: 'easeOut' }}
+                      >
+                        <Link
+                          href={item.href}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={cn(
+                            'group relative flex items-center justify-between rounded-2xl border px-3.5 py-3 text-sm transition-colors',
+                            isActive
+                              ? 'border-amber-200/80 bg-amber-50 text-zinc-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-zinc-100'
+                              : 'border-transparent bg-white/55 text-zinc-600 hover:bg-white dark:bg-zinc-900/40 dark:text-zinc-300 dark:hover:bg-zinc-900/70'
+                          )}
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className={cn(
+                              'flex size-8 items-center justify-center rounded-full border',
+                              isActive
+                                ? 'border-amber-200 bg-white text-amber-600 dark:border-amber-300/20 dark:bg-zinc-900 dark:text-amber-300'
+                                : 'border-zinc-200 bg-white/80 text-zinc-500 dark:border-white/10 dark:bg-zinc-900/75 dark:text-zinc-400'
+                            )}>
+                              <Icon className="size-4" />
+                            </span>
+                            <span className="font-medium">{item.label}</span>
+                          </span>
+                          <span className={cn(
+                            'text-xs transition-opacity',
+                            isActive ? 'opacity-100 text-amber-600 dark:text-amber-300' : 'opacity-0 group-hover:opacity-60 dark:group-hover:opacity-70'
+                          )}>
+                            {locale === 'zh' ? '进入' : 'Open'}
+                          </span>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.nav>
+            </>
+          )}
+        </AnimatePresence>
 
         <div className="relative mx-auto flex w-full max-w-395 flex-col gap-8">
           
