@@ -1,4 +1,4 @@
-import { APPLE_ICON_GEOMETRY, createIconImageResponse } from "@/lib/iconArt";
+import { createIconImageResponse } from "@/lib/iconArt";
 
 export const dynamic = "force-static";
 export const size = {
@@ -8,5 +8,5 @@ export const size = {
 export const contentType = "image/png";
 
 export default function AppleIcon() {
-  return createIconImageResponse(size, APPLE_ICON_GEOMETRY);
+  return createIconImageResponse(size, "TOEIC Deck apple icon");
 }

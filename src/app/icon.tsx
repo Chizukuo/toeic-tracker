@@ -1,4 +1,4 @@
-import { createIconImageResponse, DEFAULT_ICON_GEOMETRY } from "@/lib/iconArt";
+import { createIconImageResponse } from "@/lib/iconArt";
 
 export const dynamic = "force-static";
 export const size = {
@@ -8,5 +8,5 @@ export const size = {
 export const contentType = "image/png";
 
 export default function Icon() {
-  return createIconImageResponse(size, DEFAULT_ICON_GEOMETRY);
+  return createIconImageResponse(size, "TOEIC Deck icon");
 }

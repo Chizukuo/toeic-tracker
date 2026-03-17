@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import type { ReactNode } from 'react';
 import { useDeferredValue, useMemo } from 'react';
@@ -35,6 +35,7 @@ import {
 } from '@/lib/toeic';
 import { useStore } from '@/store/useStore';
 import { getCopy, translatePart, translateReason } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 type LossTrendPoint = {
   set: string;
@@ -188,27 +189,29 @@ export function AnalyticsDashboard() {
 
   return (
     <section className="grid gap-6">
-      <DataConfidenceCard locale={locale} confidence={analyticsConfidence} />
+      <DataStatusBanner locale={locale} confidence={analyticsConfidence} radarSummary={radarSummary} />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <LossTrendCard
-          title={copy.mistakeTrend}
-          description={copy.mistakeTrendDesc}
-          data={trendData}
-          summary={lossSummary}
-          locale={locale}
-          listeningLabel={copy.listeningSeries}
-          readingLabel={copy.readingSeries}
-        />
+      <LossTrendCard
+        title={copy.mistakeTrend}
+        description={copy.mistakeTrendDesc}
+        data={trendData}
+        summary={lossSummary}
+        locale={locale}
+        listeningLabel={copy.listeningSeries}
+        readingLabel={copy.readingSeries}
+      />
 
-        <WeaknessRadarCard
-          title={copy.weaknessRadar}
-          description={copy.weaknessRadarDesc}
-          data={radarData}
-          summary={radarSummary}
-          locale={locale}
-        />
-      </div>
+      {radarSummary.hotspots.length > 0 && (
+        <HotspotRankCard summary={radarSummary} locale={locale} />
+      )}
+
+      <WeaknessRadarCard
+        title={copy.weaknessRadar}
+        description={copy.weaknessRadarDesc}
+        data={radarData}
+        summary={radarSummary}
+        locale={locale}
+      />
 
       <ChartCard
         title={copy.rootCauseFrequency}
@@ -236,7 +239,7 @@ export function AnalyticsDashboard() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="deck-empty flex h-44 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
+          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-44 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
             {copy.saveDebugToUnlock}
           </div>
         )}
@@ -245,104 +248,118 @@ export function AnalyticsDashboard() {
   );
 }
 
-function DataConfidenceCard({ locale, confidence }: { locale: 'zh' | 'en'; confidence: AnalyticsConfidence }) {
-  const title =
-    confidence.level === 'high'
-      ? locale === 'zh'
-        ? '当前分析样本较稳定'
-        : 'Analytics sample is stable'
-      : confidence.level === 'medium'
-        ? locale === 'zh'
-          ? '当前分析可参考，但要保守解读'
-          : 'Analytics is usable, but read conservatively'
-        : locale === 'zh'
-          ? '当前分析样本还不够稳'
-          : 'Analytics sample is still unstable';
+function DataStatusBanner({ locale, confidence, radarSummary }: { locale: 'zh' | 'en'; confidence: AnalyticsConfidence; radarSummary: RadarSummary }) {
+  const isHigh = confidence.level === 'high';
+  const isMedium = confidence.level === 'medium';
 
-  const body =
-    confidence.level === 'high'
-      ? locale === 'zh'
-        ? '大部分记录已经形成“计时 + 复盘”闭环，趋势和薄弱项可以直接拿来指导下一轮训练。'
-        : 'Most records already complete the timer-review loop, so the trends and weak spots are fit to guide the next round.'
-      : confidence.level === 'medium'
-        ? locale === 'zh'
-          ? '当前图表已经有参考价值，但未完成题或未复盘节点仍会拉偏部分趋势。'
-          : 'The charts are already useful, but unfinished items or unreviewed nodes still bias parts of the trend.'
-        : locale === 'zh'
-          ? '当前仍有较多在途记录或样本偏少，先补齐流程再下结论更稳。'
-          : 'There are still too many in-flight records or too little data, so finish the workflow before drawing strong conclusions.';
+  const dotClass = isHigh
+    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+    : isMedium
+      ? 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+      : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]';
+
+  const label = isHigh
+    ? (locale === 'zh' ? '高可信度' : 'Stable')
+    : isMedium
+      ? (locale === 'zh' ? '中等可信度' : 'Usable')
+      : (locale === 'zh' ? '低可信度' : 'Sparse');
+
+  const riskLabel = confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : null;
 
   return (
-    <Card className="deck-card">
-      <CardHeader className="deck-card-header gap-3 px-6 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
-              {locale === 'zh' ? 'Data Confidence' : 'Data Confidence'}
-            </CardTitle>
-            <CardDescription className="mt-1 text-sm leading-6">{title}</CardDescription>
-          </div>
-          <span className={confidenceBadgeClassName(confidence.level)}>
-            {confidence.level === 'high' ? (locale === 'zh' ? '高' : 'High') : confidence.level === 'medium' ? (locale === 'zh' ? '中' : 'Medium') : locale === 'zh' ? '低' : 'Low'}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-2 text-sm">
+      <div className="flex items-center gap-2">
+        <div className={cn('size-2 rounded-full', dotClass)} />
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+      </div>
+      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+      <span className="text-zinc-500 dark:text-zinc-400">
+        {confidence.recordedSessions}{locale === 'zh' ? ' 套已记录' : ' recorded'}
+      </span>
+      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+      <span className="text-zinc-500 dark:text-zinc-400">
+        {confidence.reviewedSessions}{locale === 'zh' ? ' 已复盘' : ' reviewed'}
+      </span>
+      {radarSummary.totalTrackedLoss > 0 && (
+        <>
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+          <span className="text-zinc-500 dark:text-zinc-400">
+            {locale === 'zh' ? `累计失分 ${radarSummary.totalTrackedLoss}` : `${radarSummary.totalTrackedLoss} total loss`}
           </span>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className={confidencePanelClassName(confidence.level)}>{body}</div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <SignalTile label={locale === 'zh' ? '已记录' : 'Recorded'} value={`${confidence.recordedSessions}`} helper={locale === 'zh' ? '已进入分析样本的 session' : 'Sessions included in analytics'} />
-          <SignalTile label={locale === 'zh' ? '已复盘' : 'Reviewed'} value={`${confidence.reviewedSessions}`} helper={locale === 'zh' ? 'debugged 节点数' : 'Nodes already reviewed'} />
-          <SignalTile label={locale === 'zh' ? '进行中' : 'In Progress'} value={`${confidence.inProgressSessions}`} helper={locale === 'zh' ? '仍可能继续变动' : 'Still likely to change'} />
-          <SignalTile label={locale === 'zh' ? '未完成题 session' : 'Backlog Sessions'} value={`${confidence.unfinishedSessions}`} helper={locale === 'zh' ? '阅读遗留会放大失分' : 'Reading backlog inflates loss'} />
-          <SignalTile label={locale === 'zh' ? '超时记录' : 'Timed Out'} value={`${confidence.timedOutSessions}`} helper={locale === 'zh' ? '反映时间压力' : 'Signals time pressure'} />
-          <SignalTile label={locale === 'zh' ? '关键提醒' : 'Key Risk'} value={confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : locale === 'zh' ? '无' : 'None'} helper={locale === 'zh' ? '最先要修正的数据风险' : 'The first data risk to resolve'} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SignalTile({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <div className="deck-surface-soft rounded-[22px] p-4">
-      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{helper}</div>
+        </>
+      )}
+      {riskLabel && (
+        <>
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+          <span className="text-amber-600 dark:text-amber-400">
+            {locale === 'zh' ? `风险：${riskLabel}` : `Risk: ${riskLabel}`}
+          </span>
+        </>
+      )}
     </div>
   );
 }
 
-function confidenceBadgeClassName(level: AnalyticsConfidence['level']) {
-  return level === 'high'
-    ? 'rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300'
-    : level === 'medium'
-      ? 'rounded-full border border-amber-400/30 bg-amber-400/12 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300'
-      : 'rounded-full border border-red-500/25 bg-red-500/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-red-700 dark:text-red-300';
-}
-
-function confidencePanelClassName(level: AnalyticsConfidence['level']) {
-  return level === 'high'
-    ? 'rounded-[24px] border border-emerald-500/20 bg-emerald-500/8 px-4 py-4 text-sm leading-6 text-emerald-700 dark:text-emerald-300'
-    : level === 'medium'
-      ? 'rounded-[24px] border border-amber-400/20 bg-amber-400/8 px-4 py-4 text-sm leading-6 text-amber-700 dark:text-amber-300'
-      : 'rounded-[24px] border border-red-500/20 bg-red-500/8 px-4 py-4 text-sm leading-6 text-red-700 dark:text-red-300';
-}
-
 function formatConfidenceIssue(locale: 'zh' | 'en', issue: AnalyticsConfidence['issues'][number]) {
   switch (issue) {
-    case 'unfinished-backlog':
-      return locale === 'zh' ? '先清未完成题' : 'Clear backlog first';
-    case 'missing-review':
-      return locale === 'zh' ? '补齐复盘' : 'Finish review';
-    case 'sparse-history':
-      return locale === 'zh' ? '样本太少' : 'Too little data';
-    case 'missing-timer':
-      return locale === 'zh' ? '缺计时数据' : 'Timer data missing';
-    case 'timer-running':
-      return locale === 'zh' ? '仍在进行中' : 'Still in progress';
-    default:
-      return locale === 'zh' ? '无' : 'None';
+    case 'unfinished-backlog': return locale === 'zh' ? '先清未完成题' : 'Clear backlog';
+    case 'missing-review': return locale === 'zh' ? '补齐复盘' : 'Finish review';
+    case 'sparse-history': return locale === 'zh' ? '样本太少' : 'Too few samples';
+    case 'missing-timer': return locale === 'zh' ? '缺计时数据' : 'Timer missing';
+    case 'timer-running': return locale === 'zh' ? '仍在进行中' : 'Timer running';
+    default: return locale === 'zh' ? '无' : 'None';
   }
+}
+
+function HotspotRankCard({ summary, locale }: { summary: RadarSummary; locale: 'zh' | 'en' }) {
+  const maxPressure = summary.hotspots[0]?.pressure ?? 1;
+  const accentColors = ['bg-red-400', 'bg-amber-400', 'bg-sky-400'] as const;
+
+  return (
+    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+      <CardHeader className="border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
+        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
+          {locale === 'zh' ? '优先改进目标' : 'Priority Targets'}
+        </CardTitle>
+        <CardDescription className="text-xs leading-6">
+          {locale === 'zh'
+            ? '按压力指数排序（错误率 68% + 失分占比 32%）。排名越靠前，越是当前阻碍进步的核心模块。'
+            : 'Ranked by pressure index: 68% error rate + 32% loss share. Higher rank indicates a stronger drag on progress.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-8">
+        <div className="space-y-6">
+          {summary.hotspots.map((item, index) => (
+            <div key={item.partKey} className="flex items-start gap-4">
+              <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-mono text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                {index + 1}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">{item.part}</span>
+                  <div className="flex shrink-0 items-center gap-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>{locale === 'zh' ? '错误率' : 'Error'} <strong className="text-zinc-700 dark:text-zinc-200">{formatRadarPercent(item.errorRate)}</strong></span>
+                    <span>{locale === 'zh' ? '失分占比' : 'Share'} <strong className="text-zinc-700 dark:text-zinc-200">{formatRadarPercent(item.lossShare)}</strong></span>
+                  </div>
+                </div>
+                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-zinc-200/70 dark:bg-zinc-800">
+                  <div
+                    className={cn('h-full rounded-full', accentColors[index] ?? 'bg-zinc-400')}
+                    style={{ width: `${(item.pressure / maxPressure) * 100}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                  {locale === 'zh'
+                    ? `${item.attempts} 次记录 · 累计失分 ${item.totalMistakes}`
+                    : `${item.attempts} attempts · ${item.totalMistakes} total loss`}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function WeaknessRadarCard({
@@ -364,18 +381,18 @@ function WeaknessRadarCard({
   const radarScale = getAdaptiveRadarScale(data);
 
   return (
-    <Card className="deck-card">
-      <CardHeader className="deck-card-header gap-3 px-6 py-4">
+    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+      <CardHeader className="gap-3 border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
         <div className="space-y-1">
           <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
           <CardDescription className="text-xs leading-6">{description}</CardDescription>
         </div>
 
         <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '已记录 session' : 'Recorded sessions'} {summary.recordedSessions}
           </span>
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '纳入失分' : 'Tracked loss'} {summary.totalTrackedLoss}
           </span>
         </div>
@@ -385,7 +402,7 @@ function WeaknessRadarCard({
         {hasRadarData ? (
           <>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-              <div className="deck-surface-soft rounded-[24px] p-4">
+              <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={data} outerRadius="72%">
@@ -488,7 +505,7 @@ function WeaknessRadarCard({
               </div>
             </div>
 
-            <div className="deck-surface-soft rounded-[24px] p-4">
+            <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
               <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
                 {locale === 'zh' ? '诊断摘要' : 'Diagnostic summary'}
               </div>
@@ -497,37 +514,9 @@ function WeaknessRadarCard({
               </p>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-3">
-              {summary.hotspots.map((item, index) => (
-                <div key={item.partKey} className="deck-surface-soft rounded-[22px] p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? `热点 ${index + 1}` : `Hotspot ${index + 1}`}
-                  </div>
-                  <div className="mt-2 text-base font-semibold text-zinc-900 dark:text-zinc-50">{item.part}</div>
-                  <div className="mt-3 grid gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    <div className="flex items-center justify-between gap-3">
-                      <span>{seriesLabelError}</span>
-                      <span>{formatRadarPercent(item.errorRate)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>{seriesLabelShare}</span>
-                      <span>{formatRadarPercent(item.lossShare)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>{locale === 'zh' ? '记录次数' : 'Attempts'}</span>
-                      <span>{item.attempts}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>{locale === 'zh' ? '累计失分' : 'Loss count'}</span>
-                      <span>{item.totalMistakes}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </>
         ) : (
-          <div className="deck-empty flex h-104 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
+          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-104 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
             {locale === 'zh'
               ? '至少完成一套听力或阅读后，这里才会显示各 Part 的错误率、失分占比和压力热点。'
               : 'Finish at least one listening or reading set to unlock error rate, loss share, and pressure hotspots by part.'}
@@ -548,8 +537,8 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="deck-card">
-      <CardHeader className="deck-card-header px-6 py-4">
+    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+      <CardHeader className="border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
         <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
         <CardDescription className="text-xs leading-6">{description}</CardDescription>
       </CardHeader>
@@ -581,65 +570,57 @@ function LossTrendCard({
       : undefined;
 
   return (
-    <Card className="deck-card">
-      <CardHeader className="deck-card-header gap-3 px-6 py-4">
+    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+      <CardHeader className="gap-3 border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
         <div className="space-y-1">
           <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
           <CardDescription className="text-xs leading-6">{description}</CardDescription>
         </div>
 
         <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '已成对' : 'Paired'} {summary.pairedCount}/10
           </span>
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '待补全' : 'Partial'} {summary.partialCount}
           </span>
         </div>
       </CardHeader>
 
       <CardContent className="grid gap-4 p-6">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <LossMetric
-            label={locale === 'zh' ? '最新总错题' : 'Latest total incorrect'}
-            value={formatLossMetric(summary.latest?.Total, locale)}
-            hint={summary.latest ? `${summary.latest.set}${summary.latest.paired ? '' : locale === 'zh' ? ' · 单科' : ' · partial'}` : getEmptyMetricHint(locale)}
-          />
-          <LossMetric
-            label={locale === 'zh' ? '较上次变化' : 'Change vs previous'}
-            value={formatDeltaMetric(latestDelta, locale)}
-            hint={describeDelta(latestDelta, locale)}
-          />
-          <LossMetric
-            label={locale === 'zh' ? '近 3 套均值' : 'Last 3-set avg'}
-            value={formatLossMetric(summary.recentAverage, locale, 1)}
-            hint={summary.availableCount >= 3 ? (locale === 'zh' ? '仅统计最近 3 个已记录套次' : 'Based on the last 3 recorded sets') : getEmptyMetricHint(locale)}
-          />
-          <LossMetric
-            label={locale === 'zh' ? '最佳套次' : 'Best set'}
-            value={summary.best?.set ?? '--'}
-            hint={summary.best?.Total !== undefined ? `${formatLossMetric(summary.best.Total, locale)} ${locale === 'zh' ? '总错题' : 'total incorrect'}` : getEmptyMetricHint(locale)}
-          />
-        </div>
-
-        <div className="deck-surface-soft rounded-[24px] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '诊断结论' : 'Diagnostic readout'}
-              </div>
-              <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                {buildLossInsight({ locale, summary, listeningLabel, readingLabel })}
-              </p>
+        <div className="grid overflow-hidden rounded-[24px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md sm:grid-cols-2 xl:grid-cols-4 dark:border-white/10 dark:bg-zinc-900/50">
+          <div className="px-4 py-3">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '最新总错题' : 'Latest total incorrect'}
             </div>
-
-            <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span className="deck-pill">
-                {locale === 'zh' ? '最近波动' : 'Recent range'} {formatLossRange(summary.recentRange, locale)}
-              </span>
-              <span className="deck-pill">
-                {locale === 'zh' ? '最差套次' : 'Worst set'} {summary.worst?.set ?? '--'}
-              </span>
+            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossMetric(summary.latest?.Total, locale)}</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {summary.latest ? `${summary.latest.set}${summary.latest.paired ? '' : locale === 'zh' ? ' · 单科' : ' · partial'}` : getEmptyMetricHint(locale)}
+            </div>
+          </div>
+          <div className="border-t border-white/50 px-4 py-3 sm:border-l sm:border-t-0 dark:border-white/10">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '较上次变化' : 'Change vs previous'}
+            </div>
+            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatDeltaMetric(latestDelta, locale)}</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{describeDelta(latestDelta, locale)}</div>
+          </div>
+          <div className="border-t border-white/50 px-4 py-3 xl:border-l xl:border-t-0 dark:border-white/10">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '近 3 套均值' : 'Last 3-set avg'}
+            </div>
+            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossMetric(summary.recentAverage, locale, 1)}</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {summary.availableCount >= 3 ? (locale === 'zh' ? '仅统计最近 3 个已记录套次' : 'Based on last 3 recorded sets') : getEmptyMetricHint(locale)}
+            </div>
+          </div>
+          <div className="border-t border-white/50 px-4 py-3 sm:border-l dark:border-white/10">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '波动范围' : 'Recent range'}
+            </div>
+            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossRange(summary.recentRange, locale)}</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {summary.availableCount >= 2 ? (locale === 'zh' ? `最差 ${summary.worst?.set ?? '--'}` : `Worst ${summary.worst?.set ?? '--'}`) : getEmptyMetricHint(locale)}
             </div>
           </div>
         </div>
@@ -692,12 +673,20 @@ function LossTrendCard({
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="deck-empty flex h-56 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
+          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-56 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
             {locale === 'zh'
               ? '至少完成一套听力或阅读后，这里会显示错题结构、总错题与最近波动。'
               : 'Complete at least one listening or reading set to unlock the incorrect-answer breakdown, total incorrect count, and recent volatility.'}
           </div>
         )}
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 text-sm text-zinc-500 dark:text-zinc-400">
+          <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+            {locale === 'zh' ? '诊断' : 'Diagnostic'}
+          </span>
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+          <span className="leading-6">{buildLossInsight({ locale, summary, listeningLabel, readingLabel })}</span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -705,7 +694,7 @@ function LossTrendCard({
 
 function LossMetric({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="deck-surface-soft rounded-[22px] p-4">
+    <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
       <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
       <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{hint}</div>
@@ -715,7 +704,7 @@ function LossMetric({ label, value, hint }: { label: string; value: string; hint
 
 function RadarMetric({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="deck-surface-soft rounded-[22px] p-4">
+    <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
       <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
       <div className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
       <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{hint}</div>

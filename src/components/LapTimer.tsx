@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Clock3, Flag, Hourglass, Play, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Clock3, Flag, Hourglass, Play, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -382,10 +383,11 @@ export function LapTimer({
       return;
     }
 
-    if (currentLapIndex === READING_LAP_SEGMENTS.length - 1 && !awaitingFinalConfirm) {
+    // Removed secondary confirmation for final lap to ensure precise timing
+    /* if (currentLapIndex === READING_LAP_SEGMENTS.length - 1 && !awaitingFinalConfirm) {
       setAwaitingFinalConfirm(true);
       return;
-    }
+    } */
 
     const now = Date.now();
     const lapElapsed = now - lapStartedAtRef.current;
@@ -536,207 +538,185 @@ export function LapTimer({
   };
 
   return (
-    <div className="space-y-4">
-      <div
+    <div className="space-y-6">
+      <motion.div
+        layout
         className={cn(
-          'relative overflow-hidden rounded-[26px] border p-5 transition-all duration-300 sm:p-6',
-          timerRunning && !overtimeMode && (warning ? 'timer-glow-red' : 'timer-glow-amber'),
+          'relative overflow-hidden rounded-[36px] border p-6 sm:p-8 backdrop-blur-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]',
+          timerRunning && !overtimeMode && (warning ? 'border-red-400/40 bg-red-50/60 dark:border-red-900/40 dark:bg-red-900/20' : 'border-amber-400/40 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/20'),
           overtimeMode
-            ? 'border-red-500/30 bg-red-500/8 dark:bg-red-500/10'
-            : warning
-              ? 'border-red-500/25 bg-red-500/5 dark:bg-red-500/8'
-              : 'border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/8'
+            ? 'border-red-500/40 bg-red-50/80 dark:border-red-900/50 dark:bg-red-900/30'
+            : !timerRunning && !warning
+              ? 'border-zinc-200/50 bg-white/60 dark:border-white/10 dark:bg-zinc-900/60'
+              : ''
         )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
-            <span
-              className={cn(
-                'inline-block size-1.5 rounded-full transition-colors',
-                timerRunning ? 'animate-pulse bg-emerald-400' : 'bg-zinc-400 dark:bg-zinc-600'
-              )}
-            />
-            {overtimeMode
-              ? locale === 'zh'
-                ? '阅读加时赛'
-                : 'Reading Overtime'
-              : isListening
-                ? copy.strictListeningMode
-                : copy.strictReadingMode}
-          </div>
+        <div className="flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2">
-            <span className="deck-pill px-2 py-0.5 text-[9px] tracking-[0.2em]">
-              {overtimeMode ? (locale === 'zh' ? 'Overtime' : 'Overtime') : 'No Pause'}
+            <AnimatePresence>
+              {timerRunning && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className={cn(
+                    'flex size-2.5 rounded-full',
+                    overtimeMode ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 animate-pulse'
+                  )}
+                />
+              )}
+            </AnimatePresence>
+            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
+              {overtimeMode
+                ? locale === 'zh'
+                  ? '阅读加时赛'
+                  : 'Reading Overtime'
+                : isListening
+                  ? copy.strictListeningMode
+                  : copy.strictReadingMode}
             </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
             {timerRunning && (
-              <span className={cn(
-                'rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em]',
-                overtimeMode
-                  ? 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-300'
-                  : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-600 dark:text-emerald-400'
-              )}>
+              <motion.span 
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className={cn(
+                  'rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] shadow-sm',
+                  overtimeMode
+                    ? 'border-red-200 bg-red-100 text-red-600 dark:border-red-900/50 dark:bg-red-900/50 dark:text-red-400'
+                    : 'border-emerald-200 bg-emerald-100 text-emerald-600 dark:border-emerald-900/50 dark:bg-emerald-900/50 dark:text-emerald-400'
+                )}>
                 {overtimeMode ? (locale === 'zh' ? '补录中' : 'Resolving') : copy.runningNow}
-              </span>
+              </motion.span>
             )}
           </div>
         </div>
 
-        <div className={cn(
-          'mt-4 font-mono text-6xl font-bold tracking-tight tabular-nums sm:text-7xl',
-          overtimeMode
-            ? 'text-red-500 dark:text-red-300'
-            : warning
-              ? 'text-red-500 dark:text-red-400'
-              : 'text-amber-500 dark:text-amber-300'
-        )}>
-          {overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)}
-        </div>
-
-        <Progress
-          value={progressValue}
+        <motion.div 
+          layout
           className={cn(
-            'mt-4 h-1.5 [&>div]:rounded-full [&>div]:transition-all [&>div]:duration-300',
+            'mt-6 font-mono text-[5.5rem] font-bold tracking-tighter tabular-nums leading-none text-center',
             overtimeMode
-              ? '[&>div]:bg-red-500'
+              ? 'text-red-500 dark:text-red-400'
               : warning
-                ? '[&>div]:bg-red-500'
-                : '[&>div]:bg-amber-400'
+                ? 'text-red-500 dark:text-red-400'
+                : 'text-zinc-900 dark:text-zinc-50'
           )}
-        />
+        >
+          {overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)}
+        </motion.div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-start">
-          <p className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-            {overtimeMode
-              ? locale === 'zh'
-                ? '严格模考分已经锁定。现在继续做题只会记录你的补录错题和额外耗时，用来估算潜力分。'
-                : 'The strict mock score is already locked. Continue working only to record overtime mistakes and extra time for the potential score.'
-              : isListening
-                ? copy.listeningTimerBody
-                : copy.readingTimerBody}
-          </p>
-          <div className="deck-surface-strong p-3 text-left sm:text-right">
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">{copy.latestCapture}</div>
-            <div className="mt-0.5 font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300">{lastAttemptText}</div>
-            <div className="mt-1 text-[11px] leading-5 text-zinc-400 dark:text-zinc-500">
-              {overtimeMode
-                ? locale === 'zh'
-                  ? '右侧复盘面板已切换到补录模式。'
-                  : 'The review panel on the right is now in overtime-entry mode.'
-                : session.timerSummary?.timedOut
-                  ? copy.timedOutSaved
-                  : session.timerSummary
-                    ? copy.savedAttempt
-                    : locale === 'zh'
-                      ? '尚未写入本套严格模拟数据。'
-                      : 'No strict attempt has been written for this set yet.'}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-8 flex flex-col items-center gap-4 relative z-10">
           {!timerRunning && !pendingSubmit && !overtimeMode && (
-            <Button
-              onClick={startTimer}
-              size="sm"
-              className={cn(
-                'font-mono text-xs font-semibold uppercase tracking-[0.18em] shadow-sm',
-                isListening
-                  ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'bg-amber-400 text-zinc-950 hover:bg-amber-500'
-              )}
-            >
-              <Play className="mr-1.5 size-3.5" />
-              {session.timerSummary ? copy.restartStrictAttempt : copy.startStrictAttempt}
-            </Button>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Button
+                onClick={startTimer}
+                size="lg"
+                className={cn(
+                  'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-transform hover:scale-105 active:scale-95',
+                  isListening
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
+                )}
+              >
+                <Play className="mr-2 size-5 fill-current" />
+                {session.timerSummary ? copy.restartStrictAttempt : copy.startStrictAttempt}
+              </Button>
+            </motion.div>
           )}
 
-          {!isListening && timerRunning && !overtimeMode && currentSegment && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={captureLap}
-              className={cn(
-                'border-amber-400/40 font-mono text-xs uppercase tracking-[0.16em] text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-400/10',
-                awaitingFinalConfirm && currentLapIndex === READING_LAP_SEGMENTS.length - 1
-                  ? 'border-red-500/40 text-red-600 hover:bg-red-500/8 dark:text-red-300'
-                  : ''
-              )}
-            >
-              <Flag className="mr-1.5 size-3.5" />
-              {awaitingFinalConfirm && currentLapIndex === READING_LAP_SEGMENTS.length - 1
-                ? locale === 'zh'
-                  ? '确认完成最后分段并提交成绩'
-                  : 'Confirm Final Lap & Submit'
-                : copy.lapAction(currentSegment.shortLabel)}
-            </Button>
-          )}
-
-          {awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={cancelFinalLapConfirm}
-              className="border border-zinc-300/70 font-mono text-xs uppercase tracking-[0.16em] text-zinc-600 hover:bg-zinc-200/40 dark:border-white/12 dark:text-zinc-300 dark:hover:bg-white/8"
-            >
-              {locale === 'zh' ? '返回最后分段' : 'Back To Final Lap'}
-            </Button>
-          )}
-
-          {timerRunning && !overtimeMode && !(awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={submitForced}
-              className="border border-red-500/20 font-mono text-xs uppercase tracking-[0.16em] text-red-600 hover:bg-red-500/8 dark:text-red-400"
-            >
-              <ShieldAlert className="mr-1.5 size-3.5" />
-              {copy.forceSubmit}
-            </Button>
+          {timerRunning && !overtimeMode && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+               {!isListening && currentSegment && (
+                 <Button
+                    size="lg"
+                    onClick={captureLap}
+                    className={cn(
+                      'h-16 w-full sm:w-64 rounded-[24px] text-lg font-semibold shadow-xl transition-all hover:scale-[1.02] active:scale-95',
+                      currentLapIndex === READING_LAP_SEGMENTS.length - 1
+                        ? 'bg-amber-500 text-amber-950 hover:bg-amber-600'
+                        : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
+                    )}
+                 >
+                    {currentLapIndex === READING_LAP_SEGMENTS.length - 1 ? (
+                      <>
+                        <CheckCircle2 className="mr-2 size-5" />
+                        {copy.lapAction(currentSegment.shortLabel)}
+                      </>
+                    ) : (
+                      <>
+                        <Flag className="mr-2 size-5 fill-current" />
+                        {copy.lapAction(currentSegment.shortLabel)}
+                      </>
+                    )}
+                 </Button>
+               )}
+               
+               <div className="flex gap-2">
+                 
+                 
+                 <Button
+                   variant="outline"
+                   size="lg"
+                   onClick={submitForced}
+                   className="h-16 rounded-[24px] border-red-200 bg-red-50/50 text-red-600 backdrop-blur-md hover:bg-red-100/80 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-transform hover:scale-105 active:scale-95"
+                 >
+                   <ShieldAlert className="size-5 sm:mr-2" />
+                   <span className="hidden sm:inline">{copy.forceSubmit}</span>
+                 </Button>
+               </div>
+            </motion.div>
           )}
         </div>
 
-        {lapUndo && !isListening && timerRunning && !overtimeMode && (
-          <div className="mt-3 rounded-[18px] border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] leading-5 text-zinc-700 dark:text-zinc-300">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>
+        <AnimatePresence>
+          {lapUndo && !isListening && timerRunning && !overtimeMode && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="mt-6 mx-auto flex max-w-sm items-center justify-between rounded-full border border-amber-200 bg-amber-50/90 px-4 py-3 shadow-lg backdrop-blur-xl relative z-20 dark:border-amber-900/50 dark:bg-amber-900/80"
+            >
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
                 {locale === 'zh'
-                  ? `刚刚记录了 ${translatePart(locale, lapUndo.capturedLapKey)}。如误触，可撤销。`
-                  : `Recorded ${translatePart(locale, lapUndo.capturedLapKey)}. Undo if this was a mistap.`}
+                  ? `已记录 ${translatePart(locale, lapUndo.capturedLapKey)}`
+                  : `Recorded ${translatePart(locale, lapUndo.capturedLapKey)}`}
               </span>
               <button
                 type="button"
                 onClick={undoLastLapCapture}
-                className="rounded-full border border-amber-500/30 bg-white/75 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700 transition-colors hover:bg-amber-50 dark:bg-zinc-950/75 dark:text-amber-300"
+                className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-amber-600 shadow-sm transition-transform hover:scale-105 active:scale-95 dark:bg-amber-950 dark:text-amber-300"
               >
-                {locale === 'zh' ? '撤销打点' : 'Undo Lap'}
+                {locale === 'zh' ? '撤销' : 'Undo'}
               </button>
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        {/* Ambient progress indicator in background */}
+        {timerRunning && (
+          <div className="absolute inset-0 pointer-events-none z-0 opacity-10 overflow-hidden rounded-[36px]">
+             <div 
+               className={cn("h-full w-full bg-gradient-to-t transition-all duration-1000 ease-linear", overtimeMode ? "from-red-500 to-transparent" : warning ? "from-red-500 to-transparent" : "from-amber-400 to-transparent")}
+               style={{ transform: `translateY(${100 - progressValue}%)` }}
+             />
           </div>
         )}
-
-        {awaitingFinalConfirm && !isListening && currentLapIndex === READING_LAP_SEGMENTS.length - 1 && (
-          <div className="mt-3 rounded-[18px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-700 dark:text-red-300">
-            {locale === 'zh'
-              ? '这是“完成最后分段后提交整套成绩”，不是提前交卷。请再次确认。'
-              : 'This action submits the full attempt after final-lap completion, not an early submit. Confirm to continue.'}
-          </div>
-        )}
-      </div>
+      </motion.div>
 
       {!isListening && (
-        <div className="deck-surface-soft p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+        <div className="rounded-[32px] border border-zinc-200/50 bg-white/40 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/40">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
               {copy.readingLapSequence}
             </div>
-            <div className="rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 font-mono text-[10px] dark:border-zinc-700 dark:bg-zinc-950">
+            <div className="rounded-full bg-zinc-100 px-3 py-1 font-mono text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
               {copy.doneCount(completedLapCount, 4)}
             </div>
           </div>
-          <div className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-            {copy.currentCheckpoint(currentSegment ? translatePart(locale, currentSegment.key) : copy.allLapsCompleted)}
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {READING_LAP_SEGMENTS.map((segment, index) => {
               const completed = readingLapTimes[segment.key] !== undefined;
               const active = timerRunning && !overtimeMode && currentLapIndex === index;
@@ -746,22 +726,22 @@ export function LapTimer({
                 <div
                   key={segment.key}
                   className={cn(
-                    'rounded-2xl border p-3 transition-colors',
+                    'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300',
                     completed
-                      ? 'border-emerald-500/30 bg-emerald-500/8'
+                      ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10'
                       : active
-                        ? 'border-amber-400/40 bg-amber-400/8'
-                        : 'border-zinc-200/80 bg-white/80 dark:border-white/8 dark:bg-zinc-950/78'
+                        ? 'border-amber-400/50 bg-amber-50 shadow-md scale-[1.02] dark:border-amber-500/30 dark:bg-amber-900/20'
+                        : 'border-zinc-200/50 bg-white/50 dark:border-white/5 dark:bg-zinc-900/50 opacity-70'
                   )}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">{segment.shortLabel}</div>
-                    <div className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
-                      {copy.baseline} {segment.baselineMinutes}m
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={cn("font-mono text-[10px] font-semibold tracking-wider", completed ? "text-emerald-600 dark:text-emerald-400" : active ? "text-amber-600 dark:text-amber-400" : "text-zinc-400 dark:text-zinc-500")}>{segment.shortLabel}</div>
+                    <div className="font-mono text-[10px] text-zinc-400">
+                       {segment.baselineMinutes}m
                     </div>
                   </div>
-                  <div className="mt-1 text-xs font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
-                  <div className={cn('mt-2 font-mono text-[10px] leading-5', completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500')}>
+                  <div className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
+                  <div className={cn('mt-3 font-mono text-[11px] font-medium', completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500')}>
                     {completed
                       ? copy.thisRun(formatMinutes(readingLapTimes[segment.key]))
                       : stored !== undefined
@@ -776,44 +756,47 @@ export function LapTimer({
       )}
 
       {pendingSubmit && !showTimeoutDialog && (
-        <div className="rounded-[24px] border border-red-500/25 bg-red-500/8 p-4 text-sm dark:bg-red-500/10">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-500" />
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[32px] border border-red-200 bg-red-50 p-6 shadow-sm dark:border-red-900/30 dark:bg-red-900/10">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">
+              <AlertTriangle className="size-6" />
+            </div>
             <div className="flex-1">
-              <div className="text-sm font-semibold text-red-700 dark:text-red-300">
+              <div className="text-base font-semibold text-red-800 dark:text-red-300">
                 {pendingSubmit.timedOut ? copy.timeoutFrozen : copy.forcedEnded}
               </div>
-              <p className="mt-1.5 text-xs leading-6 text-zinc-600 dark:text-zinc-300">
+              <p className="mt-1 text-sm text-red-600/80 dark:text-red-400/80">
                 {copy.pendingSubmitBody}
               </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  type="number"
-                  min="0"
-                  value={unfinishedQuestions}
-                  onChange={(event) => setUnfinishedQuestions(event.target.value)}
-                  className="h-9 w-full bg-white/80 text-sm sm:w-44 dark:bg-black/20"
-                  placeholder={copy.unfinishedPlaceholder}
-                />
-                <Button size="sm" onClick={strictSubmitFromPending} className="bg-red-500 text-white hover:bg-red-600">
-                  <Hourglass className="mr-1.5 size-3.5" />
-                  {copy.saveSubmitData}
-                </Button>
-              </div>
+            </div>
+            <div className="flex w-full sm:w-auto items-center gap-2 bg-white dark:bg-zinc-950 p-1.5 rounded-full shadow-sm border border-zinc-200 dark:border-zinc-800">
+              <Input
+                type="number"
+                min="0"
+                value={unfinishedQuestions}
+                onChange={(event) => setUnfinishedQuestions(event.target.value)}
+                className="h-11 w-24 border-0 bg-transparent text-center text-lg font-semibold focus-visible:ring-0"
+                placeholder={copy.unfinishedPlaceholder}
+              />
+              <Button size="lg" onClick={strictSubmitFromPending} className="rounded-full bg-red-500 text-white hover:bg-red-600">
+                {copy.saveSubmitData}
+              </Button>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {(overtimeMode || unresolvedBacklog) && (
-        <div className="rounded-[24px] border border-red-500/20 bg-red-500/8 p-4 dark:bg-red-500/10">
-          <div className="flex items-start gap-3">
-            <Clock3 className="mt-0.5 size-4 shrink-0 text-red-500" />
+        <div className="rounded-[32px] border border-red-200 bg-red-50/50 p-6 backdrop-blur-sm dark:border-red-900/30 dark:bg-red-900/10">
+          <div className="flex items-start gap-4">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">
+              <Clock3 className="size-5" />
+            </div>
             <div>
-              <div className="text-sm font-semibold text-red-700 dark:text-red-300">
+              <div className="text-base font-semibold text-red-800 dark:text-red-300">
                 {locale === 'zh' ? '未完成补录模式已开启' : 'Overtime resolution mode is active'}
               </div>
-              <p className="mt-1.5 text-xs leading-6 text-zinc-600 dark:text-zinc-300">
+              <p className="mt-1 text-sm leading-relaxed text-red-600/80 dark:text-red-400/80">
                 {locale === 'zh'
                   ? '严格分已经按照未完成题锁定。继续补做只会影响潜力分，不再反向污染严格模考分。'
                   : 'The strict score is already locked from the unfinished count. Any continued work now only affects the potential score, not the strict mock score.'}
@@ -824,40 +807,50 @@ export function LapTimer({
       )}
 
       <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
-        <DialogContent showCloseButton={false} className="max-w-lg rounded-[28px] border border-white/65 bg-white/92 p-0 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.3)] dark:border-white/10 dark:bg-zinc-950/92 overflow-hidden">
-          <DialogHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
-            <div className="mb-3 flex size-10 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
-              <AlertTriangle className="size-5" />
+        <DialogContent showCloseButton={false} className="max-w-md rounded-[36px] border border-white/40 bg-white/95 p-0 shadow-[0_32px_120px_rgba(0,0,0,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/95 dark:shadow-[0_32px_120px_rgba(0,0,0,0.5)] overflow-hidden">
+          <DialogHeader className="px-8 pt-8 text-center flex flex-col items-center">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400">
+              <AlertTriangle className="size-8" />
             </div>
-            <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-              {locale === 'zh' ? '时间到，还有几题没做完？' : 'Time is up. How many items are unfinished?'}
+            <DialogTitle className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+              {locale === 'zh' ? '时间到' : 'Time is up'}
             </DialogTitle>
-            <DialogDescription className="text-sm leading-7">
+            <DialogDescription className="mt-3 text-base text-zinc-500 dark:text-zinc-400">
               {locale === 'zh'
-                ? '严格模考分会先按未完成题锁定。你可以直接严格交卷，也可以开启加时赛继续补做，额外时间和错题会单独记录到潜力分。'
-                : 'The strict mock score will be locked first from the unfinished count. You can submit now or open overtime mode to continue, with extra time and mistakes tracked separately for the potential score.'}
+                ? '严格模考分已锁定。你还有几题没有做完？'
+                : 'Strict mock score locked. How many items are unfinished?'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-            <Input
-              type="number"
-              min="0"
-              value={unfinishedQuestions}
-              onChange={(event) => setUnfinishedQuestions(event.target.value)}
-              className="h-11 bg-white/90 text-sm dark:bg-zinc-950/80"
-              placeholder={copy.unfinishedPlaceholder}
-            />
+          <div className="px-8 pb-8 pt-6">
+            <div className="mx-auto flex max-w-[200px] flex-col items-center">
+               <Input
+                 type="number"
+                 min="0"
+                 value={unfinishedQuestions}
+                 onChange={(event) => setUnfinishedQuestions(event.target.value)}
+                 className="h-16 text-center text-3xl font-semibold bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl border-zinc-200 dark:border-zinc-800"
+                 placeholder="0"
+                 autoFocus
+               />
+               <span className="mt-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">{locale === 'zh' ? '未完题数' : 'Unfinished Count'}</span>
+            </div>
           </div>
 
-          <DialogFooter className="mx-0! mb-0! rounded-b-[28px] border-white/60 bg-white/70 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:border-white/8 dark:bg-white/4 sm:px-6">
-            <Button variant="outline" onClick={strictSubmitFromPending} className="w-full sm:w-auto">
-              {locale === 'zh' ? '严格交卷' : 'Submit Strict Score'}
-            </Button>
-            <Button onClick={startOvertime} className="w-full bg-red-500 text-white hover:bg-red-600 sm:w-auto">
+          <div className="grid grid-cols-2 gap-px bg-zinc-200/50 dark:bg-zinc-800/50 border-t border-zinc-200/50 dark:border-zinc-800/50">
+            <button 
+              onClick={strictSubmitFromPending} 
+              className="bg-white/80 py-5 text-base font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              {locale === 'zh' ? '直接交卷' : 'Submit Now'}
+            </button>
+            <button 
+              onClick={startOvertime} 
+              className="bg-white/80 py-5 text-base font-semibold text-red-600 transition-colors hover:bg-red-50 dark:bg-zinc-900/80 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
               {locale === 'zh' ? '开启加时赛' : 'Start Overtime'}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

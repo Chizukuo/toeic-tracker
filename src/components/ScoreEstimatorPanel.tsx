@@ -377,265 +377,263 @@ export function ScoreEstimatorPanel() {
   const canAutoRecordEstimate = mode === 'T' && pairStrictEstimate.available;
 
   return (
-    <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 shadow-[0_24px_80px_-46px_rgba(15,23,42,0.22)] dark:border-white/10">
-      <CardHeader className="border-b border-zinc-200/70 bg-white/55 px-6 py-5 dark:border-white/8 dark:bg-zinc-950/80">
-        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-700 dark:text-amber-300">
-          {copy.scoreEstimatorTitle}
-        </CardTitle>
-        <CardDescription className="max-w-3xl text-xs leading-6">
-          {locale === 'zh' ? 'PEASEA 估分' : 'PEASEA Estimator'}
-        </CardDescription>
-      </CardHeader>
+    <div className="grid gap-5">
+      {/* ── Hero: Score + Mode Selector ── */}
+      <div className="overflow-hidden rounded-[40px] bg-white/50 shadow-[0_8px_40px_rgba(0,0,0,0.06)] backdrop-blur-2xl ring-1 ring-black/5 dark:bg-zinc-900/50 dark:ring-white/8">
+        {/* Toolbar: mode switcher + session picker inline */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200/50 px-6 py-4 dark:border-white/8">
+          <div className="flex rounded-[12px] bg-zinc-100/80 p-1 dark:bg-zinc-800/60">
+            <ModeButton active={mode === 'L'} label={copy.scoreModeListening} icon={<Headphones className="size-3.5" />} onClick={() => setMode('L')} />
+            <ModeButton active={mode === 'R'} label={copy.scoreModeReading} icon={<LibraryBig className="size-3.5" />} onClick={() => setMode('R')} />
+            <ModeButton active={mode === 'T'} label={copy.scoreModeTotal} icon={<Sigma className="size-3.5" />} onClick={() => setMode('T')} />
+          </div>
+          <div className="min-w-40 flex-1">
+            {mode === 'L' ? (
+              <SessionSelect value={selectedListeningId} onValueChange={setSelectedListeningId} sessions={listeningSessions} placeholder={copy.scoreSelectListening} />
+            ) : mode === 'R' ? (
+              <SessionSelect value={selectedReadingId} onValueChange={setSelectedReadingId} sessions={readingSessions} placeholder={copy.scoreSelectReading} />
+            ) : (
+              <PairSelect value={selectedPair} onValueChange={setSelectedPair} placeholder={copy.scoreSelectPair} />
+            )}
+          </div>
+          <div className="shrink-0 rounded-full bg-zinc-100/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400">
+            PEASEA
+          </div>
+        </div>
 
-      <CardContent className="grid items-start gap-5 p-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="grid gap-4">
-          <div className="deck-surface p-4">
-            <div className="grid grid-cols-3 gap-2">
-              <ModeButton active={mode === 'L'} label={copy.scoreModeListening} icon={<Headphones className="size-3.5" />} onClick={() => setMode('L')} />
-              <ModeButton active={mode === 'R'} label={copy.scoreModeReading} icon={<LibraryBig className="size-3.5" />} onClick={() => setMode('R')} />
-              <ModeButton active={mode === 'T'} label={copy.scoreModeTotal} icon={<Sigma className="size-3.5" />} onClick={() => setMode('T')} />
+        {/* Score display */}
+        {!activeSummary || !activeSummary.available ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-8 py-16 text-center">
+            <CircleGauge className="size-8 text-zinc-300 dark:text-zinc-600" />
+            <p className="max-w-sm text-sm leading-6 text-zinc-400 dark:text-zinc-500">
+              {locale === 'zh'
+                ? '先完成一次计时，或至少保存按 Part 的错题数据，模型才会输出有效估分。'
+                : 'Finish a timed run or save part-level mistake data first for a valid estimate.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="px-8 pt-10 pb-6">
+              {/* Main score hero */}
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="font-mono text-[88px] font-semibold leading-none tracking-[-0.06em] text-zinc-950 dark:text-zinc-50">
+                  {activeSummary.score}
+                </div>
+                <div className="mb-3 flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs uppercase tracking-[0.2em] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                      {activeSummary.band}
+                    </span>
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 font-mono text-xs uppercase tracking-[0.2em] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                      CEFR {activeSummary.cefr}
+                    </span>
+                    <span className={cn('rounded-full border px-3 py-1 font-mono text-xs uppercase tracking-[0.18em]', confidenceBadgeClassName(activeSummary.confidence.tone))}>
+                      {activeSummary.confidence.label}
+                    </span>
+                  </div>
+                  <div className="font-mono text-sm text-zinc-400 dark:text-zinc-500">
+                    {locale === 'zh' ? '区间' : 'Range'} {activeSummary.interval}
+                  </div>
+                </div>
+              </div>
+
+              {/* Strict → Potential speed gap (only when there's a meaningful gap) */}
+              {potentialSummary && potentialSummary.score > activeSummary.score && (
+                <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                  <span className="font-mono text-zinc-400 dark:text-zinc-500">{locale === 'zh' ? '严格分' : 'Strict'}</span>
+                  <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-300">{activeSummary.score}</span>
+                  <span className="text-zinc-300 dark:text-zinc-600">→</span>
+                  <span className="font-mono text-zinc-400 dark:text-zinc-500">{locale === 'zh' ? '潜力分' : 'Potential'}</span>
+                  <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-300">{potentialSummary.score}</span>
+                  <span className="rounded-full bg-sky-50 px-3 py-0.5 font-mono text-[11px] text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">
+                    +{potentialSummary.score - activeSummary.score} {locale === 'zh' ? '速度差' : 'speed gap'}
+                  </span>
+                </div>
+              )}
+
+              {/* Confidence context */}
+              <div className={cn('mt-5 rounded-[18px] px-4 py-3 text-sm leading-6', confidencePanelClassName(activeSummary.confidence.tone))}>
+                {activeSummary.confidence.detail}
+              </div>
             </div>
 
-            <div className="deck-surface-strong mt-4 p-4">
-              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                {mode === 'L' ? copy.scoreSelectListening : mode === 'R' ? copy.scoreSelectReading : copy.scoreSelectPair}
+            {/* Key metrics strip — ruled row, no boxing */}
+            <div className="grid grid-cols-2 border-t border-zinc-200/50 sm:grid-cols-4 dark:border-white/8">
+              <div className="flex flex-col gap-1.5 px-6 py-5">
+                <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.scoreRawCorrect}</div>
+                <div className="font-mono text-xl font-semibold text-zinc-900 dark:text-zinc-50">{activeSummary.rawCorrect}{mode === 'T' ? '/200' : '/100'}</div>
               </div>
-              <div className="mt-3">
-                {mode === 'L' ? (
-                  <SessionSelect value={selectedListeningId} onValueChange={setSelectedListeningId} sessions={listeningSessions} placeholder={copy.scoreSelectListening} />
-                ) : mode === 'R' ? (
-                  <SessionSelect value={selectedReadingId} onValueChange={setSelectedReadingId} sessions={readingSessions} placeholder={copy.scoreSelectReading} />
-                ) : (
-                  <PairSelect value={selectedPair} onValueChange={setSelectedPair} placeholder={copy.scoreSelectPair} />
-                )}
+              <div className="flex flex-col gap-1.5 border-l border-zinc-200/50 px-6 py-5 dark:border-white/8">
+                <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{locale === 'zh' ? '修正原始分' : 'Adjusted'}</div>
+                <div className="font-mono text-xl font-semibold text-zinc-900 dark:text-zinc-50">{activeSummary.adjustedRawCorrect}{mode === 'T' ? '/200' : '/100'}</div>
               </div>
-              <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh'
-                  ? '模型会优先识别基础层与高阶层错题是否失衡，并对异常分布做原始分惩罚。'
-                  : 'The model first checks whether foundational and advanced parts are imbalanced, then penalizes abnormal distributions in raw-score space.'}
-              </p>
+              <div className="flex flex-col gap-1.5 border-l border-zinc-200/50 px-6 py-5 dark:border-white/8">
+                <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.scoreMistakes}</div>
+                <div className="font-mono text-xl font-semibold text-zinc-900 dark:text-zinc-50">{activeSummary.mistakes}</div>
+              </div>
+              <div className="flex flex-col gap-1.5 border-l border-zinc-200/50 px-6 py-5 dark:border-white/8">
+                <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{copy.scoreAccuracy}</div>
+                <div className="font-mono text-xl font-semibold text-zinc-900 dark:text-zinc-50">{activeSummary.accuracy}%</div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Diagnostic Insights ── */}
+      {activeSummary?.available && activeSummary.insights.length > 0 && (
+        <div className="rounded-[32px] bg-white/40 px-8 py-6 shadow-sm backdrop-blur-xl ring-1 ring-black/5 dark:bg-zinc-900/40 dark:ring-white/8">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-3.5 text-zinc-400 dark:text-zinc-500" />
+            <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-400 dark:text-zinc-500">
+              {locale === 'zh' ? '诊断' : 'Diagnosis'}
             </div>
           </div>
+          <div className="mt-4 space-y-4">
+            {activeSummary.insights.map((item, index) => (
+              <p key={index} className="text-sm leading-7 text-zinc-600 dark:text-zinc-300">
+                {item}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
 
-          <div className="deck-surface-strong rounded-[28px] p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950">
-                <Plus className="size-4" />
+      {/* ── Part Error Breakdown (ranked bars, most pressure first) ── */}
+      {activeSummary?.available && activeSummary.partBreakdown.length > 0 && (
+        <div className="rounded-[32px] bg-white/40 px-8 py-6 shadow-sm backdrop-blur-xl ring-1 ring-black/5 dark:bg-zinc-900/40 dark:ring-white/8">
+          <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-400 dark:text-zinc-500">
+            {locale === 'zh' ? '错题分布' : 'Loss Distribution'}
+          </div>
+          <div className="mt-5 space-y-4">
+            {activeSummary.partBreakdown.map((item) => (
+              <div key={item.label}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50">{item.label}</span>
+                  <div className="flex items-center gap-3 font-mono text-zinc-500 dark:text-zinc-400">
+                    <span>{locale === 'zh' ? `失分 ${item.mistakes}` : `Loss ${item.mistakes}`}</span>
+                    <span className="text-zinc-700 dark:text-zinc-200">{(item.rate * 100).toFixed(1)}%</span>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200/70 dark:bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400"
+                    style={{ width: `${Math.max(item.rate * 100, 3)}%` }}
+                  />
+                </div>
               </div>
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                  {locale === 'zh' ? '历史成绩录入' : 'Historical Scores'}
-                </div>
-                <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  {locale === 'zh'
-                    ? '补录模考、正式成绩，或把当前总分估算写入历史曲线。'
-                    : 'Add mock or official scores, or write the current projected total into the trend.'}
-                </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Section Mapping (Total mode only, when L+R both present) ── */}
+      {activeSummary?.available && activeSummary.breakdownCards.length > 1 && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {activeSummary.breakdownCards.map((item) => (
+            <div key={item.label} className="rounded-[28px] bg-white/40 p-6 shadow-sm backdrop-blur-xl ring-1 ring-black/5 dark:bg-zinc-900/40 dark:ring-white/8">
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">{item.label}</div>
+              <div className="mt-3 font-mono text-5xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">{item.score}</div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="rounded-full bg-zinc-100/80 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 dark:bg-zinc-800/80 dark:text-zinc-400">CEFR {item.cefr}</span>
+                <span className="rounded-full bg-zinc-100/80 px-2.5 py-1 font-mono text-[10px] text-zinc-400 dark:bg-zinc-800/80">{item.interval}</span>
               </div>
             </div>
+          ))}
+        </div>
+      )}
 
-            <div className="mt-4 grid gap-3">
-              <Input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} className="h-11 bg-white/90 dark:bg-zinc-950/80" />
-              <div className="grid grid-cols-2 gap-3">
-                <Input type="number" min="5" max="495" step="5" value={historyListening} onChange={(event) => setHistoryListening(event.target.value)} className="h-11 bg-white/90 dark:bg-zinc-950/80" placeholder={copy.scoreListeningLabel} />
-                <Input type="number" min="5" max="495" step="5" value={historyReading} onChange={(event) => setHistoryReading(event.target.value)} className="h-11 bg-white/90 dark:bg-zinc-950/80" placeholder={copy.scoreReadingLabel} />
+      {/* ── Projection Trend Chart ── */}
+      {activeSummary?.available && (
+        <ProjectionTrendChart
+          data={activeSummary.chart}
+          lineColor={activeSummary.color}
+          lineLabel={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
+          locale={locale}
+        />
+      )}
+
+      {/* ── Historical Scores: chart + input side by side ── */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_360px]">
+        <HistoricalScoreChart data={historicalTrend} locale={locale} />
+        <div className="flex flex-col gap-5 rounded-[32px] bg-white/40 p-6 shadow-sm backdrop-blur-xl ring-1 ring-black/5 dark:bg-zinc-900/40 dark:ring-white/8">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-400 dark:text-zinc-500">
+              {locale === 'zh' ? '录入成绩' : 'Record Score'}
+            </div>
+            <div className="mt-4 overflow-hidden rounded-[20px] bg-white/60 ring-1 ring-zinc-200/50 dark:bg-zinc-900/40 dark:ring-white/10">
+              <div className="flex items-center justify-between gap-4 border-b border-zinc-200/50 px-4 py-3.5 dark:border-white/5">
+                <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">{locale === 'zh' ? '日期' : 'Date'}</span>
+                <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} className="w-32 bg-transparent text-right text-[13px] text-zinc-900 focus:outline-none dark:text-zinc-50" />
               </div>
-
-              <div className="deck-surface-soft rounded-[18px] px-3 py-3">
-                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                  {locale === 'zh' ? '预估总分' : 'Computed Total'}
-                </div>
-                <div className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">
-                  {manualTotalPreview}
-                </div>
+              <div className="flex items-center justify-between gap-4 border-b border-zinc-200/50 px-4 py-3.5 dark:border-white/5">
+                <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">{copy.scoreListeningLabel}</span>
+                <input type="number" min="5" max="495" step="5" value={historyListening} onChange={(event) => setHistoryListening(event.target.value)} className="w-20 bg-transparent text-right text-[13px] text-zinc-900 focus:outline-none dark:text-zinc-50 placeholder:text-zinc-400" placeholder="0" />
               </div>
-
-              <div className="grid gap-2">
-                <Button type="button" onClick={handleAddHistoricalScore} className="h-11 bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200">
-                  {locale === 'zh' ? '手动加入历史曲线' : 'Add Manual Record'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleAutoAddEstimatedScore}
-                  disabled={!canAutoRecordEstimate}
-                  className="h-11 border-zinc-200/80 bg-white/85 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/8 dark:bg-zinc-950/80 dark:hover:bg-zinc-900"
-                >
+              <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300">{copy.scoreReadingLabel}</span>
+                <input type="number" min="5" max="495" step="5" value={historyReading} onChange={(event) => setHistoryReading(event.target.value)} className="w-20 bg-transparent text-right text-[13px] text-zinc-900 focus:outline-none dark:text-zinc-50 placeholder:text-zinc-400" placeholder="0" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between rounded-[18px] bg-zinc-100/60 px-4 py-3 dark:bg-zinc-800/40">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">{locale === 'zh' ? '计算总分' : 'Total'}</span>
+              <span className="font-mono text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{manualTotalPreview}</span>
+            </div>
+            <div className="mt-3 grid gap-2">
+              <Button type="button" onClick={handleAddHistoricalScore} className="h-11 rounded-2xl bg-zinc-950 text-white transition-transform active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-950">
+                {locale === 'zh' ? '手动加入历史曲线' : 'Add Manual Record'}
+              </Button>
+              {canAutoRecordEstimate && (
+                <Button type="button" variant="outline" onClick={handleAutoAddEstimatedScore} className="h-11 rounded-2xl border-zinc-200/80 transition-transform active:scale-[0.98] dark:border-white/8">
                   {locale === 'zh' ? '录入当前总分估算' : 'Record Current Estimate'}
                 </Button>
-              </div>
+              )}
+            </div>
+            {canAutoRecordEstimate && (
+              <p className="mt-3 text-xs leading-5 text-zinc-400 dark:text-zinc-500">
+                {locale === 'zh'
+                  ? `将 ${selectedPairListening.label} + ${selectedPairReading.label} 的估算写入历史，日期默认使用${historyDate ? '当前输入值' : '今天'}。`
+                  : `Write the ${selectedPairListening.label} + ${selectedPairReading.label} estimate into history. Date uses ${historyDate ? 'the current input' : 'today'} by default.`}
+              </p>
+            )}
+          </div>
 
-              <div className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-                {canAutoRecordEstimate
-                  ? locale === 'zh'
-                    ? `将 ${selectedPairListening.label} + ${selectedPairReading.label} 的总分估算写入历史曲线，日期默认使用${historyDate ? '当前输入值' : '今天'}。`
-                    : `Write the estimate from ${selectedPairListening.label} + ${selectedPairReading.label} into history. The date uses ${historyDate ? 'the current input' : 'today'} by default.`
-                  : locale === 'zh'
-                    ? '自动录入仅在“总分估算”模式下可用，并且当前套次的听力与阅读都必须已有可用估分。'
-                    : 'Auto record is available only in Total mode after both listening and reading estimates are available for the selected pair.'}
+          {/* Compact history ledger */}
+          {deferredHistoricalScores.length > 0 && (
+            <div>
+              <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-400 dark:text-zinc-500">
+                {locale === 'zh' ? '历史记录' : 'History'}
+              </div>
+              <div className="space-y-2">
+                {[...deferredHistoricalScores].reverse().map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-[18px] bg-white/60 px-4 py-3 ring-1 ring-zinc-200/50 dark:bg-zinc-900/50 dark:ring-white/8">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xl font-semibold text-zinc-950 dark:text-zinc-50">{item.total}</span>
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          {item.source === 'estimated' ? (locale === 'zh' ? '估分' : 'Est') : (locale === 'zh' ? '手动' : 'Manual')}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 font-mono text-xs text-zinc-400 dark:text-zinc-500">
+                        {item.date} · L{item.listening} R{item.reading}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => startTransition(() => removeHistoricalScore(item.id))}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:text-red-500 active:text-red-600 dark:hover:text-red-400"
+                      aria-label={locale === 'zh' ? '删除历史成绩' : 'Remove historical score'}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="grid gap-5">
-          {!activeSummary || !activeSummary.available ? (
-            <EstimatePlaceholder />
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <DualScoreCard
-                  locale={locale}
-                  title={locale === 'zh' ? '严格模考分' : 'Strict Score'}
-                  body={locale === 'zh' ? '基于规定时间内的错题 + 未完成惩罚。' : 'Built from in-time mistakes plus unfinished-question penalty.'}
-                  summary={activeSummary}
-                  tone="amber"
-                />
-                <DualScoreCard
-                  locale={locale}
-                  title={locale === 'zh' ? '潜力分' : 'Potential Score'}
-                  body={locale === 'zh' ? '合并 overtime 错题，去掉未完成惩罚。' : 'Merges overtime mistakes and removes the unfinished penalty.'}
-                  summary={potentialSummary ?? activeSummary}
-                  tone="cyan"
-                  delta={(potentialSummary ?? activeSummary).score - activeSummary.score}
-                />
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_320px]">
-                <div className="deck-surface p-5">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                    {activeSummary.title}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-end gap-3">
-                    <div className="font-mono text-6xl font-semibold tracking-[-0.06em] text-zinc-950 dark:text-zinc-50">
-                      {activeSummary.score}
-                    </div>
-                    <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                      {activeSummary.scaleLabel}
-                    </div>
-                    <div className="deck-pill mb-2 text-[10px] tracking-[0.18em]">
-                      {activeSummary.band}
-                    </div>
-                    <div className="deck-pill mb-2 text-[10px] tracking-[0.18em]">
-                      CEFR {activeSummary.cefr}
-                    </div>
-                    <div className={cn('mb-2 rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em]', confidenceBadgeClassName(activeSummary.confidence.tone))}>
-                      {activeSummary.confidence.label}
-                    </div>
-                  </div>
-
-                  <div className={cn('mt-4 rounded-[20px] border px-4 py-3 text-sm leading-6', confidencePanelClassName(activeSummary.confidence.tone))}>
-                    {activeSummary.confidence.detail}
-                  </div>
-
-                  <div className="mt-5 grid gap-3 sm:grid-cols-4">
-                    <ScoreMetric label={copy.scoreRawCorrect} value={`${activeSummary.rawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
-                    <ScoreMetric label={locale === 'zh' ? '修正原始分' : 'Adjusted Raw'} value={`${activeSummary.adjustedRawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
-                    <ScoreMetric label={copy.scoreMistakes} value={`${activeSummary.mistakes}`} />
-                    <ScoreMetric label={copy.scoreAccuracy} value={`${activeSummary.accuracy}%`} />
-                  </div>
-                </div>
-
-                <div className="deck-surface-strong rounded-[28px] p-5">
-                  <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-400/12 text-amber-700 dark:text-amber-300">
-                    <Calculator className="size-4.5" />
-                  </div>
-                  <div className="mt-4 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {locale === 'zh' ? '预测摘要' : 'Projection Snapshot'}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh'
-                      ? '同时查看 CEFR、SEM 区间和错题分布惩罚，避免把偶然对题当成稳定能力。'
-                      : 'View CEFR, SEM range, and distribution penalty together so lucky hits are not mistaken for stable ability.'}
-                  </p>
-                  <div className="mt-4 grid gap-3">
-                    <ScoreMetric label={locale === 'zh' ? '预测区间' : 'SEM Range'} value={activeSummary.interval} compact />
-                    <ScoreMetric label={locale === 'zh' ? '分布惩罚' : 'Distribution Penalty'} value={`-${activeSummary.penaltyRaw}`} compact />
-                    <ScoreMetric
-                      label={locale === 'zh' ? '速度损失' : 'Speed Gap'}
-                      value={`${Math.max((potentialSummary ?? activeSummary).score - activeSummary.score, 0)}`}
-                      compact
-                    />
-                    <ScoreMetric label={locale === 'zh' ? '最近历史' : 'Latest History'} value={latestHistorical ? `${latestHistorical.total}` : '--'} compact />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-                <InsightCard locale={locale} insights={activeSummary.insights} />
-                <BreakdownCard locale={locale} title={locale === 'zh' ? '分项映射' : 'Section Mapping'} items={activeSummary.breakdownCards} />
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <ProjectionTrendChart
-                  data={activeSummary.chart}
-                  lineColor={activeSummary.color}
-                  lineLabel={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
-                  locale={locale}
-                />
-                <PartBreakdownCard locale={locale} items={activeSummary.partBreakdown} />
-              </div>
-            </>
           )}
-
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_360px]">
-            <HistoricalScoreChart data={historicalTrend} locale={locale} />
-            <div className="deck-surface-strong rounded-[28px] p-5">
-              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '历史记录' : 'History Ledger'}
-              </div>
-              <div className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '用于对照当前估分与真实模考或正式成绩。' : 'Use these records to compare projected scores against mocks or official results.'}
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {deferredHistoricalScores.length === 0 ? (
-                  <div className="deck-empty px-4 py-5 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? '还没有历史成绩，先补录一次模考、正式成绩，或录入一次当前估分。' : 'No historical scores yet. Add a mock, official record, or capture the current estimate.'}
-                  </div>
-                ) : (
-                  deferredHistoricalScores.map((item) => (
-                    <div key={item.id} className="deck-surface-soft rounded-[22px] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                            <span>{item.date}</span>
-                            <span className="rounded-full border border-zinc-200/80 bg-white/80 px-2 py-0.5 text-[9px] tracking-[0.18em] text-zinc-500 dark:border-white/8 dark:bg-zinc-950/75 dark:text-zinc-300">
-                              {item.source === 'estimated' ? (locale === 'zh' ? '估分' : 'Estimate') : locale === 'zh' ? '手动' : 'Manual'}
-                            </span>
-                          </div>
-                          <div className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">
-                            {item.total}
-                          </div>
-                          {item.note ? <div className="mt-1 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{item.note}</div> : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            startTransition(() => {
-                              removeHistoricalScore(item.id);
-                            });
-                          }}
-                          className="flex size-9 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/80 text-zinc-500 transition-colors hover:text-red-600 dark:border-white/8 dark:bg-zinc-950/80 dark:hover:text-red-300"
-                          aria-label={locale === 'zh' ? '删除历史成绩' : 'Remove historical score'}
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </div>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <ScoreMetric label={copy.scoreListeningLabel} value={`${item.listening}`} compact />
-                        <ScoreMetric label={copy.scoreReadingLabel} value={`${item.reading}`} compact />
-                        <ScoreMetric label={copy.scoreTotalLabel} value={`${item.total}`} compact />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -940,7 +938,7 @@ const ProjectionTrendChart = memo(function ProjectionTrendChart({
   }
 
   return (
-    <div className="deck-surface-strong rounded-[28px] p-5">
+    <div className="rounded-[28px] border border-white/60 bg-white/40 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/40 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
@@ -952,10 +950,10 @@ const ProjectionTrendChart = memo(function ProjectionTrendChart({
         </div>
 
         <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '最新' : 'Latest'} {latest?.score ?? '--'}
           </span>
-          <span className="deck-pill">
+          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
             {locale === 'zh' ? '最佳' : 'Best'} {best?.score ?? '--'}
           </span>
         </div>
@@ -1039,7 +1037,7 @@ const HistoricalScoreChart = memo(function HistoricalScoreChart({ data, locale }
   }
 
   return (
-    <div className="deck-surface p-5">
+    <div className="rounded-[32px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/50 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
@@ -1094,34 +1092,52 @@ function DualScoreCard({
   tone: 'amber' | 'cyan';
   delta?: number;
 }) {
-  const toneClass = tone === 'amber'
-    ? 'border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,214,102,0.18),rgba(255,255,255,0.82))] dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.09),rgba(16,18,24,0.95))]'
-    : 'border-cyan-300/60 bg-[linear-gradient(180deg,rgba(125,225,255,0.16),rgba(255,255,255,0.82))] dark:bg-[linear-gradient(180deg,rgba(84,212,255,0.08),rgba(16,18,24,0.95))]';
+  const isAmber = tone === 'amber';
+  const containerClass = isAmber
+    ? 'bg-[linear-gradient(135deg,rgba(255,251,235,1),rgba(255,247,237,0.5))] dark:bg-[linear-gradient(135deg,rgba(67,20,7,0.4),rgba(67,20,7,0.1))] border-amber-200/50 dark:border-amber-900/50 text-amber-950 dark:text-amber-100'
+    : 'bg-[linear-gradient(135deg,rgba(236,254,255,1),rgba(239,246,255,0.5))] dark:bg-[linear-gradient(135deg,rgba(8,51,68,0.4),rgba(23,37,84,0.1))] border-cyan-200/50 dark:border-cyan-900/50 text-cyan-950 dark:text-cyan-100';
+
+  const badgeClass = isAmber
+    ? 'bg-amber-100/50 border-amber-200/50 dark:bg-amber-900/30 dark:border-amber-800/50'
+    : 'bg-cyan-100/50 border-cyan-200/50 dark:bg-cyan-900/30 dark:border-cyan-800/50';
 
   return (
-    <div className={cn('rounded-[28px] border p-5 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.26)]', toneClass)}>
-      <div className="flex items-start justify-between gap-3">
+    <div className={cn('relative overflow-hidden rounded-[28px] border p-6 shadow-sm transition-all', containerClass)}>
+      <div className={cn('absolute -top-12 -right-12 h-32 w-32 rounded-full blur-3xl', isAmber ? 'bg-amber-400/20' : 'bg-cyan-400/20')} />
+      
+      <div className="relative flex items-start justify-between gap-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{title}</div>
-          <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{body}</p>
+          <div className="font-mono text-[11px] uppercase tracking-[0.24em] opacity-70">{title}</div>
+          <p className="mt-1.5 max-w-[200px] text-xs leading-5 opacity-60">{body}</p>
         </div>
-        <div className="deck-pill text-[10px] tracking-[0.18em]">CEFR {summary.cefr}</div>
+        <div className={cn('rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.18em] uppercase backdrop-blur-sm', badgeClass)}>
+          CEFR {summary.cefr}
+        </div>
       </div>
 
-      <div className="mt-4 flex items-end gap-3">
-        <div className="font-mono text-5xl font-semibold tracking-[-0.05em] text-zinc-950 dark:text-zinc-50">{summary.score}</div>
-        <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{summary.band}</div>
+      <div className="relative mt-8 flex items-baseline gap-3">
+        <div className="font-mono text-6xl font-semibold tracking-[-0.05em]">{summary.score}</div>
+        <div className="mb-2 font-mono text-xs uppercase tracking-[0.2em] opacity-70">{summary.band}</div>
         {typeof delta === 'number' && delta > 0 ? (
-          <div className="pb-2 font-mono text-[11px] uppercase tracking-[0.22em] text-red-600 dark:text-red-300">
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-red-500">
             {locale === 'zh' ? `+${delta} 速度差` : `+${delta} speed gap`}
           </div>
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <ScoreMetric label={locale === 'zh' ? '原始分' : 'Raw'} value={`${summary.rawCorrect}`} compact />
-        <ScoreMetric label={locale === 'zh' ? '准确率' : 'Accuracy'} value={`${summary.accuracy}%`} compact />
-        <ScoreMetric label={locale === 'zh' ? '区间' : 'Range'} value={summary.interval} compact />
+      <div className="relative mt-6 flex items-center justify-between border-t border-current/10 pt-4 text-xs">
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-60">{locale === 'zh' ? '原始分' : 'Raw'}</span>
+          <span className="font-medium">{summary.rawCorrect}</span>
+        </div>
+        <div className="flex flex-col gap-1 text-center">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-60">{locale === 'zh' ? '准确率' : 'Accuracy'}</span>
+          <span className="font-medium">{summary.accuracy}%</span>
+        </div>
+        <div className="flex flex-col items-end gap-1 text-right">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-60">{locale === 'zh' ? '误差区间' : 'Range'}</span>
+          <span className="font-medium">{summary.interval}</span>
+        </div>
       </div>
     </div>
   );
@@ -1129,7 +1145,7 @@ function DualScoreCard({
 
 function InsightCard({ locale, insights }: { locale: 'zh' | 'en'; insights: string[] }) {
   return (
-    <div className="deck-surface p-5">
+    <div className="rounded-[32px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/50 p-6">
       <div className="flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-2xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950">
           <Sparkles className="size-4" />
@@ -1146,7 +1162,7 @@ function InsightCard({ locale, insights }: { locale: 'zh' | 'en'; insights: stri
 
       <div className="mt-4 space-y-3">
         {insights.map((item, index) => (
-          <div key={`${item}-${index}`} className="deck-surface-soft rounded-[20px] p-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+          <div key={`${item}-${index}`} className="rounded-[20px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50 p-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
             {item}
           </div>
         ))}
@@ -1165,7 +1181,7 @@ function BreakdownCard({
   items: ActiveSummary['breakdownCards'];
 }) {
   return (
-    <div className="deck-surface-strong rounded-[28px] p-5">
+    <div className="rounded-[28px] border border-white/60 bg-white/40 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/40 p-6">
       <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{title}</div>
       <div className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
         {locale === 'zh' ? '单项与总分分别保留独立的等值化区间。' : 'Each section keeps its own equated range before rolling into the total.'}
@@ -1173,13 +1189,13 @@ function BreakdownCard({
 
       <div className="mt-4 space-y-3">
         {items.map((item) => (
-          <div key={`${item.label}-${item.score}`} className="deck-surface-soft rounded-[20px] p-4">
+          <div key={`${item.label}-${item.score}`} className="rounded-[20px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{item.label}</div>
                 <div className="mt-2 font-mono text-3xl font-semibold tracking-[-0.04em] text-zinc-950 dark:text-zinc-50">{item.score}</div>
               </div>
-              <div className="deck-pill text-[10px] tracking-[0.18em]">CEFR {item.cefr}</div>
+              <div className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300 text-[10px] tracking-[0.18em]">CEFR {item.cefr}</div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <ScoreMetric label={locale === 'zh' ? '区间' : 'Range'} value={item.interval} compact />
@@ -1194,7 +1210,7 @@ function BreakdownCard({
 
 function PartBreakdownCard({ locale, items }: { locale: 'zh' | 'en'; items: PartBreakdownItem[] }) {
   return (
-    <div className="deck-surface-strong rounded-[28px] p-5">
+    <div className="rounded-[28px] border border-white/60 bg-white/40 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/40 p-6">
       <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
         {locale === 'zh' ? '错题分布' : 'Loss Distribution'}
       </div>
@@ -1204,7 +1220,7 @@ function PartBreakdownCard({ locale, items }: { locale: 'zh' | 'en'; items: Part
 
       <div className="mt-4 space-y-3">
         {items.map((item) => (
-          <div key={item.label} className="deck-surface-soft rounded-[20px] p-4">
+          <div key={item.label} className="rounded-[20px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50 p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-zinc-950 dark:text-zinc-50">{item.label}</div>
               <div className="font-mono text-sm text-zinc-500 dark:text-zinc-400">{(item.rate * 100).toFixed(1)}%</div>
@@ -1228,7 +1244,7 @@ function EstimatePlaceholder() {
   const copy = getCopy(locale);
 
   return (
-    <div className="deck-empty flex min-h-72 flex-col items-center justify-center px-6 text-center">
+    <div className="flex min-h-72 flex-col items-center justify-center rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 px-6 text-center dark:border-white/10 dark:bg-zinc-900/30">
       <div className="flex size-11 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
         <CircleGauge className="size-5" />
       </div>
@@ -1250,10 +1266,10 @@ function ModeButton({ active, label, icon, onClick }: { active: boolean; label: 
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
+        'flex flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3 py-2 text-xs font-medium transition-all duration-200',
         active
-          ? 'border-amber-400/45 bg-amber-400/12 text-amber-700 dark:text-amber-300'
-          : 'border-zinc-200/80 bg-white/80 text-zinc-500 hover:text-zinc-800 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400 dark:hover:text-zinc-200'
+          ? 'bg-white text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)] dark:bg-zinc-700 dark:text-zinc-50'
+          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
       )}
     >
       {icon}
@@ -1264,7 +1280,7 @@ function ModeButton({ active, label, icon, onClick }: { active: boolean; label: 
 
 function ScoreMetric({ label, value, compact }: { label: string; value: string; compact?: boolean }) {
   return (
-    <div className={cn('deck-surface-strong flex h-full flex-col rounded-[22px]', compact ? 'p-3' : 'p-4')}>
+    <div className={cn('flex h-full flex-col rounded-[24px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50', compact ? 'p-4' : 'p-5')}>
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">{label}</div>
       <div className={cn('mt-2 font-mono font-semibold tracking-tight text-zinc-950 dark:text-zinc-50', compact ? 'text-xl' : 'text-2xl')}>
         {value}

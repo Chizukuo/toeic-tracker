@@ -13,10 +13,10 @@ export function LocaleToggle() {
   const copy = getCopy(locale);
 
   return (
-    <div className="control-shell inline-flex items-center gap-1 p-1">
-      <div className="flex items-center gap-2 px-2 text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+    <div className="control-shell inline-flex items-center gap-0.5 p-1 sm:gap-1">
+      <div className="flex items-center gap-2 px-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400 sm:px-2">
         <Languages className="size-3.5" />
-        <span className="hidden sm:inline">{copy.languageLabel}</span>
+        <span className="hidden xl:inline">{copy.languageLabel}</span>
       </div>
       {(['zh', 'en'] as const).map((value) => {
         const active = value === locale;
@@ -28,7 +28,7 @@ export function LocaleToggle() {
             size="sm"
             onClick={() => setLocale(value)}
             className={cn(
-              'rounded-full px-3 font-mono text-[11px] uppercase tracking-[0.22em] transition-all',
+              'rounded-full px-2.5 font-mono text-[11px] uppercase tracking-[0.22em] transition-all sm:px-3',
               active
                 ? 'bg-[linear-gradient(135deg,#ffd971_0%,#ff8f56_100%)] text-zinc-950 shadow-[0_14px_26px_-16px_rgba(245,158,11,0.9)] hover:text-zinc-950'
                 : 'text-zinc-500 hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-100'

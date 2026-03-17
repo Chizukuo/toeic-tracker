@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 
+import { BrandIconSvg } from '@/lib/brandIcon';
 import { siteConfig } from '@/lib/seo';
 
 export const dynamic = 'force-static';
@@ -56,22 +57,15 @@ export default function OpenGraphImage() {
                 gap: 18,
               }}
             >
-              <div
+              <BrandIconSvg
+                title={siteConfig.shortName}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   width: 74,
                   height: 74,
-                  borderRadius: 22,
-                  background: 'linear-gradient(135deg, #ffd36d 0%, #54d4ff 100%)',
                   boxShadow: '0 20px 48px rgba(15, 23, 42, 0.16)',
-                  fontSize: 34,
-                  fontWeight: 800,
+                  borderRadius: 22,
                 }}
-              >
-                T
-              </div>
+              />
               <div
                 style={{
                   display: 'flex',
