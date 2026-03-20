@@ -615,7 +615,7 @@ export function LapTimer({
                 onClick={startTimer}
                 size="lg"
                 className={cn(
-                  'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-transform hover:scale-105 active:scale-95',
+                  'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
                   isListening
                     ? 'bg-red-500 text-white hover:bg-red-600'
                     : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
@@ -633,12 +633,12 @@ export function LapTimer({
                  <Button
                     size="lg"
                     onClick={captureLap}
-                    className={cn(
-                      'h-16 w-full sm:w-64 rounded-[24px] text-lg font-semibold shadow-xl transition-all hover:scale-[1.02] active:scale-95',
-                      currentLapIndex === READING_LAP_SEGMENTS.length - 1
-                        ? 'bg-amber-500 text-amber-950 hover:bg-amber-600'
-                        : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
-                    )}
+                     className={cn(
+                       'h-16 w-full sm:w-64 rounded-full text-lg font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
+                       currentLapIndex === READING_LAP_SEGMENTS.length - 1
+                         ? 'bg-amber-500 text-amber-950 hover:bg-amber-600'
+                         : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
+                     )}
                  >
                     {currentLapIndex === READING_LAP_SEGMENTS.length - 1 ? (
                       <>
@@ -661,7 +661,7 @@ export function LapTimer({
                    variant="outline"
                    size="lg"
                    onClick={submitForced}
-                   className="h-16 rounded-[24px] border-red-200 bg-red-50/50 text-red-600 backdrop-blur-md hover:bg-red-100/80 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-transform hover:scale-105 active:scale-95"
+                   className="h-16 rounded-full border-red-200 bg-red-50/50 text-red-600 backdrop-blur-md hover:bg-red-100/80 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
                  >
                    <ShieldAlert className="size-5 sm:mr-2" />
                    <span className="hidden sm:inline">{copy.forceSubmit}</span>

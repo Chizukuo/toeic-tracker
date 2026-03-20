@@ -4,6 +4,7 @@ import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
 import { startTransition, useEffect, useRef, useState } from 'react';
 import { Check, Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 import {
 	Dialog,
@@ -309,60 +310,41 @@ export function DataVaultPanel() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 p-4 sm:p-6 xl:grid-cols-4">
-					<div className="xl:col-span-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-						<SummaryTile
-							label={locale === 'zh' ? '已录入套题' : 'Recorded Sets'}
-							value={`${recordedSessions}/20`}
-							helper={locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '已完成复盘' : 'Reviewed'}
-							value={`${reviewedSessions}/20`}
-							helper={locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '历史成绩' : 'History Records'}
-							value={`${historicalScores.length}`}
-							helper={locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated score entries'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '当前定位' : 'Active Session'}
-							value={activeSessionLabel}
-							helper={examDate}
-						/>
-					</div>
-
-					<ActionPanel
-						icon={<Download className="size-5" />}
-						title={copy.exportTitle}
-						body={copy.exportBody}
-						actionLabel={copy.exportAction}
-						onAction={handleExport}
-					/>
-					<ActionPanel
-						icon={<Upload className="size-5" />}
-						title={copy.importTitle}
-						body={copy.importBody}
-						actionLabel={copy.importAction}
-						onAction={handleImportClick}
-					/>
-					<ActionPanel
-						icon={<Link2 className="size-5" />}
-						title={copy.syncTitle}
-						body={copy.syncBody}
-						actionLabel={copy.syncAction}
-						onAction={() => {
-							void handleGenerateSyncLink();
+					<motion.div 
+						className="xl:col-span-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+						variants={{
+							hidden: { opacity: 0 },
+							show: { opacity: 1, transition: { staggerChildren: 0.08 } }
 						}}
-					/>
-					<ActionPanel
-						icon={<RotateCcw className="size-5" />}
-						title={copy.resetTitle}
-						body={copy.resetBody}
-						actionLabel={copy.resetAction}
-						onAction={() => setResetOpen(true)}
-						danger
-					/>
+						initial="hidden"
+						animate="show"
+					>
+						{[
+							{ label: locale === 'zh' ? '已录入套题' : 'Recorded Sets', value: `${recordedSessions}/20`, helper: locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data' },
+							{ label: locale === 'zh' ? '已完成复盘' : 'Reviewed', value: `${reviewedSessions}/20`, helper: locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed' },
+							{ label: locale === 'zh' ? '历史成绩' : 'History Records', value: `${historicalScores.length}`, helper: locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated score entries' },
+							{ label: locale === 'zh' ? '当前定位' : 'Active Session', value: activeSessionLabel, helper: examDate }
+						].map((item, i) => (
+							<motion.div key={i} variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }}>
+								<SummaryTile {...item} />
+							</motion.div>
+						))}
+					</motion.div>
+
+					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Link2 className="size-5" />} title={copy.syncTitle} body={copy.syncBody} actionLabel={copy.syncAction} onAction={() => { void handleGenerateSyncLink(); }} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
+						</motion.div>
+					</motion.div>
 
 					{syncDraft ? (
 						<div className="xl:col-span-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">

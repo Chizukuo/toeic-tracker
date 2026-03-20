@@ -10,7 +10,7 @@ import {
 
 export type NextStepRecommendation = {
   kind: 'resolve-backlog' | 'resume-active' | 'start-active' | 'reinforce-weakness' | 'record-score' | 'review-analytics';
-  href: '/unfinished' | '/timer' | '/scores' | '/analytics';
+  href: '/unfinished' | '/timer' | '/scores' | '/analytics' | '/practice' | '/insights';
   targetSessionId?: string;
   tone: 'coral' | 'amber' | 'cyan' | 'slate';
   title: string;

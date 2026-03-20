@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
 import type { ReactNode } from 'react';
 import { useDeferredValue, useMemo } from 'react';
+import { motion } from 'framer-motion';
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   ComposedChart,
   PolarAngleAxis,
@@ -18,10 +18,9 @@ import {
   XAxis,
   YAxis,
   Bar,
-  BarChart,
 } from 'recharts';
+import { Sparkles, TrendingDown, TrendingUp, Minus, AlertCircle } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   getAnalyticsDataConfidence,
   getIncorrectAnswers,
@@ -154,7 +153,6 @@ export function AnalyticsDashboard() {
       if (!highest || item.errorRate > highest.errorRate) {
         return item;
       }
-
       return highest;
     }, undefined);
 
@@ -162,7 +160,6 @@ export function AnalyticsDashboard() {
       if (!highest || item.lossShare > highest.lossShare) {
         return item;
       }
-
       return highest;
     }, undefined);
 
@@ -188,528 +185,311 @@ export function AnalyticsDashboard() {
   }, [deferredSessions, locale]);
 
   return (
-    <section className="grid gap-6">
-      <DataStatusBanner locale={locale} confidence={analyticsConfidence} radarSummary={radarSummary} />
+    <motion.section 
+      className="w-full max-w-6xl mx-auto space-y-6"
+      variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
+      initial="hidden" animate="show"
+    >
+      <HeaderInsight locale={locale} confidence={analyticsConfidence} summary={lossSummary} radarSummary={radarSummary} />
 
-      <LossTrendCard
-        title={copy.mistakeTrend}
-        description={copy.mistakeTrendDesc}
-        data={trendData}
-        summary={lossSummary}
-        locale={locale}
-        listeningLabel={copy.listeningSeries}
-        readingLabel={copy.readingSeries}
-      />
+      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+        <WidgetCard>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
+          <div>
+            <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.mistakeTrend}</h2>
+            <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400">
+              {buildLossInsight({ locale, summary: lossSummary })}
+            </p>
+          </div>
+          {lossSummary.latest?.Total !== undefined && (
+            <div className="flex flex-col items-end">
+              <span className="text-[12px] font-medium text-zinc-400 uppercase tracking-widest">{locale === 'zh' ? '最新错题' : 'Latest Loss'}</span>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{lossSummary.latest.Total}</span>
+                <TrendIndicator delta={lossSummary.latest.Total - (lossSummary.previous?.Total ?? lossSummary.latest.Total)} />
+              </div>
+            </div>
+          )}
+        </div>
 
-      {radarSummary.hotspots.length > 0 && (
-        <HotspotRankCard summary={radarSummary} locale={locale} />
-      )}
-
-      <WeaknessRadarCard
-        title={copy.weaknessRadar}
-        description={copy.weaknessRadarDesc}
-        data={radarData}
-        summary={radarSummary}
-        locale={locale}
-      />
-
-      <ChartCard
-        title={copy.rootCauseFrequency}
-        description={copy.rootCauseFrequencyDesc}
-      >
-        {reasonData.length > 0 ? (
-          <div className="h-72">
+        {lossSummary.availableCount > 0 ? (
+          <div className="h-[280px] w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={reasonData} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(161,161,170,0.15)" vertical={false} />
-                <XAxis dataKey="reason" tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" />
-                <YAxis tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" allowDecimals={false} />
+              <ComposedChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="4 4" stroke="currentColor" opacity={0.04} vertical={false} />
+                <XAxis dataKey="set" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} dy={10} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} allowDecimals={false} dx={-10} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(251,191,36,0.07)' }}
+                  cursor={{ fill: 'currentColor', opacity: 0.03 }}
                   contentStyle={{
-                    background: 'var(--tooltip-bg)',
-                    borderColor: 'var(--tooltip-border)',
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(0,0,0,0.06)',
                     borderRadius: '12px',
-                    fontSize: '12px',
-                    color: 'var(--tooltip-color)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    fontSize: '13px',
+                    color: '#18181b',
+                    padding: '8px 12px'
                   }}
+                  itemStyle={{ color: '#18181b', fontWeight: 500 }}
+                  labelStyle={{ color: '#71717a', marginBottom: '2px', fontWeight: 500 }}
+                  formatter={(value: number, name: string) => [`${value}`, name === 'Total' ? (locale === 'zh' ? '总错题' : 'Total') : name]}
                 />
-                <Bar dataKey="count" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={48} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-44 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
-            {copy.saveDebugToUnlock}
-          </div>
-        )}
-      </ChartCard>
-    </section>
-  );
-}
-
-function DataStatusBanner({ locale, confidence, radarSummary }: { locale: 'zh' | 'en'; confidence: AnalyticsConfidence; radarSummary: RadarSummary }) {
-  const isHigh = confidence.level === 'high';
-  const isMedium = confidence.level === 'medium';
-
-  const dotClass = isHigh
-    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-    : isMedium
-      ? 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]'
-      : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]';
-
-  const label = isHigh
-    ? (locale === 'zh' ? '高可信度' : 'Stable')
-    : isMedium
-      ? (locale === 'zh' ? '中等可信度' : 'Usable')
-      : (locale === 'zh' ? '低可信度' : 'Sparse');
-
-  const riskLabel = confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : null;
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-2 text-sm">
-      <div className="flex items-center gap-2">
-        <div className={cn('size-2 rounded-full', dotClass)} />
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
-      </div>
-      <span className="text-zinc-300 dark:text-zinc-600">·</span>
-      <span className="text-zinc-500 dark:text-zinc-400">
-        {confidence.recordedSessions}{locale === 'zh' ? ' 套已记录' : ' recorded'}
-      </span>
-      <span className="text-zinc-300 dark:text-zinc-600">·</span>
-      <span className="text-zinc-500 dark:text-zinc-400">
-        {confidence.reviewedSessions}{locale === 'zh' ? ' 已复盘' : ' reviewed'}
-      </span>
-      {radarSummary.totalTrackedLoss > 0 && (
-        <>
-          <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="text-zinc-500 dark:text-zinc-400">
-            {locale === 'zh' ? `累计失分 ${radarSummary.totalTrackedLoss}` : `${radarSummary.totalTrackedLoss} total loss`}
-          </span>
-        </>
-      )}
-      {riskLabel && (
-        <>
-          <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="text-amber-600 dark:text-amber-400">
-            {locale === 'zh' ? `风险：${riskLabel}` : `Risk: ${riskLabel}`}
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function formatConfidenceIssue(locale: 'zh' | 'en', issue: AnalyticsConfidence['issues'][number]) {
-  switch (issue) {
-    case 'unfinished-backlog': return locale === 'zh' ? '先清未完成题' : 'Clear backlog';
-    case 'missing-review': return locale === 'zh' ? '补齐复盘' : 'Finish review';
-    case 'sparse-history': return locale === 'zh' ? '样本太少' : 'Too few samples';
-    case 'missing-timer': return locale === 'zh' ? '缺计时数据' : 'Timer missing';
-    case 'timer-running': return locale === 'zh' ? '仍在进行中' : 'Timer running';
-    default: return locale === 'zh' ? '无' : 'None';
-  }
-}
-
-function HotspotRankCard({ summary, locale }: { summary: RadarSummary; locale: 'zh' | 'en' }) {
-  const maxPressure = summary.hotspots[0]?.pressure ?? 1;
-  const accentColors = ['bg-red-400', 'bg-amber-400', 'bg-sky-400'] as const;
-
-  return (
-    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
-      <CardHeader className="border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
-        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
-          {locale === 'zh' ? '优先改进目标' : 'Priority Targets'}
-        </CardTitle>
-        <CardDescription className="text-xs leading-6">
-          {locale === 'zh'
-            ? '按压力指数排序（错误率 68% + 失分占比 32%）。排名越靠前，越是当前阻碍进步的核心模块。'
-            : 'Ranked by pressure index: 68% error rate + 32% loss share. Higher rank indicates a stronger drag on progress.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-8">
-        <div className="space-y-6">
-          {summary.hotspots.map((item, index) => (
-            <div key={item.partKey} className="flex items-start gap-4">
-              <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-mono text-[11px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                {index + 1}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">{item.part}</span>
-                  <div className="flex shrink-0 items-center gap-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>{locale === 'zh' ? '错误率' : 'Error'} <strong className="text-zinc-700 dark:text-zinc-200">{formatRadarPercent(item.errorRate)}</strong></span>
-                    <span>{locale === 'zh' ? '失分占比' : 'Share'} <strong className="text-zinc-700 dark:text-zinc-200">{formatRadarPercent(item.lossShare)}</strong></span>
-                  </div>
-                </div>
-                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-zinc-200/70 dark:bg-zinc-800">
-                  <div
-                    className={cn('h-full rounded-full', accentColors[index] ?? 'bg-zinc-400')}
-                    style={{ width: `${(item.pressure / maxPressure) * 100}%` }}
-                  />
-                </div>
-                <div className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                  {locale === 'zh'
-                    ? `${item.attempts} 次记录 · 累计失分 ${item.totalMistakes}`
-                    : `${item.attempts} attempts · ${item.totalMistakes} total loss`}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function WeaknessRadarCard({
-  title,
-  description,
-  data,
-  summary,
-  locale,
-}: {
-  title: string;
-  description: string;
-  data: RadarPoint[];
-  summary: RadarSummary;
-  locale: 'zh' | 'en';
-}) {
-  const hasRadarData = summary.recordedSessions > 0;
-  const seriesLabelError = locale === 'zh' ? '错误率' : 'Error rate';
-  const seriesLabelShare = locale === 'zh' ? '失分占比' : 'Loss share';
-  const radarScale = getAdaptiveRadarScale(data);
-
-  return (
-    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
-      <CardHeader className="gap-3 border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
-        <div className="space-y-1">
-          <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
-          <CardDescription className="text-xs leading-6">{description}</CardDescription>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
-            {locale === 'zh' ? '已记录 session' : 'Recorded sessions'} {summary.recordedSessions}
-          </span>
-          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
-            {locale === 'zh' ? '纳入失分' : 'Tracked loss'} {summary.totalTrackedLoss}
-          </span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="grid gap-4 p-6">
-        {hasRadarData ? (
-          <>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-              <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={data} outerRadius="72%">
-                      <PolarGrid stroke="rgba(161,161,170,0.16)" />
-                      <PolarAngleAxis dataKey="part" tick={{ fill: '#71717a', fontSize: 10 }} />
-                      <PolarRadiusAxis
-                        domain={[0, radarScale.maxDomain]}
-                        axisLine={false}
-                        tick={{ fill: '#a1a1aa', fontSize: 10 }}
-                        tickCount={radarScale.tickCount}
-                        tickFormatter={(value) => `${value}%`}
-                      />
-                      <Radar
-                        name={seriesLabelError}
-                        dataKey="errorRate"
-                        stroke="#ef4444"
-                        fill="#ef4444"
-                        fillOpacity={0.18}
-                        strokeWidth={2.25}
-                      />
-                      <Radar
-                        name={seriesLabelShare}
-                        dataKey="lossShare"
-                        stroke="#06b6d4"
-                        fill="#06b6d4"
-                        fillOpacity={0.08}
-                        strokeWidth={2}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '11px' }} />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          const point = payload?.[0]?.payload as RadarPoint | undefined;
-
-                          if (!active || !point) {
-                            return null;
-                          }
-
-                          return (
-                            <div
-                              className="min-w-47 rounded-2xl border px-3 py-2 text-xs shadow-xl"
-                              style={{
-                                background: 'var(--tooltip-bg)',
-                                borderColor: 'var(--tooltip-border)',
-                                color: 'var(--tooltip-color)',
-                              }}
-                            >
-                              <div className="font-medium">{point.part}</div>
-                              <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                                {locale === 'zh'
-                                  ? `${point.group === 'Listening' ? '听力' : '阅读'} · ${point.attempts} 次记录`
-                                  : `${point.group} · ${point.attempts} attempts`}
-                              </div>
-                              <div className="mt-3 space-y-1.5">
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{seriesLabelError}</span>
-                                  <span>{formatRadarPercent(point.errorRate)}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{seriesLabelShare}</span>
-                                  <span>{formatRadarPercent(point.lossShare)}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{locale === 'zh' ? '累计失分' : 'Total loss'}</span>
-                                  <span>{point.totalMistakes}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{locale === 'zh' ? '覆盖题量' : 'Question volume'}</span>
-                                  <span>{point.totalQuestions}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{locale === 'zh' ? '压力指数' : 'Pressure index'}</span>
-                                  <span>{formatRadarPercent(point.pressure)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <RadarMetric
-                  label={locale === 'zh' ? '最高错误率' : 'Highest error rate'}
-                  value={summary.highestErrorRate?.part ?? '--'}
-                  hint={summary.highestErrorRate ? formatRadarPercent(summary.highestErrorRate.errorRate) : getEmptyMetricHint(locale)}
-                />
-                <RadarMetric
-                  label={locale === 'zh' ? '最大失分占比' : 'Largest loss share'}
-                  value={summary.highestLossShare?.part ?? '--'}
-                  hint={summary.highestLossShare ? formatRadarPercent(summary.highestLossShare.lossShare) : getEmptyMetricHint(locale)}
-                />
-                <RadarMetric
-                  label={locale === 'zh' ? '热点数量' : 'Hotspot count'}
-                  value={`${summary.hotspots.length}`}
-                  hint={locale === 'zh' ? '按压力指数排序' : 'Ranked by pressure index'}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
-              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '诊断摘要' : 'Diagnostic summary'}
-              </div>
-              <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                {buildRadarInsight({ locale, summary })}
-              </p>
-            </div>
-
-          </>
-        ) : (
-          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-104 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
-            {locale === 'zh'
-              ? '至少完成一套听力或阅读后，这里才会显示各 Part 的错误率、失分占比和压力热点。'
-              : 'Finish at least one listening or reading set to unlock error rate, loss share, and pressure hotspots by part.'}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChartCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
-      <CardHeader className="border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
-        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
-        <CardDescription className="text-xs leading-6">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="p-6">{children}</CardContent>
-    </Card>
-  );
-}
-
-function LossTrendCard({
-  title,
-  description,
-  data,
-  summary,
-  locale,
-  listeningLabel,
-  readingLabel,
-}: {
-  title: string;
-  description: string;
-  data: LossTrendPoint[];
-  summary: LossTrendSummary;
-  locale: 'zh' | 'en';
-  listeningLabel: string;
-  readingLabel: string;
-}) {
-  const latestDelta =
-    summary.latest?.Total !== undefined && summary.previous?.Total !== undefined
-      ? summary.latest.Total - summary.previous.Total
-      : undefined;
-
-  return (
-    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
-      <CardHeader className="gap-3 border-b border-zinc-200/50 bg-white/30 px-8 py-6 dark:border-white/10 dark:bg-zinc-900/30">
-        <div className="space-y-1">
-          <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">{title}</CardTitle>
-          <CardDescription className="text-xs leading-6">{description}</CardDescription>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
-            {locale === 'zh' ? '已成对' : 'Paired'} {summary.pairedCount}/10
-          </span>
-          <span className="rounded-full border border-zinc-200/50 bg-white/60 px-3 py-1 font-mono uppercase text-zinc-500 shadow-sm dark:border-white/10 dark:bg-zinc-800/80 dark:text-zinc-300">
-            {locale === 'zh' ? '待补全' : 'Partial'} {summary.partialCount}
-          </span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="grid gap-4 p-6">
-        <div className="grid overflow-hidden rounded-[24px] border border-white/50 bg-white/50 shadow-sm backdrop-blur-md sm:grid-cols-2 xl:grid-cols-4 dark:border-white/10 dark:bg-zinc-900/50">
-          <div className="px-4 py-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-              {locale === 'zh' ? '最新总错题' : 'Latest total incorrect'}
-            </div>
-            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossMetric(summary.latest?.Total, locale)}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {summary.latest ? `${summary.latest.set}${summary.latest.paired ? '' : locale === 'zh' ? ' · 单科' : ' · partial'}` : getEmptyMetricHint(locale)}
-            </div>
-          </div>
-          <div className="border-t border-white/50 px-4 py-3 sm:border-l sm:border-t-0 dark:border-white/10">
-            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-              {locale === 'zh' ? '较上次变化' : 'Change vs previous'}
-            </div>
-            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatDeltaMetric(latestDelta, locale)}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{describeDelta(latestDelta, locale)}</div>
-          </div>
-          <div className="border-t border-white/50 px-4 py-3 xl:border-l xl:border-t-0 dark:border-white/10">
-            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-              {locale === 'zh' ? '近 3 套均值' : 'Last 3-set avg'}
-            </div>
-            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossMetric(summary.recentAverage, locale, 1)}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {summary.availableCount >= 3 ? (locale === 'zh' ? '仅统计最近 3 个已记录套次' : 'Based on last 3 recorded sets') : getEmptyMetricHint(locale)}
-            </div>
-          </div>
-          <div className="border-t border-white/50 px-4 py-3 sm:border-l dark:border-white/10">
-            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-              {locale === 'zh' ? '波动范围' : 'Recent range'}
-            </div>
-            <div className="mt-1.5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{formatLossRange(summary.recentRange, locale)}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {summary.availableCount >= 2 ? (locale === 'zh' ? `最差 ${summary.worst?.set ?? '--'}` : `Worst ${summary.worst?.set ?? '--'}`) : getEmptyMetricHint(locale)}
-            </div>
-          </div>
-        </div>
-
-        {summary.availableCount > 0 ? (
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(161,161,170,0.15)" vertical={false} />
-                <XAxis dataKey="set" tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" />
-                <YAxis tickLine={false} axisLine={false} fontSize={11} stroke="#71717a" allowDecimals={false} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(245,158,11,0.08)' }}
-                  labelFormatter={(label, payload) => {
-                    const point = payload?.[0]?.payload as LossTrendPoint | undefined;
-                    if (!point) {
-                      return String(label);
-                    }
-
-                    return point.paired
-                      ? `${label} · ${locale === 'zh' ? '听读成对' : 'paired listening/reading'}`
-                      : `${label} · ${locale === 'zh' ? '数据未补全' : 'partial data'}`;
-                  }}
-                  formatter={(value: number | string, name: string) => [
-                    `${Number(value)}${locale === 'zh' ? ' 题' : ''}`,
-                    name,
-                  ]}
-                  contentStyle={{
-                    background: 'var(--tooltip-bg)',
-                    borderColor: 'var(--tooltip-border)',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    color: 'var(--tooltip-color)',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="Listening" name={listeningLabel} stackId="loss" fill="#38bdf8" radius={[0, 0, 6, 6]} maxBarSize={30} />
-                <Bar dataKey="Reading" name={readingLabel} stackId="loss" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={30} />
+                <Bar key="listening-bar" dataKey="Listening" name={copy.listeningSeries} stackId="loss" fill="#38bdf8" radius={[0, 0, 4, 4]} maxBarSize={32} opacity={0.9} />
+                <Bar key="reading-bar" dataKey="Reading" name={copy.readingSeries} stackId="loss" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={32} opacity={0.9} />
                 <Line
+                  key="total-line"
                   type="monotone"
                   dataKey="Total"
-                  name={locale === 'zh' ? '总错题' : 'Total incorrect'}
-                  stroke="#fb7185"
+                  name="Total"
+                  stroke="#ef4444"
                   strokeWidth={2.5}
-                  dot={{ r: 2.5 }}
-                  activeDot={{ r: 5 }}
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 0, fill: '#ef4444' }}
                   connectNulls
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="rounded-[32px] border border-dashed border-zinc-200/60 bg-zinc-50/50 dark:border-white/10 dark:bg-zinc-900/30 flex h-56 items-center justify-center px-6 text-center text-xs leading-6 text-zinc-400 dark:text-zinc-500">
-            {locale === 'zh'
-              ? '至少完成一套听力或阅读后，这里会显示错题结构、总错题与最近波动。'
-              : 'Complete at least one listening or reading set to unlock the incorrect-answer breakdown, total incorrect count, and recent volatility.'}
-          </div>
+          <EmptyState message={locale === 'zh' ? '完成一套练习以查看趋势' : 'Complete a set to view trends'} />
         )}
+        </WidgetCard>
+      </motion.div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-2 text-sm text-zinc-500 dark:text-zinc-400">
-          <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
-            {locale === 'zh' ? '诊断' : 'Diagnostic'}
-          </span>
-          <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="leading-6">{buildLossInsight({ locale, summary, listeningLabel, readingLabel })}</span>
+      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid md:grid-cols-2 gap-6">
+        <WidgetCard className="flex flex-col">
+          <div className="mb-5">
+            <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{locale === 'zh' ? '重点突破' : 'Priority Targets'}</h2>
+            <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '基于错误率与失分的综合评估' : 'Based on error rate and loss share'}
+            </p>
+          </div>
+          
+          <div className="flex-1 flex flex-col justify-center">
+            {radarSummary.hotspots.length > 0 ? (
+              <div className="flex flex-col rounded-[16px] bg-zinc-50/80 dark:bg-[#2C2C2E]/80 overflow-hidden">
+                {radarSummary.hotspots.map((item, index) => (
+                  <div key={item.partKey} className={cn(
+                    "flex items-center justify-between p-4",
+                    index !== radarSummary.hotspots.length - 1 && "border-b border-black/[0.04] dark:border-white/[0.04]"
+                  )}>
+                    <div className="flex items-center gap-3.5">
+                      <div className="flex size-7 items-center justify-center rounded-full bg-white dark:bg-[#1C1C1E] text-[13px] font-bold text-zinc-700 dark:text-zinc-300 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-black/[0.02] dark:border-white/5">
+                        {index + 1}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">{item.part}</span>
+                        <div className="flex items-center gap-1.5 text-[12px] font-medium text-zinc-500">
+                          <span>{item.errorRate.toFixed(0)}% err</span>
+                          <span>·</span>
+                          <span>{item.lossShare.toFixed(0)}% share</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[17px] font-bold text-zinc-900 dark:text-zinc-50">{item.pressure.toFixed(0)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState message={locale === 'zh' ? '暂无足够的数据' : 'Not enough data yet'} />
+            )}
+          </div>
+        </WidgetCard>
+
+        <WidgetCard className="flex flex-col">
+          <div className="mb-2">
+            <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.weaknessRadar}</h2>
+            <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400 line-clamp-2">
+              {buildRadarInsight({ locale, summary: radarSummary })}
+            </p>
+          </div>
+          
+          <div className="flex-1 min-h-[220px] relative mt-2">
+            {radarSummary.recordedSessions > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} outerRadius="70%">
+                  <PolarGrid stroke="currentColor" opacity={0.05} />
+                  <PolarAngleAxis dataKey="part" tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 11 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 'auto']} axisLine={false} tick={false} />
+                  <Radar
+                    name={locale === 'zh' ? '错误率' : 'Error rate'}
+                    dataKey="errorRate"
+                    stroke="#ef4444"
+                    strokeWidth={1.5}
+                    fill="#ef4444"
+                    fillOpacity={0.1}
+                  />
+                  <Radar
+                    name={locale === 'zh' ? '失分占比' : 'Loss share'}
+                    dataKey="lossShare"
+                    stroke="#0ea5e9"
+                    strokeWidth={1.5}
+                    fill="#0ea5e9"
+                    fillOpacity={0.1}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(255, 255, 255, 0.85)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(0,0,0,0.06)',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      fontSize: '13px',
+                      color: '#18181b',
+                      padding: '8px 12px'
+                    }}
+                    itemStyle={{ color: '#18181b', fontWeight: 500 }}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+               <EmptyState message={locale === 'zh' ? '完成测试以生成雷达图' : 'Complete a test for radar chart'} />
+            )}
+          </div>
+        </WidgetCard>
+      </motion.div>
+
+      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+        <WidgetCard>
+        <div className="mb-6">
+          <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{copy.rootCauseFrequency}</h2>
+          <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400">
+            {copy.rootCauseFrequencyDesc}
+          </p>
         </div>
-      </CardContent>
-    </Card>
+        
+        {reasonData.length > 0 ? (
+          <div className="flex flex-col gap-4 mt-2 max-w-3xl">
+            {reasonData.map((item, index) => {
+              const maxCount = reasonData[0]?.count || 1;
+              const percentage = Math.max((item.count / maxCount) * 100, 2);
+              return (
+                <div key={item.reason} className="flex items-center gap-4">
+                  <div className="w-[110px] sm:w-[140px] shrink-0">
+                    <span className="text-[14px] font-medium text-zinc-700 dark:text-zinc-300 truncate block">
+                      {item.reason}
+                    </span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-3">
+                    <div className="h-2.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-zinc-800 dark:bg-zinc-200 rounded-full"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-[15px] font-bold text-zinc-900 dark:text-zinc-50 min-w-[28px] text-right">
+                      {item.count}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState message={copy.saveDebugToUnlock} />
+        )}
+        </WidgetCard>
+      </motion.div>
+    </motion.section>
   );
 }
 
-function LossMetric({ label, value, hint }: { label: string; value: string; hint: string }) {
+function HeaderInsight({ locale, confidence, summary, radarSummary }: { locale: 'zh' | 'en'; confidence: AnalyticsConfidence; summary: LossTrendSummary; radarSummary: RadarSummary }) {
+  const isHigh = confidence.level === 'high';
+  const isMedium = confidence.level === 'medium';
+  const riskLabel = confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : null;
+
   return (
-    <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
-      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{hint}</div>
+    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
+      <div>
+        <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          {locale === 'zh' ? '分析洞察' : 'Insights'}
+        </h1>
+        <p className="mt-1 text-[15px] text-zinc-500 dark:text-zinc-400">
+          {buildHeroInsight(locale, summary, radarSummary)}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3 text-[13px] shrink-0">
+        <span className={cn(
+          "font-medium",
+          isHigh ? "text-emerald-600 dark:text-emerald-400" : isMedium ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"
+        )}>
+          {isHigh ? (locale === 'zh' ? '高可信度数据' : 'Stable Data') : isMedium ? (locale === 'zh' ? '中等可信度' : 'Usable Data') : (locale === 'zh' ? '数据不足' : 'Sparse Data')}
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="text-zinc-500 dark:text-zinc-400">
+          {confidence.recordedSessions} {locale === 'zh' ? '套测验' : 'sets'}
+        </span>
+        {riskLabel && (
+          <>
+            <span className="text-zinc-300 dark:text-zinc-700">|</span>
+            <span className="flex items-center gap-1 text-red-500 font-medium">
+              <AlertCircle className="size-3.5" />
+              {riskLabel}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function RadarMetric({ label, value, hint }: { label: string; value: string; hint: string }) {
+function WidgetCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="rounded-[24px] border border-white/50 bg-white/50 p-5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/50">
-      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
-      <div className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{hint}</div>
+    <div className={cn(
+      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04]",
+      className
+    )}>
+      {children}
     </div>
   );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex h-full min-h-[160px] w-full items-center justify-center rounded-[16px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20">
+      <p className="text-[14px] font-medium text-zinc-400 dark:text-zinc-500">{message}</p>
+    </div>
+  );
+}
+
+function TrendIndicator({ delta }: { delta: number }) {
+  if (delta === 0) {
+    return <div className="flex items-center text-zinc-400"><Minus className="size-3.5" /></div>;
+  }
+  if (delta < 0) {
+    return (
+      <div className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 text-[13px] font-medium">
+        <TrendingDown className="size-3.5" />
+        {Math.abs(delta)}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-0.5 text-red-500 dark:text-red-400 text-[13px] font-medium">
+      <TrendingUp className="size-3.5" />
+      {delta}
+    </div>
+  );
+}
+
+
+/* --- Helper Functions --- */
+
+function formatConfidenceIssue(locale: 'zh' | 'en', issue: AnalyticsConfidence['issues'][number]) {
+  switch (issue) {
+    case 'unfinished-backlog': return locale === 'zh' ? '包含未完成题目' : 'Clear backlog';
+    case 'missing-review': return locale === 'zh' ? '部分未复盘' : 'Finish review';
+    case 'sparse-history': return locale === 'zh' ? '数据样本过少' : 'Too few samples';
+    case 'missing-timer': return locale === 'zh' ? '缺乏计时数据' : 'Timer missing';
+    case 'timer-running': return locale === 'zh' ? '计时仍在进行' : 'Timer running';
+    default: return locale === 'zh' ? '无' : 'None';
+  }
 }
 
 function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
@@ -718,11 +498,7 @@ function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
   const partialCount = data.filter((point) => point.Total !== undefined && !point.paired).length;
 
   if (available.length === 0) {
-    return {
-      availableCount: 0,
-      pairedCount,
-      partialCount,
-    };
+    return { availableCount: 0, pairedCount, partialCount };
   }
 
   const latest = available[available.length - 1];
@@ -734,208 +510,73 @@ function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
   const best = available.reduce((lowest, point) => ((point.Total ?? Infinity) < (lowest.Total ?? Infinity) ? point : lowest), available[0]);
   const worst = available.reduce((highest, point) => ((point.Total ?? -Infinity) > (highest.Total ?? -Infinity) ? point : highest), available[0]);
 
-  return {
-    availableCount: available.length,
-    pairedCount,
-    partialCount,
-    latest,
-    previous,
-    best,
-    worst,
-    recentAverage: Number(recentAverage.toFixed(1)),
-    recentRange,
-  };
+  return { availableCount: available.length, pairedCount, partialCount, latest, previous, best, worst, recentAverage: Number(recentAverage.toFixed(1)), recentRange };
 }
 
-function formatLossMetric(value: number | undefined, locale: 'zh' | 'en', digits = 0) {
-  if (value === undefined) {
-    return '--';
+function buildHeroInsight(locale: 'zh' | 'en', summary: LossTrendSummary, radarSummary: RadarSummary) {
+  if (summary.availableCount === 0) {
+    return locale === 'zh' ? '准备好开始追踪你的测验表现了吗？' : 'Ready to start tracking your progress?';
+  }
+  
+  let insight = '';
+  const latest = summary.latest?.Total ?? 0;
+  const previous = summary.previous?.Total;
+  const hotspot = radarSummary.hotspots[0]?.part;
+
+  if (previous !== undefined) {
+    const delta = latest - previous;
+    if (delta < 0) {
+      insight = locale === 'zh' ? `近期表现提升，错题减少了 ${Math.abs(delta)} 题。` : `Performance improved, mistakes down by ${Math.abs(delta)}. `;
+    } else if (delta > 0) {
+      insight = locale === 'zh' ? `近期错题增加了 ${delta} 题，需要关注。` : `Mistakes increased by ${delta}, requires attention. `;
+    } else {
+      insight = locale === 'zh' ? `整体表现保持稳定。` : `Overall performance is stable. `;
+    }
+  } else {
+    insight = locale === 'zh' ? `最新测验产生了 ${latest} 个错题。` : `You had ${latest} mistakes in the latest set. `;
   }
 
-  return digits > 0 ? value.toFixed(digits) : `${Math.round(value)}`;
+  if (hotspot) {
+    insight += locale === 'zh' ? `接下来的攻坚重点是 ${hotspot}。` : `Next, focus your efforts on ${hotspot}.`;
+  }
+
+  return insight;
 }
 
-function formatDeltaMetric(delta: number | undefined, locale: 'zh' | 'en') {
-  if (delta === undefined) {
-    return '--';
-  }
-
-  if (delta === 0) {
-    return locale === 'zh' ? '持平' : 'Flat';
-  }
-
-  return `${delta > 0 ? '+' : ''}${delta}`;
-}
-
-function describeDelta(delta: number | undefined, locale: 'zh' | 'en') {
-  if (delta === undefined) {
-    return getEmptyMetricHint(locale);
-  }
-
-  if (delta < 0) {
-    return locale === 'zh' ? '总错题下降，趋势在改善。' : 'Total incorrect answers are down, so the trend is improving.';
-  }
-
-  if (delta > 0) {
-    return locale === 'zh' ? '总错题回升，需要排查波动来源。' : 'Total incorrect answers are up, so the recent spike needs review.';
-  }
-
-  return locale === 'zh' ? '与上一个已记录套次持平。' : 'Flat versus the previous recorded set.';
-}
-
-function formatLossRange(range: number | undefined, locale: 'zh' | 'en') {
-  if (range === undefined) {
-    return '--';
-  }
-
-  return `${range}${locale === 'zh' ? ' 题' : ''}`;
-}
-
-function formatRadarPercent(value: number) {
-  return `${value.toFixed(1)}%`;
-}
-
-function getAdaptiveRadarScale(data: RadarPoint[]) {
-  const recordedPoints = data.filter((item) => item.attempts > 0);
-
-  if (recordedPoints.length === 0) {
-    return {
-      maxDomain: 100,
-      tickCount: 6,
-    };
-  }
-
-  const maxValue = recordedPoints.reduce((highest, item) => {
-    return Math.max(highest, item.errorRate, item.lossShare);
-  }, 0);
-  const paddedMax = maxValue < 10 ? maxValue * 1.35 : maxValue * 1.18;
-  const roundedMax = roundRadarDomain(Math.max(paddedMax, 20));
-  const tickStep = getRadarTickStep(roundedMax);
-  const tickCount = Math.floor(roundedMax / tickStep) + 1;
-
-  return {
-    maxDomain: roundedMax,
-    tickCount,
-  };
-}
-
-function roundRadarDomain(value: number) {
-  if (value <= 25) {
-    return 25;
-  }
-
-  if (value <= 50) {
-    return Math.ceil(value / 5) * 5;
-  }
-
-  if (value <= 80) {
-    return Math.ceil(value / 10) * 10;
-  }
-
-  return 100;
-}
-
-function getRadarTickStep(maxDomain: number) {
-  if (maxDomain <= 25) {
-    return 5;
-  }
-
-  if (maxDomain <= 50) {
-    return 10;
-  }
-
-  return 20;
-}
-
-function getEmptyMetricHint(locale: 'zh' | 'en') {
-  return locale === 'zh' ? '记录更多套次后显示' : 'More recorded sets needed';
-}
-
-function buildRadarInsight({
-  locale,
-  summary,
-}: {
-  locale: 'zh' | 'en';
-  summary: RadarSummary;
-}) {
+function buildRadarInsight({ locale, summary }: { locale: 'zh' | 'en'; summary: RadarSummary }) {
   if (summary.recordedSessions === 0 || summary.hotspots.length === 0) {
     return locale === 'zh'
-      ? '当前还没有足够的 Part 级数据。先完成并保存训练记录，系统才会开始识别高压热点。'
-      : 'There is not enough part-level data yet. Save completed training records before the dashboard starts identifying pressure hotspots.';
+      ? '暂无足够数据。完成练习后系统将自动识别薄弱环节。'
+      : 'Not enough data. Complete tests to unlock weakness insights.';
   }
 
-  const lead = summary.hotspots[0];
   const errorPart = summary.highestErrorRate;
   const sharePart = summary.highestLossShare;
 
   if (locale === 'zh') {
-    return `${lead.part} 当前是综合压力最高的模块，压力指数 ${formatRadarPercent(lead.pressure)}。${errorPart ? `${errorPart.part} 的纯错误率最高，达到 ${formatRadarPercent(errorPart.errorRate)}。` : ''}${sharePart ? `${sharePart.part} 占全部失分的 ${formatRadarPercent(sharePart.lossShare)}，说明它对总损失的拖拽最强。` : ''}`.trim();
+    return `${errorPart ? `错误率最高项为 ${errorPart.part} (${errorPart.errorRate.toFixed(1)}%)。` : ''}${sharePart && sharePart.part !== errorPart?.part ? `同时 ${sharePart.part} 贡献了主要的失分 (${sharePart.lossShare.toFixed(1)}%)。` : ''}`.trim();
   }
 
-  return `${lead.part} is the strongest overall pressure point at ${formatRadarPercent(lead.pressure)}. ${errorPart ? `${errorPart.part} carries the highest pure error rate at ${formatRadarPercent(errorPart.errorRate)}.` : ''} ${sharePart ? `${sharePart.part} contributes ${formatRadarPercent(sharePart.lossShare)} of all tracked loss, making it the heaviest drag on the total result.` : ''}`.trim();
+  return `${errorPart ? `${errorPart.part} has the highest error rate (${errorPart.errorRate.toFixed(1)}%). ` : ''}${sharePart && sharePart.part !== errorPart?.part ? `${sharePart.part} accounts for ${sharePart.lossShare.toFixed(1)}% of total loss.` : ''}`.trim();
 }
 
-function buildLossInsight({
-  locale,
-  summary,
-  listeningLabel,
-  readingLabel,
-}: {
-  locale: 'zh' | 'en';
-  summary: LossTrendSummary;
-  listeningLabel: string;
-  readingLabel: string;
-}) {
+function buildLossInsight({ locale, summary }: { locale: 'zh' | 'en'; summary: LossTrendSummary }) {
   if (!summary.latest || summary.latest.Total === undefined) {
     return locale === 'zh'
-      ? '当前还没有足够数据做诊断。先完成至少一套听力或阅读，系统才会开始判断错题结构和波动。'
-      : 'There is not enough data for diagnostics yet. Finish at least one listening or reading set before the dashboard can evaluate incorrect-answer structure and volatility.';
+      ? '积累数据后，这里将展示详细的趋势分析。'
+      : 'Trend analysis will appear here after more data is recorded.';
   }
 
-  const latestDominant = getDominantLabel(summary.latest, locale, listeningLabel, readingLabel);
-  const delta =
-    summary.previous?.Total !== undefined ? (summary.latest.Total ?? 0) - summary.previous.Total : undefined;
-  const deltaText =
-    delta === undefined
-      ? locale === 'zh'
-        ? '这是首个可用套次。'
-        : 'This is the first recorded set.'
-      : delta < 0
-        ? locale === 'zh'
-          ? `较上次减少 ${Math.abs(delta)} 题。`
-          : `Down ${Math.abs(delta)} from the previous set.`
-        : delta > 0
-          ? locale === 'zh'
-            ? `较上次增加 ${delta} 题。`
-            : `Up ${delta} from the previous set.`
-          : locale === 'zh'
-            ? '与上次持平。'
-            : 'Flat versus the previous set.';
+  const listening = summary.latest.Listening ?? 0;
+  const reading = summary.latest.Reading ?? 0;
+  
+  const dominant = listening > reading ? (locale === 'zh' ? '听力' : 'Listening') : reading > listening ? (locale === 'zh' ? '阅读' : 'Reading') : (locale === 'zh' ? '听力与阅读' : 'Listening and Reading');
 
-  const stabilityText =
-    summary.recentRange === undefined
-      ? ''
-      : locale === 'zh'
-        ? `最近波动区间 ${summary.recentRange} 题。`
-        : `Recent range is ${summary.recentRange}.`;
+  const stability = summary.recentRange !== undefined && summary.availableCount >= 3
+      ? (locale === 'zh' ? `近三套波动范围在 ${summary.recentRange} 题左右。` : `Recent variation is around ${summary.recentRange} questions.`)
+      : '';
 
   return locale === 'zh'
-    ? `最新 ${summary.latest.set} 总错题 ${summary.latest.Total} 题，当前压力主要来自${latestDominant}。${deltaText} ${stabilityText}`.trim()
-    : `${summary.latest.set} closed at ${summary.latest.Total} incorrect answers, with ${latestDominant} currently contributing more pressure. ${deltaText} ${stabilityText}`.trim();
-}
-
-function getDominantLabel(
-  point: LossTrendPoint,
-  locale: 'zh' | 'en',
-  listeningLabel: string,
-  readingLabel: string
-) {
-  const listening = point.Listening ?? 0;
-  const reading = point.Reading ?? 0;
-
-  if (listening === reading) {
-    return locale === 'zh' ? '听读均衡' : 'a balanced split';
-  }
-
-  return listening > reading ? listeningLabel : readingLabel;
+    ? `当前失分主要集中在${dominant}部分。${stability}`
+    : `Loss is mostly concentrated in ${dominant}. ${stability}`;
 }

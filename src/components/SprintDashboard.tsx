@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCopy, translateStatus } from '@/lib/i18n';
 import { getIncorrectAnswers } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
@@ -48,31 +49,34 @@ export function SprintDashboard() {
   }, [sessions]);
 
   return (
-    <section>
-      <Card className="deck-card rounded-[28px]">
-        <CardHeader className="deck-card-header px-6 py-5">
+    <motion.div 
+      variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
+      initial="hidden" animate="show"
+    >
+      <Card className="overflow-hidden rounded-[32px] border border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <CardHeader className="px-6 py-6 border-b border-black/[0.04] dark:border-white/[0.04]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="relative h-11 w-11 shrink-0">
+              <div className="relative h-12 w-12 shrink-0">
                 <svg className="size-full -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-zinc-200 dark:text-zinc-800" />
+                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-zinc-100 dark:text-zinc-800" />
                   <circle
                     cx="18" cy="18" r="15.5"
-                    fill="none" stroke="currentColor" strokeWidth="2.5"
+                    fill="none" stroke="currentColor" strokeWidth="3"
                     strokeDasharray={`${progressPct} 100`}
                     strokeLinecap="round"
-                    className="text-amber-400 transition-all duration-500"
+                    className="text-amber-500 transition-all duration-1000 ease-[cubic-bezier(0.32,0.72,0,1)]"
                   />
                 </svg>
-                <span className="absolute inset-0 flex items-center justify-center font-mono text-[9px] font-semibold text-zinc-700 dark:text-zinc-300">
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-zinc-900 dark:text-zinc-100">
                   {progressPct}%
                 </span>
               </div>
               <div>
-                <div className="font-mono text-[11px] uppercase tracking-[0.26em] text-amber-600 dark:text-amber-400">
+                <CardTitle className="text-[12px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400">
                   {copy.dashboardTitle}
-                </div>
-                <div className="mt-1 max-w-2xl text-xs leading-6 text-zinc-500 dark:text-zinc-400">{copy.dashboardDescription}</div>
+                </CardTitle>
+                <div className="mt-1 max-w-2xl text-[14px] leading-relaxed text-zinc-500">{copy.dashboardDescription}</div>
               </div>
             </div>
 
@@ -83,10 +87,12 @@ export function SprintDashboard() {
             </div>
           </div>
 
-          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-linear-to-r from-amber-400 to-amber-500 transition-all duration-700"
-              style={{ width: `${progressPct}%` }}
+          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 1, ease: [0.32, 0.72, 0, 1] }}
+              className="h-full rounded-full bg-amber-500"
             />
           </div>
         </CardHeader>
@@ -104,71 +110,68 @@ export function SprintDashboard() {
                     : 'border-zinc-200/80 bg-white/70 text-zinc-500 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400';
 
               return (
-                <button
+                <motion.button
                   key={session.id}
+                  variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0.2 } } }}
                   type="button"
                   onClick={() => selectSession(session.id)}
                   className={cn(
-                    'group relative flex min-h-32 flex-col rounded-[22px] border p-3.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60',
+                    'group relative flex min-h-32 flex-col rounded-[24px] border p-4 text-left transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
                     baseCls,
                     isActive
-                      ? 'z-10 -translate-y-0.5 border-amber-400 shadow-lg shadow-amber-400/15 ring-2 ring-amber-400/40'
-                      : 'hover:-translate-y-0.5 hover:border-amber-300/60 hover:shadow-md hover:shadow-amber-400/8'
+                      ? 'z-10 bg-white dark:bg-[#2C2C2E] border-amber-400 shadow-[0_8px_32px_rgba(245,165,36,0.15)] ring-1 ring-amber-400/20'
+                      : 'border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
                   )}
                   aria-pressed={isActive}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-mono text-base font-bold leading-none tracking-tight">{session.id}</div>
-                      <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">
+                      <div className="text-base font-bold leading-none tracking-tight text-zinc-900 dark:text-zinc-50">{session.id}</div>
+                      <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                         Day {String(session.sprintDay).padStart(2, '0')}
                       </div>
                     </div>
 
-                    <div className="rounded-full bg-current/10 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.22em] opacity-75">
+                    <div className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                       {session.type === 'L' ? 'LC' : 'RC'}
                     </div>
                   </div>
 
-                  <div className="mt-4 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  <div className="mt-4 text-[13px] font-medium text-zinc-500">
                     {translateStatus(locale, session.status)}
                   </div>
 
                   <div className="mt-auto flex items-end justify-between gap-3 pt-4">
-                    <div className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
+                    <div className="text-[11px] font-medium leading-[1.4] text-zinc-400">
                       {session.type === 'L'
-                        ? locale === 'zh'
-                          ? '45 分钟听力计时'
-                          : '45-minute listening timer'
-                        : locale === 'zh'
-                          ? '75 分钟阅读分段计时'
-                          : '75-minute segmented reading timer'}
+                        ? locale === 'zh' ? '45 min' : '45 min'
+                        : locale === 'zh' ? '75 min' : '75 min'}
                     </div>
 
                     {hasMistakes ? (
-                      <div className="rounded-lg bg-current/10 px-2 py-1 font-mono text-[10px] font-semibold tabular-nums">
+                      <div className="rounded-lg bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-600 dark:text-red-400">
                         -{mistakes}
                       </div>
                     ) : (
-                      <div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-50">
-                          {locale === 'zh' ? '无失分' : 'No loss'}
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-300 dark:text-zinc-700">
+                        {locale === 'zh' ? 'CLEAN' : 'CLEAN'}
                       </div>
                     )}
                   </div>
 
                   <div className={cn(
-                    'absolute top-2 right-2 size-1.5 rounded-full',
-                    session.status === 'debugged' ? 'bg-emerald-400' :
-                    session.status === 'in-progress' ? 'bg-amber-400 animate-pulse' :
-                    'bg-zinc-300 dark:bg-zinc-700'
+                    'absolute top-4 right-4 size-2 rounded-full',
+                    session.status === 'debugged' ? 'bg-emerald-500' :
+                    session.status === 'in-progress' ? 'bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
+                    'bg-zinc-200 dark:bg-zinc-800'
                   )} />
-                </button>
+                </motion.button>
               );
             })}
           </div>
         </CardContent>
       </Card>
-    </section>
+    </motion.div>
   );
 }
 
@@ -183,15 +186,15 @@ function StatusPill({
 }) {
   const cls =
     tone === 'amber'
-      ? 'border-amber-400/30 bg-amber-400/8 text-amber-700 dark:text-amber-300'
+      ? 'border-amber-400/20 bg-amber-400/5 text-amber-600 dark:text-amber-400'
       : tone === 'green'
-        ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
-        : 'border-zinc-200/80 bg-white/72 text-zinc-500 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400';
+        ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+        : 'border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 text-zinc-500';
 
   return (
-    <div className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em]', cls)}>
-      <span className="text-base font-semibold leading-none">{value}</span>
-      <span className="opacity-70">{label}</span>
+    <div className={cn('flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest', cls)}>
+      <span className="text-zinc-900 dark:text-zinc-100">{value}</span>
+      <span className="opacity-60">{label}</span>
     </div>
   );
 }
