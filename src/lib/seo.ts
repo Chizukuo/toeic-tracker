@@ -1,17 +1,26 @@
 import type { Metadata } from "next";
 
-export const DEFAULT_SITE_URL = "https://toeic-tracker.pages.dev";
-export const ASSET_VERSION = "20260311";
+export const DEFAULT_SITE_URL = "https://toeic.chizunet.cc";
+export const ASSET_VERSION = "20260329";
 
 export const siteConfig = {
-  name: "Cheese TOEIC Command Deck",
-  shortName: "TOEIC Deck",
+  name: "Cheese TOEIC Tracker",
+  shortName: "toeic tracker",
   creator: "Chizukuo",
   description:
-    "TOEIC 20天冲刺训练看板，集中管理听力与阅读练习进度、严格计时、错题复盘、未完成题追踪与实时估分。",
+    "Cheese TOEIC Tracker — TOEIC（托业）20天冲刺训练看板，集中管理听力与阅读练习进度、严格计时、错题复盘、未完成题追踪与实时估分。适合想在短期内提升托业成绩的考生。",
   locale: "zh_CN",
   keywords: [
+    "Cheese TOEIC",
+    "Cheese TOEIC Tracker",
+    "cheese toeic",
+    "toeic tracker",
     "TOEIC",
+    "托业",
+    "托业 备考",
+    "托业 练习",
+    "托业 冲刺",
+    "托业 词汇",
     "TOEIC tracker",
     "TOEIC study planner",
     "TOEIC timer",
@@ -66,7 +75,7 @@ export const defaultOpenGraphImage = {
   url: `/opengraph-image?v=${ASSET_VERSION}`,
   width: 1200,
   height: 630,
-  alt: "Cheese TOEIC Command Deck share image",
+  alt: "Cheese TOEIC Tracker 分享图片 / Cheese TOEIC Tracker share image",
   type: "image/png",
 } as const;
 
@@ -74,7 +83,7 @@ export const defaultTwitterImage = {
   url: `/twitter-image?v=${ASSET_VERSION}`,
   width: 1200,
   height: 630,
-  alt: "Cheese TOEIC Command Deck Twitter card",
+  alt: "Cheese TOEIC Tracker Twitter 卡片 / Cheese TOEIC Tracker Twitter card",
   type: "image/png",
 } as const;
 
