@@ -61,6 +61,7 @@ export function DebugForm({
   const [mistakes, setMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.mistakes);
   const [overtimeMistakes, setOvertimeMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.overtimeMistakes ?? {});
   const [reasons, setReasons] = useState<string[]>(activeSession.reasons);
+  const [notes, setNotes] = useState<string>(activeSession.notes ?? '');
   const [saved, setSaved] = useState(false);
   const [overtimeSaved, setOvertimeSaved] = useState(false);
   const [undoVisible, setUndoVisible] = useState(false);
@@ -68,6 +69,7 @@ export function DebugForm({
   const undoPayloadRef = useRef<{
     mistakes: Partial<Record<MistakeKey, number>>;
     reasons: string[];
+    notes?: string;
     status: SessionRecord['status'];
   } | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -89,9 +91,10 @@ export function DebugForm({
   const dirtyReview = useMemo(() => {
     return (
       !sameNumberRecord<MistakeKey>(mistakes, activeSession.mistakes) ||
-      !sameStringArray(reasons, activeSession.reasons)
+      !sameStringArray(reasons, activeSession.reasons) ||
+      notes !== (activeSession.notes ?? '')
     );
-  }, [activeSession.mistakes, activeSession.reasons, mistakes, reasons]);
+  }, [activeSession.mistakes, activeSession.reasons, activeSession.notes, mistakes, reasons, notes]);
 
   const dirtyOvertime = useMemo(() => {
     return !sameNumberRecord<MistakeKey>(overtimeMistakes, activeSession.overtimeMistakes ?? {});
@@ -161,6 +164,7 @@ export function DebugForm({
   const resetReviewDraft = () => {
     setMistakes(activeSession.mistakes);
     setReasons(activeSession.reasons);
+    setNotes(activeSession.notes ?? '');
   };
 
   const resetOvertimeDraft = () => {
@@ -171,12 +175,14 @@ export function DebugForm({
     undoPayloadRef.current = {
       mistakes: activeSession.mistakes,
       reasons: activeSession.reasons,
+      notes: activeSession.notes,
       status: activeSession.status,
     };
 
     saveDiagnostics(activeSession.id, {
       mistakes,
       reasons,
+      notes: notes.trim() || undefined,
       status: 'debugged',
     });
     setSaved(true);
@@ -205,6 +211,7 @@ export function DebugForm({
     saveDiagnostics(activeSession.id, {
       mistakes: previous.mistakes,
       reasons: previous.reasons,
+      notes: previous.notes,
       status: previous.status,
     });
 
@@ -285,12 +292,12 @@ export function DebugForm({
   }, []);
 
   return (
-    <Card className="deck-card rounded-[26px]">
-      <CardHeader className="deck-card-header px-6 py-5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
+    <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+      <CardHeader className="border-b border-zinc-200/50 px-8 py-6 dark:border-white/10">
+        <div className="font-mono text-[10px] font-medium uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
           {activeSession.type === 'L' ? 'LISTENING REVIEW' : 'READING REVIEW'}
         </div>
-        <CardTitle className="mt-1 text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-base">
+        <CardTitle className="mt-2 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">
           {copy.dataEntryTitle}
         </CardTitle>
         <CardDescription className="text-xs leading-6">
@@ -387,7 +394,7 @@ export function DebugForm({
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {parts.map((part, index) => (
-              <label key={part} className="deck-surface-soft p-3 transition-colors hover:border-amber-300/60 dark:hover:border-amber-300/25">
+              <label key={part} className="group flex flex-col justify-between rounded-[24px] border border-white/50 bg-white/50 p-4 shadow-sm transition-all focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/20 hover:bg-white/80 dark:border-white/10 dark:bg-zinc-900/50 dark:hover:bg-zinc-900/80">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
@@ -397,7 +404,7 @@ export function DebugForm({
                 <Input
                   type="number"
                   min="0"
-                  className="mt-2 h-9 bg-white text-sm dark:bg-zinc-950"
+                  className="mt-3 h-12 rounded-[16px] border-0 bg-white/80 text-center text-lg font-semibold focus-visible:ring-0 dark:bg-zinc-950/80"
                   value={mistakes[part] ?? ''}
                   ref={(element) => {
                     inputRefs.current[index] = element;
@@ -423,7 +430,7 @@ export function DebugForm({
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {parts.map((part) => (
-                <label key={`overtime-${part}`} className="deck-surface-soft border-red-500/10 p-3 transition-colors hover:border-red-300/40 dark:hover:border-red-300/20">
+                <label key={`overtime-${part}`} className="group flex flex-col justify-between rounded-[24px] border border-red-200/50 bg-red-50/50 p-4 shadow-sm transition-all focus-within:border-red-400 focus-within:ring-2 focus-within:ring-red-400/20 hover:bg-red-50/80 dark:border-red-900/20 dark:bg-red-900/10 dark:hover:bg-red-900/20">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
@@ -433,7 +440,7 @@ export function DebugForm({
                   <Input
                     type="number"
                     min="0"
-                    className="mt-2 h-9 bg-white text-sm dark:bg-zinc-950"
+                    className="mt-3 h-12 rounded-[16px] border-0 bg-white/80 text-center text-lg font-semibold focus-visible:ring-0 dark:bg-zinc-950/80"
                     value={overtimeMistakes[part] ?? ''}
                     onChange={(event) => updateOvertimeMistake(part, event.target.value)}
                     placeholder="0"
@@ -471,7 +478,7 @@ export function DebugForm({
                   type="button"
                   onClick={() => toggleReason(reason)}
                   className={cn(
-                    'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                    'rounded-full border px-5 py-2.5 text-sm font-medium shadow-sm transition-all duration-200 hover:scale-105 active:scale-95',
                     active
                       ? 'border-amber-400/40 bg-amber-400/10 text-amber-700 shadow-sm dark:text-amber-300'
                       : 'border-zinc-200/80 bg-white/80 text-zinc-500 hover:border-amber-300 hover:text-zinc-800 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400'
@@ -483,6 +490,22 @@ export function DebugForm({
               );
             })}
           </div>
+        </div>
+
+        {/* Notes (Phase 2 feature) */}
+        <div>
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+              {locale === 'zh' ? '复盘笔记 (可选)' : 'Session Notes (Optional)'}
+            </div>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={locale === 'zh' ? '记录本次复盘的心得、教训或盲区…' : 'Record observations, lessons learned, or blind spots…'}
+            rows={3}
+            className="w-full resize-none rounded-[16px] border border-zinc-200/80 bg-white/50 p-4 text-sm leading-relaxed text-zinc-700 transition-all placeholder:text-zinc-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20 dark:border-white/10 dark:bg-zinc-900/50 dark:text-zinc-300 dark:placeholder:text-zinc-600 dark:focus:bg-zinc-950/80"
+          />
         </div>
 
         <div className="deck-surface-strong p-3">
@@ -499,7 +522,7 @@ export function DebugForm({
             size="sm"
             onClick={handleSave}
             disabled={!dirtyReview}
-            className="w-full bg-zinc-950 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-55 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+            className="h-14 w-full rounded-full text-base font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
           >
             {saved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
             {saved ? `${copy.saveDiagnostics} OK` : !dirtyReview ? (locale === 'zh' ? '暂无变更' : 'No Changes') : `${copy.saveDiagnostics} ${copy.markDebugged}`}
@@ -538,7 +561,7 @@ export function DebugForm({
               size="sm"
               onClick={handleSaveOvertime}
               disabled={!dirtyOvertime}
-              className="w-full bg-red-500 font-mono text-xs uppercase tracking-[0.18em] text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-55"
+              className="h-14 w-full rounded-full text-base font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 bg-red-500 text-white hover:bg-red-600"
             >
               {overtimeSaved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
               {overtimeSaved

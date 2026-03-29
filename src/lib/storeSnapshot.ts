@@ -2,8 +2,12 @@ import {
   type MistakeKey,
   type ReadingLapKey,
   type SessionRecord,
+  type VocabularyEntry,
+  type SprintConfig,
+  SPRINT_DEFAULT_CONFIG,
   createInitialSessions,
   mergeSessionWithDefaults,
+  buildSprintBlueprints,
 } from '@/lib/toeic';
 import type { Locale as AppLocale } from '@/lib/i18n';
 
@@ -18,10 +22,12 @@ type LegacyRecord = {
 };
 
 export const SNAPSHOT_APP = 'Cheese-TOEIC-Tracker';
-export const SNAPSHOT_VERSION = 2;
-export const STORAGE_VERSION = 6;
+export const SNAPSHOT_VERSION = 3;
+export const STORAGE_VERSION = 7;
 export const DEFAULT_EXAM_DATE = '2026-05-24';
 export const EXAM_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const AUTO_BACKUP_KEY_PREFIX = 'cheese-toeic-backup-';
+export const AUTO_BACKUP_MAX = 3;;
 
 type SnapshotMeta = {
   schema: 'cheese-toeic-snapshot';
@@ -53,6 +59,10 @@ export type SprintSnapshot = {
     locale: AppLocale;
     examDate: string;
     historicalScores: HistoricalScoreRecord[];
+    sprintConfig?: SprintConfig;
+    vocabularyEntries?: VocabularyEntry[];
+    targetScore?: number;
+    unlockedAchievements?: string[];
   };
 };
 
@@ -74,6 +84,8 @@ type SnapshotLike = {
     examDate?: string;
     historicalScores?: unknown;
     records?: LegacyRecord[];
+    sprintConfig?: unknown;
+    vocabularyEntries?: unknown;
   };
   state?: {
     sessions?: unknown;
@@ -82,6 +94,8 @@ type SnapshotLike = {
     examDate?: string;
     historicalScores?: unknown;
     records?: LegacyRecord[];
+    sprintConfig?: unknown;
+    vocabularyEntries?: unknown;
   };
   sessions?: unknown;
   activeSessionId?: string;
@@ -89,6 +103,8 @@ type SnapshotLike = {
   examDate?: string;
   historicalScores?: unknown;
   records?: LegacyRecord[];
+  sprintConfig?: unknown;
+  vocabularyEntries?: unknown;
 };
 
 export type ParsedImportSnapshot = {
@@ -97,6 +113,8 @@ export type ParsedImportSnapshot = {
   locale: AppLocale;
   examDate: string;
   historicalScores: HistoricalScoreRecord[];
+  sprintConfig: SprintConfig;
+  vocabularyEntries: VocabularyEntry[];
   result: ImportSnapshotResult;
 };
 
@@ -157,20 +175,39 @@ export function normalizeHistoricalScores(incoming: unknown): HistoricalScoreRec
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function normalizeSessions(incoming: unknown): SessionRecord[] {
-  const defaults = createInitialSessions();
+export function normalizeSessions(incoming: unknown, config?: SprintConfig): SessionRecord[] {
+  const defaults = createInitialSessions(config);
   if (!Array.isArray(incoming)) {
     return defaults;
   }
 
-  return defaults.map((session) => {
+  const defaultMap = new Map(defaults.map((s) => [s.id, s]));
+
+  // Merge known sessions from defaults, then append any extra sessions from incoming that fit the id pattern
+  const merged = defaults.map((session) => {
     const match = incoming.find(
       (item): item is Partial<SessionRecord> & Pick<SessionRecord, 'id'> =>
         typeof item === 'object' && item !== null && 'id' in item && item.id === session.id
     );
-
     return match ? mergeSessionWithDefaults(match) : session;
   });
+
+  // Append sessions from incoming that aren't in defaults (i.e., from larger sprint configs)
+  for (const item of incoming) {
+    if (typeof item !== 'object' || item === null || !('id' in item)) continue;
+    const id = (item as { id: unknown }).id;
+    if (typeof id !== 'string') continue;
+    if (defaultMap.has(id) || merged.some((s) => s.id === id)) continue;
+    // Only accept well-formed session ids: L{n} or R{n}
+    if (!/^[LR]\d+$/.test(id)) continue;
+    try {
+      merged.push(mergeSessionWithDefaults(item as Partial<SessionRecord> & Pick<SessionRecord, 'id'>));
+    } catch {
+      // skip unknown ids
+    }
+  }
+
+  return merged;
 }
 
 export function migrateLegacyRecords(records: LegacyRecord[] | undefined) {
@@ -262,8 +299,10 @@ export function parseImportSnapshot(snapshot: unknown) {
       locale: isLocale(source.locale) ? source.locale : 'zh',
       examDate: normalizeExamDate(source.examDate),
       historicalScores: normalizeHistoricalScores(source.historicalScores),
+      sprintConfig: SPRINT_DEFAULT_CONFIG,
+      vocabularyEntries: [],
       result: {
-        source: 'legacy-records',
+        source: 'legacy-records' as const,
         importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
         migrated: true,
         futureVersion,
@@ -275,7 +314,7 @@ export function parseImportSnapshot(snapshot: unknown) {
     throw new Error('Snapshot does not contain session data');
   }
 
-  const sessions = normalizeSessions(source.sessions);
+  const sessions = normalizeSessions(source.sessions, normalizeSprintConfig(source.sprintConfig));
   const activeSessionId =
     typeof source.activeSessionId === 'string' && sessions.some((session) => session.id === source.activeSessionId)
       ? source.activeSessionId
@@ -287,6 +326,8 @@ export function parseImportSnapshot(snapshot: unknown) {
     locale: isLocale(source.locale) ? source.locale : 'zh',
     examDate: normalizeExamDate(source.examDate),
     historicalScores: normalizeHistoricalScores(source.historicalScores),
+    sprintConfig: normalizeSprintConfig(source.sprintConfig),
+    vocabularyEntries: normalizeVocabularyEntries(source.vocabularyEntries),
     result: {
       source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',
       importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
@@ -306,6 +347,10 @@ export function createSnapshot(state: {
   locale: AppLocale;
   examDate: string;
   historicalScores: HistoricalScoreRecord[];
+  sprintConfig: SprintConfig;
+  vocabularyEntries: VocabularyEntry[];
+  targetScore: number;
+  unlockedAchievements: string[];
 }): SprintSnapshot {
   return {
     app: SNAPSHOT_APP,
@@ -323,6 +368,10 @@ export function createSnapshot(state: {
       locale: state.locale,
       examDate: state.examDate,
       historicalScores: state.historicalScores,
+      sprintConfig: state.sprintConfig,
+      vocabularyEntries: state.vocabularyEntries,
+      targetScore: state.targetScore,
+      unlockedAchievements: state.unlockedAchievements,
     },
   };
 }
@@ -336,6 +385,10 @@ export function migratePersistedState(
   locale: AppLocale;
   examDate: string;
   historicalScores: HistoricalScoreRecord[];
+  sprintConfig: SprintConfig;
+  vocabularyEntries: VocabularyEntry[];
+  targetScore: number;
+  unlockedAchievements: string[];
 } {
   const persisted = persistedState as {
     sessions?: unknown;
@@ -346,6 +399,10 @@ export function migratePersistedState(
     records?: LegacyRecord[];
     activeDay?: number;
     activeType?: 'L' | 'R';
+    sprintConfig?: unknown;
+    vocabularyEntries?: unknown;
+    targetScore?: unknown;
+    unlockedAchievements?: unknown;
   };
 
   if (version < 2 && persisted?.records) {
@@ -360,14 +417,157 @@ export function migratePersistedState(
       locale: 'zh',
       examDate: DEFAULT_EXAM_DATE,
       historicalScores: [],
+      sprintConfig: SPRINT_DEFAULT_CONFIG,
+      vocabularyEntries: [],
+      targetScore: 850,
+      unlockedAchievements: [],
     };
   }
 
+  const sprintConfig = normalizeSprintConfig(persisted?.sprintConfig);
+
   return {
-    sessions: normalizeSessions(persisted?.sessions),
+    sessions: normalizeSessions(persisted?.sessions, sprintConfig),
     activeSessionId: persisted?.activeSessionId ?? 'L1',
     locale: persisted?.locale ?? 'zh',
     examDate: persisted?.examDate ?? DEFAULT_EXAM_DATE,
     historicalScores: normalizeHistoricalScores(persisted?.historicalScores),
+    sprintConfig,
+    vocabularyEntries: normalizeVocabularyEntries(persisted?.vocabularyEntries),
+    targetScore: typeof persisted?.targetScore === 'number' ? clampScore(persisted.targetScore, 10, 990) : 850,
+    unlockedAchievements: Array.isArray(persisted?.unlockedAchievements) ? persisted.unlockedAchievements.filter((a): a is string => typeof a === 'string') : [],
+  };
+}
+
+// ─── New Normalizers ──────────────────────────────────────────────────────────
+
+export function normalizeSprintConfig(incoming: unknown): SprintConfig {
+  if (typeof incoming !== 'object' || incoming === null) return SPRINT_DEFAULT_CONFIG;
+  const raw = incoming as Record<string, unknown>;
+  const listeningCount = Number(raw.listeningCount);
+  const readingCount = Number(raw.readingCount);
+  if (!Number.isFinite(listeningCount) || listeningCount < 1 || listeningCount > 30) return SPRINT_DEFAULT_CONFIG;
+  if (!Number.isFinite(readingCount) || readingCount < 1 || readingCount > 30) return SPRINT_DEFAULT_CONFIG;
+  return { listeningCount: Math.floor(listeningCount), readingCount: Math.floor(readingCount) };
+}
+
+export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[] {
+  if (!Array.isArray(incoming)) return [];
+  return incoming
+    .filter((item): item is Partial<VocabularyEntry> => typeof item === 'object' && item !== null)
+    .map((item, idx) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : `vocab-${idx}-${Date.now()}`,
+      text: typeof item.text === 'string' && item.text.trim() ? item.text.trim() : '',
+      reading: typeof item.reading === 'string' ? item.reading : undefined,
+      definition: typeof item.definition === 'string' ? item.definition : undefined,
+      partOfSpeech: typeof item.partOfSpeech === 'string' ? item.partOfSpeech : undefined,
+      exampleSentence: typeof item.exampleSentence === 'string' ? item.exampleSentence : undefined,
+      sessionIds: Array.isArray(item.sessionIds) ? item.sessionIds.filter((s): s is string => typeof s === 'string') : [],
+      encounterCount: typeof item.encounterCount === 'number' && item.encounterCount >= 1 ? item.encounterCount : 1,
+      tags: Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === 'string') : [],
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
+    }))
+    .filter((e) => e.text.length > 0);
+}
+
+// ─── SnapshotLike extension ─────────────────────────────────────────────────────────
+// (extend SnapshotLike type to include new fields for parsing)
+declare module '@/lib/storeSnapshot' {
+  interface SnapshotLikeExtension {
+    sprintConfig?: unknown;
+    vocabularyEntries?: unknown;
+  }
+}
+
+// ─── Auto-Backup Utilities ──────────────────────────────────────────────────────────
+
+export type AutoBackupEntry = {
+  key: string;
+  exportedAt: string;
+  sessionCount: number;
+  debuggedCount: number;
+};
+
+export function createAutoBackup(
+  state: Parameters<typeof createSnapshot>[0],
+  storage: Storage
+): void {
+  const snapshot = createSnapshot(state);
+  const key = `${AUTO_BACKUP_KEY_PREFIX}${Date.now()}`;
+  try {
+    storage.setItem(key, JSON.stringify(snapshot));
+    // Prune old backups
+    const allKeys = Object.keys(storage)
+      .filter((k) => k.startsWith(AUTO_BACKUP_KEY_PREFIX))
+      .sort();
+    while (allKeys.length > AUTO_BACKUP_MAX) {
+      const oldest = allKeys.shift()!;
+      storage.removeItem(oldest);
+    }
+  } catch {
+    // Ignore quota errors — backup is best-effort
+  }
+}
+
+export function getAutoBackups(storage: Storage): AutoBackupEntry[] {
+  return Object.keys(storage)
+    .filter((k) => k.startsWith(AUTO_BACKUP_KEY_PREFIX))
+    .sort()
+    .reverse()
+    .map((key) => {
+      try {
+        const raw = storage.getItem(key);
+        if (!raw) return null;
+        const snap = JSON.parse(raw) as SprintSnapshot;
+        return {
+          key,
+          exportedAt: snap.exportedAt,
+          sessionCount: snap.data.sessions.length,
+          debuggedCount: snap.data.sessions.filter((s) => s.status === 'debugged').length,
+        } satisfies AutoBackupEntry;
+      } catch {
+        return null;
+      }
+    })
+    .filter((e): e is AutoBackupEntry => e !== null);
+}
+
+// ─── Snapshot Diff ─────────────────────────────────────────────────────────────────────
+
+export type SnapshotDiff = {
+  sessionsWillChange: number;   // how many sessions have different status/mistakes
+  sessionsAdded: number;        // sessions in incoming but not in current
+  scoreHistoryDelta: number;    // historicalScores count change
+  examDateChanges: boolean;
+  vocabEntriesDelta: number;
+};
+
+export function diffSnapshots(
+  current: { sessions: SessionRecord[]; historicalScores: HistoricalScoreRecord[]; examDate: string; vocabularyEntries: VocabularyEntry[] },
+  incoming: SprintSnapshot
+): SnapshotDiff {
+  const incomingSessions = incoming.data.sessions ?? [];
+  const incomingScores = incoming.data.historicalScores ?? [];
+  const incomingVocab = incoming.data.vocabularyEntries ?? [];
+
+  let sessionsWillChange = 0;
+  let sessionsAdded = 0;
+
+  for (const inc of incomingSessions) {
+    const cur = current.sessions.find((s) => s.id === inc.id);
+    if (!cur) {
+      sessionsAdded++;
+    } else if (cur.status !== inc.status || JSON.stringify(cur.mistakes) !== JSON.stringify(inc.mistakes)) {
+      sessionsWillChange++;
+    }
+  }
+
+  return {
+    sessionsWillChange,
+    sessionsAdded,
+    scoreHistoryDelta: incomingScores.length - current.historicalScores.length,
+    examDateChanges: incoming.data.examDate !== current.examDate,
+    vocabEntriesDelta: incomingVocab.length - current.vocabularyEntries.length,
   };
 }

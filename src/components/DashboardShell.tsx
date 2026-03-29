@@ -1,17 +1,19 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import type { ComponentType, ReactNode } from 'react';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart2, BookOpen, CalendarDays, CheckCircle, Clock, Database, Home, Menu, Target, Trophy, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { LocaleToggle } from '@/components/LocaleToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AchievementToast } from '@/components/AchievementToast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { BrandIconSvg } from '@/lib/brandIcon';
 import { formatHotspot, formatSessionTitle, formatWorstPart, getCopy, translateStatus, type Locale } from '@/lib/i18n';
 import { getIncorrectAnswers, type SessionRecord } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
@@ -72,6 +74,11 @@ export function DashboardShell({
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     ensureInitialized();
@@ -122,6 +129,7 @@ export function DashboardShell({
       unfinishedTotal,
       unfinishedSessionsCount,
       completionPct: sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0,
+      totalSessions: sessions.length,
     };
   }, [activeSessionId, sessions]);
 
@@ -145,7 +153,7 @@ export function DashboardShell({
         stage: locale === 'zh' ? '补录中' : 'Overtime',
         title: locale === 'zh' ? '继续加时补录，完成后再保存复盘' : 'Continue overtime resolution, then save review',
         helper: locale === 'zh' ? '严格分已锁定，当前只影响潜力分。' : 'Strict score is locked. Current work only affects potential score.',
-        href: '/timer',
+        href: '/practice',
         cta: locale === 'zh' ? '继续补录' : 'Resume Overtime',
       }
     : isTimingActive
@@ -153,7 +161,7 @@ export function DashboardShell({
           stage: locale === 'zh' ? '计时中' : 'Timing',
           title: locale === 'zh' ? '当前计时进行中，优先完成本套操作' : 'The active timer is running, finish this set first',
           helper: locale === 'zh' ? '结束后会自动进入复盘录入。' : 'You will move directly into review input after the run.',
-          href: '/timer',
+          href: '/practice',
           cta: locale === 'zh' ? '返回计时页' : 'Back To Timer',
         }
       : unresolvedBacklog || (activeSession.timerSummary && activeSession.status !== 'debugged')
@@ -161,7 +169,7 @@ export function DashboardShell({
             stage: locale === 'zh' ? '待复盘' : 'Review',
             title: locale === 'zh' ? '本套已完成计时，下一步是录入错题并完成复盘' : 'Timing is done. Log mistakes and complete review next',
             helper: locale === 'zh' ? '未录入前，趋势和估分可信度会下降。' : 'Trends and estimates remain less reliable until review is saved.',
-            href: '/timer',
+            href: '/practice',
             cta: locale === 'zh' ? '去录入复盘' : 'Open Review',
           }
         : activeSession.status === 'debugged' && nextSession
@@ -169,7 +177,7 @@ export function DashboardShell({
               stage: locale === 'zh' ? '下一套' : 'Next Set',
               title: locale === 'zh' ? `当前已完成，建议切换到 ${nextSession.label}` : `Current set is done. Move to ${nextSession.label}`,
               helper: locale === 'zh' ? '保持连续节奏，比频繁切页更重要。' : 'Maintaining momentum matters more than bouncing across pages.',
-              href: '/timer',
+              href: '/practice',
               cta: locale === 'zh' ? `切换到 ${nextSession.label}` : `Switch To ${nextSession.label}`,
               targetSessionId: nextSession.id,
             }
@@ -177,7 +185,7 @@ export function DashboardShell({
               stage: locale === 'zh' ? '准备开始' : 'Ready',
               title: locale === 'zh' ? '当前套题可直接开始严格计时' : 'The current set is ready for strict timing',
               helper: locale === 'zh' ? '先开始，再在结束后统一处理复盘。' : 'Start first, then complete review in one pass after finishing.',
-              href: '/timer',
+              href: '/practice',
               cta: locale === 'zh' ? '开始本套计时' : 'Start Timer',
             };
 
@@ -227,7 +235,7 @@ export function DashboardShell({
   const overviewSignals = [
     {
       label: copy.summaryDebugged,
-      value: `${homeMetrics.debuggedCount}/20`,
+      value: `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions}`,
       detail: copy.summaryDebuggedHelper,
       tone: 'amber' as const,
     },
@@ -252,17 +260,14 @@ export function DashboardShell({
   ];
 
   const navigationItems = [
-    { href: '/', label: locale === 'zh' ? '总览' : 'Overview' },
-    { href: '/plan', label: copy.dashboardTitle },
-    { href: '/timer', label: locale === 'zh' ? '计时与录入' : 'Timer & Review' },
-    { href: '/unfinished', label: copy.unfinishedTrackerTitle },
-    { href: '/analytics', label: copy.analyticsTitle },
-    { href: '/scores', label: copy.scoreEstimatorTitle },
-    { href: '/vault', label: copy.dataVaultTitle },
+    { href: '/', label: locale === 'zh' ? '任务台' : 'Mission', icon: Home },
+    { href: '/practice', label: locale === 'zh' ? '训练场' : 'Practice', icon: Clock },
+    { href: '/insights', label: locale === 'zh' ? '参考台' : 'Insights', icon: BarChart2 },
+    { href: '/vocab', label: locale === 'zh' ? '生词本' : 'Vocab', icon: BookOpen },
+    { href: '/vault', label: locale === 'zh' ? '数据' : 'Data', icon: Database },
   ];
 
   const currentNavIndex = navigationItems.findIndex((item) => item.href === pathname);
-  const currentNavItem = currentNavIndex >= 0 ? navigationItems[currentNavIndex] : navigationItems[0];
   const previousNavItem = currentNavIndex > 0 ? navigationItems[currentNavIndex - 1] : undefined;
   const nextNavItem = currentNavIndex >= 0 && currentNavIndex < navigationItems.length - 1 ? navigationItems[currentNavIndex + 1] : undefined;
 
@@ -275,7 +280,9 @@ export function DashboardShell({
     {
       label: locale === 'zh' ? '总进度' : 'Progress',
       value: `${homeMetrics.completionPct}%`,
-      helper: locale === 'zh' ? `${homeMetrics.debuggedCount}/20 已复盘` : `${homeMetrics.debuggedCount}/20 reviewed`,
+      helper: locale === 'zh'
+        ? `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} 已复盘`
+        : `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} reviewed`,
     },
     {
       label: copy.worstPart,
@@ -297,320 +304,156 @@ export function DashboardShell({
         timedOutFlag,
       }}
     >
-      <main className="relative min-h-screen overflow-x-hidden px-4 py-4 text-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_16%,rgba(255,196,75,0.26),transparent_24%),radial-gradient(circle_at_88%_14%,rgba(62,203,255,0.14),transparent_20%),radial-gradient(circle_at_50%_100%,rgba(239,114,84,0.12),transparent_28%)]" />
-        <div className="dashboard-grid pointer-events-none fixed inset-0 opacity-80" />
-        <div className="noise-overlay pointer-events-none fixed inset-0" />
+      <AchievementToast />
+      <main className="relative min-h-screen overflow-x-hidden pt-24 px-4 pb-14 text-[var(--label-primary)] sm:px-6 lg:px-8">
 
-        <div className="relative mx-auto flex w-full max-w-395 flex-col gap-6 pb-14">
-          <header className="reveal-fade pt-2 sm:pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/65 bg-white/58 px-4 py-3 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/84 dark:shadow-[0_24px_80px_-50px_rgba(0,0,0,0.75)]">
-              <div className="flex items-center gap-4">
-                <div className="flex size-11 items-center justify-center rounded-2xl overflow-hidden shadow-[0_18px_34px_-16px_rgba(245,158,11,0.6)]">
-                  <Image src="/icon.svg" alt="TOEIC Tracker logo" width={44} height={44} priority />
-                </div>
-                <div>
-                  <div className="font-mono text-[11px] uppercase tracking-[0.34em] text-amber-700 dark:text-amber-300">
-                    {copy.appName}
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? '以考试日为终点设计训练节奏。' : 'Design the sprint backward from exam day.'}
-                  </div>
-                </div>
-              </div>
+        <header className="fixed top-4 left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-[var(--glass-border)] bg-[var(--glass-bg)] px-2 py-2 shadow-[var(--shadow-elevated)] backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
+           <Link href="/" aria-label={copy.appName} className="relative z-10 ml-2 flex shrink-0 items-center justify-center transition-transform hover:scale-105 active:scale-95">
+             <BrandIconSvg className="size-7 opacity-90" />
+          </Link>
 
-              <div className="flex items-center gap-2">
-                <LocaleToggle />
-                <ThemeToggle />
-              </div>
-            </div>
-
-            <div className="sticky top-3 z-20 mt-4 rounded-[24px] border border-white/60 bg-white/52 px-3 py-2 shadow-[0_14px_50px_-40px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-white/8 dark:bg-zinc-950/78 dark:shadow-[0_18px_60px_-42px_rgba(0,0,0,0.7)]">
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-2">
-                <div className="min-w-0">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500/80 dark:text-zinc-400/80">
-                    {variant === 'hero' ? (locale === 'zh' ? '页面入口' : 'Workspace Pages') : (locale === 'zh' ? '当前位置' : 'Current Page')}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500/90" />
-                    <span className="truncate">{currentNavItem.label}</span>
-                  </div>
-                </div>
-
-                <div className="hidden items-center gap-2 md:flex">
-                  {previousNavItem ? (
-                    <Link
-                      href={previousNavItem.href}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/66 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/8 dark:bg-white/4 dark:text-zinc-400 dark:hover:border-white/12 dark:hover:text-zinc-100"
-                    >
-                      <ArrowLeft className="size-3.5" />
-                      <span>{locale === 'zh' ? '上一页' : 'Prev'}</span>
-                    </Link>
-                  ) : null}
-
-                  {nextNavItem ? (
-                    <Link
-                      href={nextNavItem.href}
-                      className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                    >
-                      <span>{locale === 'zh' ? '下一页' : 'Next'}</span>
-                      <ArrowRight className="size-3.5" />
-                    </Link>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mb-2 rounded-[18px] border border-zinc-200/75 bg-white/78 px-3 py-2.5 dark:border-white/8 dark:bg-zinc-950/70">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500/85 dark:text-zinc-400/85">
-                      {locale === 'zh' ? '主任务' : 'Primary Task'}
-                      <span className="ml-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] tracking-[0.18em] text-amber-700 dark:text-amber-300">
-                        {primaryTask.stage}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">{primaryTask.title}</div>
-                    <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{primaryTask.helper}</div>
-                  </div>
-
-                  <Link
-                    href={primaryTask.href}
-                    onClick={() => {
-                      if (primaryTask.targetSessionId) {
-                        selectSession(primaryTask.targetSessionId);
-                      }
-                    }}
-                    className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                  >
-                    <span>{primaryTask.cta}</span>
-                    <ArrowRight className="size-3.5" />
-                  </Link>
-                </div>
-              </div>
-
-              <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-[18px] border border-white/50 bg-white/42 p-1 dark:border-white/6 dark:bg-white/3">
-                {navigationItems.map((item) => {
-                const isActive = pathname === item.href;
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'relative min-w-fit rounded-[14px] px-4 py-2 text-sm font-medium transition-all',
-                      isActive
-                        ? 'bg-white/88 text-zinc-950 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.28)] dark:bg-white dark:text-zinc-950'
-                        : 'text-zinc-500 hover:bg-white/55 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/7 dark:hover:text-zinc-100'
-                    )}
-                  >
-                    <span className="whitespace-nowrap">{item.label}</span>
-                    {isActive ? <span className="absolute inset-x-3 bottom-1 h-px bg-[linear-gradient(90deg,transparent,#f59e0b,transparent)] opacity-80 dark:bg-[linear-gradient(90deg,transparent,#18181b,transparent)]" /> : null}
-                  </Link>
-                );
-                })}
-              </div>
-            </div>
-
-            {variant === 'hero' ? (
-              <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_320px]">
-                <section className="grid gap-4">
-                  <Card className="glass-panel panel-sheen overflow-hidden rounded-[34px] border border-white/65 shadow-[0_30px_110px_-54px_rgba(15,23,42,0.42)] dark:border-white/10">
-                    <CardContent className="p-6 sm:p-8 lg:p-10">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <div className="font-mono text-[11px] uppercase tracking-[0.28em] text-zinc-500 dark:text-zinc-400">
-                            {locale === 'zh' ? '当前任务' : 'Current Task'}
-                          </div>
-                          <h1
-                            className={cn(
-                              'mt-4 max-w-4xl font-semibold text-zinc-950 dark:text-zinc-50',
-                              locale === 'zh'
-                                ? 'text-[3rem] leading-[1.02] tracking-[-0.06em] sm:text-[4.2rem]'
-                                : 'text-[2.8rem] leading-[1.02] tracking-[-0.05em] sm:text-[3.6rem]'
-                            )}
-                          >
-                            {formatSessionTitle(locale, activeSession)}
-                          </h1>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <MiniBadge label={activeSession.label} />
-                            <MiniBadge label={copy.sprintDay(activeSession.sprintDay)} />
-                            <MiniBadge label={activeSession.type === 'L' ? 'LC 45m' : 'RC 75m'} />
-                          </div>
-                        </div>
-
-                        <StatusBadge status={translateStatus(locale, activeSession.status)} sessionStatus={activeSession.status} />
-                      </div>
-
-                      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                        {focusSignals.map((signal) => (
-                          <InlineStat key={signal.label} label={signal.label} value={signal.value} helper={signal.helper} variant="compact" />
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                    {overviewSignals.map((signal) => (
-                      <OverviewSignal
-                        key={signal.label}
-                        label={signal.label}
-                        value={signal.value}
-                        detail={signal.detail}
-                        tone={signal.tone}
-                      />
-                    ))}
-                  </div>
-                </section>
-
-                <aside className="grid gap-4">
-                  <ExamCountdownPanel locale={locale} />
-
-                  <div className="mission-orbit rounded-[34px] border border-zinc-200/80 bg-[linear-gradient(180deg,rgba(255,247,230,0.9),rgba(255,255,255,0.62))] p-6 dark:border-white/8 dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.08),rgba(16,18,24,0.94))] dark:shadow-[0_28px_90px_-56px_rgba(0,0,0,0.82)]">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <div className="font-mono text-[11px] uppercase tracking-[0.28em] text-zinc-500 dark:text-zinc-400">
-                          {locale === 'zh' ? '总进度' : 'Progress'}
-                        </div>
-                        <div className="mt-3 font-mono text-5xl font-semibold tracking-[-0.06em] text-zinc-950 dark:text-zinc-50">
-                          {homeMetrics.completionPct}
-                          <span className="text-2xl text-zinc-400">%</span>
-                        </div>
-                      </div>
-
-                      <div className="text-right text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-                        {locale === 'zh' ? `${homeMetrics.debuggedCount}/20 已完成复盘` : `${homeMetrics.debuggedCount}/20 reviewed`}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#ffcc57_0%,#ff8f56_52%,#54d4ff_100%)] transition-all duration-700"
-                        style={{ width: `${homeMetrics.completionPct}%` }}
-                      />
-                    </div>
-
-                    <div className="mt-5 space-y-3">
-                      <QuickInfoRow label={copy.worstPart} value={formatWorstPart(locale, sessions)} />
-                      <QuickInfoRow label={copy.hotRootCause} value={formatHotspot(locale, sessions)} />
-                      <QuickInfoRow
-                        label={locale === 'zh' ? '时限状态' : 'Timing'}
-                        value={timedOutFlag ? (locale === 'zh' ? '当前 session 已超时' : 'Current session timed out') : activeSession.type === 'L' ? 'LC 45m' : 'RC 75m'}
-                        danger={timedOutFlag}
-                      />
-                    </div>
-
-                    <div className="mt-5 space-y-3">
-                      <ProgressLine label={copy.summaryDebugged} value={homeMetrics.debuggedCount} max={20} tone="amber" />
-                      <ProgressLine label={copy.summaryInProgress} value={homeMetrics.liveCount} max={20} tone="slate" />
-                      <ProgressLine label={copy.summaryTimeout} value={homeMetrics.overtimeCount} max={20} tone="coral" />
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_320px]">
-                <Card className="glass-panel overflow-hidden rounded-[30px] border border-white/65 dark:border-white/10">
-                  <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <MiniBadge label={activeSession.label} />
-                        <MiniBadge label={copy.sprintDay(activeSession.sprintDay)} />
-                        <MiniBadge label={activeSession.type === 'L' ? 'LC 45m' : 'RC 75m'} />
-                        <StatusBadge status={translateStatus(locale, activeSession.status)} sessionStatus={activeSession.status} />
-                      </div>
-                      <div className="mt-4 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                        {formatSessionTitle(locale, activeSession)}
-                      </div>
-                      <div className="mt-2 text-sm leading-7 text-zinc-500 dark:text-zinc-400">
-                        {locale === 'zh'
-                          ? '子页面只保留当前工作上下文，详细总览回到首页查看。'
-                          : 'Subpages keep only the active workflow context. Return to overview for the full dashboard.'}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                      {compactSignals.map((signal) => (
-                        <InlineStat key={signal.label} label={signal.label} value={signal.value} helper={signal.helper} variant="compact" />
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="glass-panel overflow-hidden rounded-[30px] border border-white/65 dark:border-white/10">
-                  <CardContent className="grid gap-3 p-5">
-                    <QuickInfoRow label={copy.hotRootCause} value={formatHotspot(locale, sessions)} />
-                    <QuickInfoRow
-                      label={locale === 'zh' ? '时限状态' : 'Timing'}
-                      value={timedOutFlag ? (locale === 'zh' ? '当前 session 已超时' : 'Current session timed out') : activeSession.type === 'L' ? 'LC 45m' : 'RC 75m'}
-                      danger={timedOutFlag}
+          
+          
+          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
+            {navigationItems.map((item) => {
+              const isActive = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "relative flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2.5 py-2 text-[13px] font-medium transition-colors md:px-3 lg:px-4 lg:py-2 lg:text-sm",
+                    isActive ? "text-zinc-900 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                  )}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="dock-indicator"
+                      className="absolute inset-0 rounded-full bg-[var(--surface-grouped)] shadow-[var(--shadow-soft)]"
+                      transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
                     />
-                    <div className="rounded-[20px] border border-zinc-200/80 bg-white/65 px-4 py-3 dark:border-white/8 dark:bg-zinc-950/82">
-                      <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                        <span>{locale === 'zh' ? '总进度' : 'Progress'}</span>
-                        <span>{homeMetrics.completionPct}%</span>
-                      </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
-                        <div
-                          className="h-full rounded-full bg-[linear-gradient(90deg,#ffcc57_0%,#ff8f56_52%,#54d4ff_100%)] transition-all duration-700"
-                          style={{ width: `${homeMetrics.completionPct}%` }}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </header>
-
-          {children}
-
-          {variant === 'compact' ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="glass-panel rounded-[28px] border border-white/65 p-4 dark:border-white/10">
-                {previousNavItem ? (
-                  <Link href={previousNavItem.href} className="group flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-600 transition-colors group-hover:bg-zinc-950 group-hover:text-white dark:bg-white/6 dark:text-zinc-300 dark:group-hover:bg-white dark:group-hover:text-zinc-950">
-                        <ArrowLeft className="size-4" />
-                      </span>
-                      <div>
-                        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                          {locale === 'zh' ? '上一页' : 'Previous'}
-                        </div>
-                        <div className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{previousNavItem.label}</div>
-                      </div>
-                    </div>
-                  </Link>
-                ) : (
-                  <div className="flex min-h-16 items-center rounded-[22px] border border-dashed border-zinc-200/80 px-4 text-sm text-zinc-400 dark:border-white/8 dark:text-zinc-500">
-                    {locale === 'zh' ? '已经是第一页' : 'Already at the first page'}
-                  </div>
-                )}
-              </div>
-
-              <div className="glass-panel rounded-[28px] border border-white/65 p-4 dark:border-white/10">
-                {nextNavItem ? (
-                  <Link href={nextNavItem.href} className="group flex items-center justify-between gap-4">
-                    <div>
-                      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-                        {locale === 'zh' ? '下一页' : 'Next'}
-                      </div>
-                      <div className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">{nextNavItem.label}</div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-zinc-950 text-white transition-colors group-hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:group-hover:bg-zinc-200">
-                        <ArrowRight className="size-4" />
-                      </span>
-                    </div>
-                  </Link>
-                ) : (
-                  <div className="flex min-h-16 items-center justify-end rounded-[22px] border border-dashed border-zinc-200/80 px-4 text-sm text-zinc-400 dark:border-white/8 dark:text-zinc-500">
-                    {locale === 'zh' ? '已经是最后一页' : 'Already at the last page'}
-                  </div>
-                )}
-              </div>
+                  )}
+                  <span className="relative z-10 hidden md:inline-block">{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          
+          <div className="relative z-10 mr-1 flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <div className="hidden md:flex items-center gap-2">
+              <LocaleToggle />
+              <ThemeToggle />
             </div>
-          ) : null}
+            <div className="md:hidden">
+              <button
+                type="button"
+                aria-label={locale === 'zh' ? '切换导航菜单' : 'Toggle navigation menu'}
+                aria-expanded={isMobileMenuOpen}
+                onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+                className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-[var(--separator)] bg-[var(--surface-elevated)] text-[var(--label-primary)] shadow-[var(--shadow-soft)] transition-colors"
+              >
+                <motion.span
+                  key={isMobileMenuOpen ? 'close' : 'menu'}
+                  initial={{ opacity: 0, scale: 0.8, rotate: -25 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, rotate: 25 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  {isMobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+                </motion.span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <>
+              <motion.button
+                type="button"
+                aria-label={locale === 'zh' ? '关闭导航菜单' : 'Close navigation menu'}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="fixed inset-0 z-40 bg-zinc-950/18 backdrop-blur-[2px] md:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              />
+
+              <motion.nav
+                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] p-2.5 shadow-[var(--shadow-elevated)] backdrop-blur-xl md:hidden"
+                initial={{ opacity: 0, y: -16, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28, mass: 0.85 }}
+              >
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                    <div className="flex items-center gap-2">
+                      <LocaleToggle />
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                  {navigationItems.map((item, index) => {
+                    const isActive = pathname === item.href;
+                    const Icon = item.icon;
+                    return (
+                      <motion.div
+                        key={item.href}
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04 + 0.05, duration: 0.22, ease: 'easeOut' }}
+                      >
+                        <Link
+                          href={item.href}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={cn(
+                            'group relative flex items-center justify-between rounded-2xl border px-3.5 py-3 text-sm transition-colors',
+                            isActive
+                              ? 'border-amber-200/80 bg-amber-50 text-zinc-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-zinc-100'
+                              : 'border-transparent bg-white/55 text-zinc-600 hover:bg-white dark:bg-zinc-900/40 dark:text-zinc-300 dark:hover:bg-zinc-900/70'
+                          )}
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className={cn(
+                              'flex size-8 items-center justify-center rounded-full border',
+                              isActive
+                                ? 'border-amber-200 bg-white text-amber-600 dark:border-amber-300/20 dark:bg-zinc-900 dark:text-amber-300'
+                                : 'border-zinc-200 bg-white/80 text-zinc-500 dark:border-white/10 dark:bg-zinc-900/75 dark:text-zinc-400'
+                            )}>
+                              <Icon className="size-4" />
+                            </span>
+                            <span className="font-medium">{item.label}</span>
+                          </span>
+                          <span className={cn(
+                            'text-xs transition-opacity',
+                            isActive ? 'opacity-100 text-amber-600 dark:text-amber-300' : 'opacity-0 group-hover:opacity-60 dark:group-hover:opacity-70'
+                          )}>
+                            {locale === 'zh' ? '进入' : 'Open'}
+                          </span>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.nav>
+            </>
+          )}
+        </AnimatePresence>
+
+        <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-6">
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={pathname}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
     </DashboardContext.Provider>
@@ -629,22 +472,11 @@ export function SectionShell({
   children: ReactNode;
 }) {
   return (
-    <section className="grid gap-4">
-      <div className="rounded-[28px] border border-white/65 bg-white/58 p-5 shadow-[0_20px_70px_-46px_rgba(15,23,42,0.3)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/84 dark:shadow-[0_24px_80px_-50px_rgba(0,0,0,0.75)]">
-        <div className="flex flex-wrap items-start gap-4 sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex size-8 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#ffd971_0%,#ff8f56_100%)] font-mono text-[10px] font-bold tracking-[0.2em] text-zinc-950">
-              {index}
-            </span>
-
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{title}</h2>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{description}</p>
-            </div>
-          </div>
-        </div>
+    <section className="grid gap-6 mt-4">
+      <div className="px-2">
+        <h2 className="text-[20px] font-semibold tracking-tight text-[var(--label-primary)]">{title}</h2>
+        <p className="mt-1 text-[14px] text-[var(--label-secondary)]">{description}</p>
       </div>
-
       <div>{children}</div>
     </section>
   );
@@ -679,11 +511,11 @@ export function DeferredSection({ component: Component }: { component: Component
 
 export function DeferredPanelPlaceholder() {
   return (
-    <div className="deck-card overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
-      <div className="h-14 border-b border-zinc-200/70 bg-white/55 px-6 py-5 dark:border-white/8 dark:bg-zinc-950/80" />
+    <div className="overflow-hidden rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)]">
+      <div className="h-16 border-b border-[var(--separator)] px-6 py-5" />
       <div className="grid gap-4 p-6">
-        <div className="h-24 animate-pulse rounded-[24px] bg-zinc-200/60 dark:bg-zinc-800/60" />
-        <div className="h-56 animate-pulse rounded-[28px] bg-zinc-200/50 dark:bg-zinc-800/50" />
+        <div className="h-24 animate-pulse rounded-[16px] bg-[var(--surface-grouped)]" />
+        <div className="h-56 animate-pulse rounded-[16px] bg-[var(--surface-grouped)]" />
       </div>
     </div>
   );
@@ -728,31 +560,31 @@ const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale
   }, [examDate, locale, now]);
 
   return (
-    <Card className="glass-panel rounded-[34px] border border-white/65 shadow-[0_28px_100px_-54px_rgba(15,23,42,0.35)] dark:border-white/10">
-      <CardHeader className="border-b border-zinc-200/70 px-6 py-5 dark:border-white/8">
-        <CardTitle className="font-mono text-[11px] uppercase tracking-[0.32em] text-amber-700 dark:text-amber-300">
+    <Card className="overflow-hidden rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]">
+      <CardHeader className="border-b border-[var(--separator)] px-6 py-5">
+        <CardTitle className="font-mono text-[11px] font-medium uppercase tracking-[0.32em] text-amber-600 dark:text-amber-400">
           {copy.examCountdownTitle}
         </CardTitle>
-        <CardDescription className="text-xs leading-6">
+        <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
           {copy.examCountdownDescription}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 p-6">
-        <div className="rounded-[24px] border border-zinc-200/80 bg-white/80 p-4 dark:border-white/8 dark:bg-zinc-950/84">
-          <label className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
+        <div className="rounded-[16px] border border-[var(--separator)] bg-[var(--surface-grouped)] p-4">
+          <label className="font-mono text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
             {copy.examCountdownLabel}
           </label>
-          <div className="mt-3 flex items-center gap-3 rounded-2xl border border-zinc-200/70 bg-zinc-50/85 px-3 dark:border-zinc-800 dark:bg-zinc-900/70">
+          <div className="mt-3 flex items-center gap-3 rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 transition-colors focus-within:border-amber-400/50 focus-within:ring-2 focus-within:ring-amber-400/20">
             <CalendarDays className="size-4 text-zinc-400 dark:text-zinc-500" />
             <Input
               id="toeic-exam-date"
               type="date"
               value={examDate}
               onChange={(event) => setExamDate(event.target.value)}
-              className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+              className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 font-medium"
             />
           </div>
-          <div className="mt-3 text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+          <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 pl-1">
             {countdown?.formattedDate ?? examDate}
           </div>
         </div>
@@ -778,7 +610,7 @@ const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale
 
 function MiniBadge({ label }: { label: string }) {
   return (
-    <span className="rounded-full border border-zinc-200/80 bg-zinc-50/90 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:border-white/8 dark:bg-zinc-950/65 dark:text-zinc-300">
+    <span className="cheese-pill">
       {label}
     </span>
   );
@@ -798,14 +630,14 @@ function InlineStat({
   return (
     <div
       className={cn(
-        'rounded-[22px] border border-zinc-200/80 bg-zinc-50/85 dark:border-white/8 dark:bg-zinc-950/65',
-        variant === 'feature' ? 'p-5 xl:min-h-47' : 'p-4'
+        'cheese-stat',
+        variant === 'feature' ? 'p-6 xl:min-h-47' : 'p-4'
       )}
     >
-      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
+      <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
       <div
         className={cn(
-          'font-semibold tracking-tight text-zinc-950 dark:text-zinc-50',
+          'font-semibold tracking-tight text-zinc-900 dark:text-zinc-50',
           variant === 'feature' ? 'mt-4 text-[2rem] leading-none sm:text-[2.4rem]' : 'mt-2 text-xl leading-tight'
         )}
       >
@@ -814,7 +646,7 @@ function InlineStat({
       <div
         className={cn(
           'text-zinc-500 dark:text-zinc-400',
-          variant === 'feature' ? 'mt-4 max-w-88 text-sm leading-7' : 'mt-2 text-xs leading-6'
+          variant === 'feature' ? 'mt-4 max-w-88 text-sm leading-6' : 'mt-2 text-xs leading-5'
         )}
       >
         {helper}
@@ -836,19 +668,24 @@ function ProgressLine({
 }) {
   const barClass =
     tone === 'amber'
-      ? 'bg-[linear-gradient(90deg,#ffd15d_0%,#ff9656_100%)]'
+      ? 'bg-amber-500'
       : tone === 'coral'
-        ? 'bg-[linear-gradient(90deg,#ff9f7b_0%,#ef7154_100%)]'
-        : 'bg-[linear-gradient(90deg,#d4d4d8_0%,#71717a_100%)]';
+        ? 'bg-rose-500'
+        : 'bg-zinc-400 dark:bg-zinc-500';
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-400">
         <span>{label}</span>
-        <span>{value}</span>
+        <span className="text-zinc-900 dark:text-zinc-100">{value}</span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
-        <div className={cn('h-full rounded-full transition-all duration-700', barClass)} style={{ width: `${Math.min((value / max) * 100, 100)}%` }} />
+      <div className="h-1.5 overflow-hidden rounded-full bg-black/[0.04] dark:bg-white/[0.04]">
+        <motion.div 
+          className={cn('h-full rounded-full', barClass)} 
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.min((value / max) * 100, 100)}%` }}
+          transition={{ duration: 1, ease: "easeOut" }}
+        />
       </div>
     </div>
   );
@@ -856,12 +693,10 @@ function ProgressLine({
 
 function QuickInfoRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-[20px] border border-zinc-200/80 bg-white/65 px-4 py-3 dark:border-white/8 dark:bg-zinc-950/82">
-      <div className="min-w-0">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
-        <div className={cn('mt-1 text-sm font-medium leading-6', danger ? 'text-red-600 dark:text-red-300' : 'text-zinc-700 dark:text-zinc-200')}>
-          {value}
-        </div>
+    <div className="flex items-center justify-between gap-4 rounded-full border border-[var(--separator)] bg-[var(--surface-elevated)] px-4 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
+      <div className={cn('text-[13px] font-bold', danger ? 'text-rose-500' : 'text-zinc-900 dark:text-zinc-100')}>
+        {value}
       </div>
     </div>
   );
@@ -880,14 +715,14 @@ function CountdownCard({
 }) {
   const cls =
     tone === 'amber'
-      ? 'border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,214,102,0.18),rgba(255,255,255,0.88))] dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.10),rgba(16,18,24,0.96))]'
-      : 'border-cyan-300/60 bg-[linear-gradient(180deg,rgba(125,225,255,0.18),rgba(255,255,255,0.88))] dark:bg-[linear-gradient(180deg,rgba(84,212,255,0.09),rgba(16,18,24,0.96))]';
+      ? 'border-amber-500/10 bg-amber-500/5'
+      : 'border-cyan-500/10 bg-cyan-500/5';
 
   return (
-    <div className={cn('rounded-[24px] border p-4', cls)}>
-      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">{label}</div>
-      <div className="mt-2 font-mono text-4xl font-semibold tracking-[-0.05em] text-zinc-950 dark:text-zinc-50">{value}</div>
-      <div className="mt-2 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{helper}</div>
+    <div className={cn('rounded-[16px] border p-6 transition-transform hover:scale-[1.02] active:scale-[0.97]', cls)}>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
+      <div className="mt-3 text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{value}</div>
+      <div className="mt-2 text-[12px] text-zinc-500 leading-snug">{helper}</div>
     </div>
   );
 }
@@ -903,34 +738,36 @@ function OverviewSignal({
   detail: string;
   tone: 'amber' | 'slate' | 'coral' | 'cyan';
 }) {
-  const cls =
-    tone === 'amber'
-      ? 'border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,214,102,0.18),rgba(255,255,255,0.74))] dark:bg-[linear-gradient(180deg,rgba(255,196,75,0.09),rgba(16,18,24,0.95))]'
-      : tone === 'coral'
-        ? 'border-orange-300/60 bg-[linear-gradient(180deg,rgba(255,160,122,0.16),rgba(255,255,255,0.74))] dark:bg-[linear-gradient(180deg,rgba(239,114,84,0.09),rgba(16,18,24,0.95))]'
-        : tone === 'cyan'
-          ? 'border-cyan-300/60 bg-[linear-gradient(180deg,rgba(125,225,255,0.16),rgba(255,255,255,0.74))] dark:bg-[linear-gradient(180deg,rgba(84,212,255,0.08),rgba(16,18,24,0.95))]'
-          : 'border-zinc-300/70 bg-white/70 dark:border-white/8 dark:bg-zinc-950/82';
+  const accentCls =
+    tone === 'amber' ? 'text-amber-500' :
+    tone === 'coral' ? 'text-rose-500' :
+    tone === 'cyan' ? 'text-cyan-500' :
+    'text-zinc-600 dark:text-zinc-400';
 
   return (
-    <div className={cn('rounded-[28px] border p-5 shadow-[0_22px_70px_-48px_rgba(15,23,42,0.34)] backdrop-blur-xl', cls)}>
-      <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">{label}</div>
-      <div className="mt-3 font-mono text-[2.2rem] font-semibold tracking-[-0.05em] text-zinc-950 dark:text-zinc-50">{value}</div>
-      <div className="mt-2 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{detail}</div>
-    </div>
+    <motion.div 
+      whileHover={{ y: -2 }}
+      className="group rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] p-7 shadow-[var(--shadow-soft)] transition-shadow hover:shadow-[var(--shadow-medium)]"
+    >
+      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
+      <div className={cn('mt-4 text-[2.5rem] font-bold tracking-tight leading-none', accentCls)}>
+        {value}
+      </div>
+      <div className="mt-3 text-[13px] leading-relaxed text-zinc-500">{detail}</div>
+    </motion.div>
   );
 }
 
 function StatusBadge({ status, sessionStatus }: { status: string; sessionStatus: string }) {
   const cls =
     sessionStatus === 'debugged'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      ? 'border-emerald-500/10 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
       : sessionStatus === 'in-progress'
-        ? 'border-amber-400/40 bg-amber-400/12 text-amber-700 dark:text-amber-300'
-        : 'border-zinc-200/90 bg-white/75 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-400';
+        ? 'border-amber-500/10 bg-amber-500/5 text-amber-600 dark:text-amber-400'
+        : 'border-zinc-500/10 bg-zinc-500/5 text-zinc-500';
 
   return (
-    <div className={cn('rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.24em] shadow-sm', cls)}>
+    <div className={cn('rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest shadow-sm', cls)}>
       {status}
     </div>
   );
@@ -938,9 +775,9 @@ function StatusBadge({ status, sessionStatus }: { status: string; sessionStatus:
 
 export function ProtocolRow({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-[22px] border border-zinc-200/80 bg-zinc-50/90 px-4 py-3 dark:border-white/8 dark:bg-zinc-950/65">
-      <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">{title}</div>
-      <p className="mt-1.5 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{body}</p>
+    <div className="rounded-[16px] border border-[var(--separator)] bg-[var(--surface-grouped)] px-5 py-4">
+      <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">{title}</div>
+      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 
+import { BrandIconSvg } from '@/lib/brandIcon';
 import { siteConfig } from '@/lib/seo';
 
 export const dynamic = 'force-static';
@@ -87,23 +88,15 @@ export default function TwitterImage() {
               alignItems: 'flex-end',
             }}
           >
-            <div
+            <BrandIconSvg
+              title={siteConfig.shortName}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 width: 150,
                 height: 150,
-                borderRadius: 32,
-                background: 'linear-gradient(135deg, #ffd36d 0%, #54d4ff 100%)',
-                color: '#09090b',
-                fontSize: 76,
-                fontWeight: 800,
                 boxShadow: '0 24px 56px rgba(15, 23, 42, 0.24)',
+                borderRadius: 32,
               }}
-            >
-              T
-            </div>
+            />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
               <div style={{ fontSize: 22, color: '#cbd5e1' }}>Static export compatible</div>
               <div style={{ fontSize: 30, fontWeight: 700 }}>{siteConfig.shortName}</div>

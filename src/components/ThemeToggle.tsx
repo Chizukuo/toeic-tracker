@@ -61,23 +61,22 @@ export function ThemeToggle() {
   )
 
   return (
-    <div className="control-shell p-1">
+    <div className="rounded-full border border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.02] p-1">
       <button
         type="button"
         onClick={toggleTheme}
-        className="relative flex h-7 w-16.5 items-center justify-between rounded-full px-2 text-zinc-500 outline-none transition-colors hover:text-zinc-950 focus-visible:ring-2 focus-visible:ring-amber-400/50 dark:text-zinc-400 dark:hover:text-zinc-50"
+        className="relative flex h-8 w-18 items-center justify-between rounded-full px-2.5 text-zinc-400 outline-none transition-all active:scale-[0.94]"
         aria-label="Toggle theme"
         aria-pressed={resolvedTheme === "dark"}
       >
-        <span
+        <div
           className={cn(
-            "absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-[linear-gradient(135deg,#ffd971_0%,#ff8f56_100%)] shadow-[0_12px_24px_-12px_rgba(245,158,11,0.95)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] dark:bg-[linear-gradient(135deg,#7ddfff_0%,#54d4ff_100%)] dark:shadow-[0_12px_24px_-12px_rgba(84,212,255,0.9)]",
-            resolvedTheme === "dark" ? "translate-x-9.5" : "translate-x-0"
+            "absolute top-0.5 left-0.5 h-7 w-7 rounded-full bg-white dark:bg-[#2C2C2E] shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+            resolvedTheme === "dark" ? "translate-x-10" : "translate-x-0"
           )}
         />
-        <Sun className={cn("relative z-10 size-3.5 transition-all duration-300", resolvedTheme === "dark" ? "scale-90 opacity-55" : "text-zinc-950 opacity-100")} />
-        <Moon className={cn("relative z-10 size-3.5 transition-all duration-300", resolvedTheme === "dark" ? "text-zinc-950 opacity-100" : "scale-90 opacity-55")} />
-        <span className="sr-only">Toggle theme</span>
+        <Sun className={cn("relative z-10 size-3.5 transition-all duration-300", resolvedTheme === "dark" ? "opacity-30" : "text-amber-500 opacity-100")} />
+        <Moon className={cn("relative z-10 size-3.5 transition-all duration-300", resolvedTheme === "dark" ? "text-amber-400 opacity-100" : "opacity-30")} />
       </button>
     </div>
   )

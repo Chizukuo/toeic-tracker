@@ -2,8 +2,9 @@
 
 import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
-import { startTransition, useEffect, useRef, useState } from 'react';
-import { Check, Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import {
 	Dialog,
@@ -17,11 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { getCopy } from '@/lib/i18n';
-import { parseImportSnapshot, type ParsedImportSnapshot } from '@/lib/storeSnapshot';
+import { getAutoBackups, parseImportSnapshot, type ParsedImportSnapshot, type AutoBackupEntry } from '@/lib/storeSnapshot';
 import { MAX_SYNC_URL_LENGTH, buildSyncUrl, decodeSnapshotFromSyncPayload, extractSyncPayloadFromHash, getSyncPreview, type SyncPreview } from '@/lib/syncLink';
 import type { SprintSnapshot } from '@/store/useStore';
 import type { ImportSnapshotResult } from '@/store/useStore';
 import { useStore } from '@/store/useStore';
+import { SNAPSHOT_APP } from '@/lib/storeSnapshot';
 
 type FeedbackTone = 'success' | 'error' | 'info';
 
@@ -60,6 +62,7 @@ export function DataVaultPanel() {
 	const activeSessionId = useStore((state) => state.activeSessionId);
 	const examDate = useStore((state) => state.examDate);
 	const historicalScores = useStore((state) => state.historicalScores);
+	const vocabularyEntries = useStore((state) => state.vocabularyEntries);
 	const exportSnapshot = useStore((state) => state.exportSnapshot);
 	const importSnapshot = useStore((state) => state.importSnapshot);
 	const resetProgress = useStore((state) => state.resetProgress);
@@ -75,6 +78,13 @@ export function DataVaultPanel() {
 	const [pendingSyncImport, setPendingSyncImport] = useState<PendingSyncImport | null>(null);
 	const [pendingFileImport, setPendingFileImport] = useState<PendingFileImport | null>(null);
 	const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
+	const [autoBackups, setAutoBackups] = useState<AutoBackupEntry[]>([]);
+
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			setAutoBackups(getAutoBackups(window.localStorage));
+		}
+	}, []);
 
 	const recordedSessions = sessions.filter((session) => session.status !== 'not-started').length;
 	const reviewedSessions = sessions.filter((session) => session.status === 'debugged').length;
@@ -92,6 +102,39 @@ export function DataVaultPanel() {
 		syncLinkRef.current?.focus();
 		syncLinkRef.current?.select();
 	}, [syncDraft]);
+
+	// Listen for paste anywhere on the page to intercept JSON
+	useEffect(() => {
+		const handlePaste = (e: ClipboardEvent) => {
+			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+			const pasted = e.clipboardData?.getData('text');
+			if (!pasted) return;
+
+			const trimmed = pasted.trim();
+			if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+				try {
+					const parsed = JSON.parse(trimmed);
+					if (parsed?.app === SNAPSHOT_APP || parsed?.schema === 'cheese-toeic-snapshot') {
+						const preview = parseImportSnapshot(parsed);
+						setPendingFileImport({
+							fileName: 'Clipboard Import',
+							payload: parsed,
+							parsed: preview,
+							rawBytes: new TextEncoder().encode(trimmed).length,
+						});
+						setImportOpen(true);
+						e.preventDefault();
+					}
+				} catch {
+					// Ignore invalid JSON pastes
+				}
+			}
+		};
+
+		window.addEventListener('paste', handlePaste);
+		return () => window.removeEventListener('paste', handlePaste);
+	}, []);
 
 	useEffect(() => {
 		if (copyState !== 'copied') {
@@ -265,6 +308,27 @@ export function DataVaultPanel() {
 		pushFeedback('success', formatImportFeedback(locale, copy.importSuccess, result));
 	};
 
+	const fileDiff = useMemo(() => {
+		if (!pendingFileImport) return null;
+		let sessionsWillChange = 0;
+		let sessionsAdded = 0;
+		for (const inc of pendingFileImport.parsed.sessions) {
+			const cur = sessions.find(s => s.id === inc.id);
+			if (!cur) {
+				sessionsAdded++;
+			} else if (cur.status !== inc.status || JSON.stringify(cur.mistakes) !== JSON.stringify(inc.mistakes)) {
+				sessionsWillChange++;
+			}
+		}
+		return {
+			sessionsWillChange,
+			sessionsAdded,
+			scoreHistoryDelta: pendingFileImport.parsed.historicalScores.length - historicalScores.length,
+			examDateChanges: pendingFileImport.parsed.examDate !== examDate,
+			vocabEntriesDelta: pendingFileImport.parsed.vocabularyEntries.length - vocabularyEntries.length,
+		};
+	}, [pendingFileImport, sessions, historicalScores, examDate, vocabularyEntries]);
+
 	const clearSyncHash = () => {
 		if (typeof window === 'undefined') {
 			return;
@@ -291,6 +355,26 @@ export function DataVaultPanel() {
 		clearSyncHash();
 	};
 
+	const handleRestoreBackup = (key: string) => {
+		if (typeof window === 'undefined') return;
+		try {
+			const raw = window.localStorage.getItem(key);
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				const preview = parseImportSnapshot(parsed);
+				setPendingFileImport({
+					fileName: locale === 'zh' ? '自动备份恢复' : 'Auto-Backup Restore',
+					payload: parsed,
+					parsed: preview,
+					rawBytes: new TextEncoder().encode(raw).length,
+				});
+				setImportOpen(true);
+			}
+		} catch {
+			pushFeedback('error', locale === 'zh' ? '无法读取备份文件。' : 'Failed to read backup.');
+		}
+	};
+
 	const handleReset = () => {
 		resetProgress();
 		setResetOpen(false);
@@ -309,60 +393,77 @@ export function DataVaultPanel() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 p-4 sm:p-6 xl:grid-cols-4">
-					<div className="xl:col-span-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-						<SummaryTile
-							label={locale === 'zh' ? '已录入套题' : 'Recorded Sets'}
-							value={`${recordedSessions}/20`}
-							helper={locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '已完成复盘' : 'Reviewed'}
-							value={`${reviewedSessions}/20`}
-							helper={locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '历史成绩' : 'History Records'}
-							value={`${historicalScores.length}`}
-							helper={locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated score entries'}
-						/>
-						<SummaryTile
-							label={locale === 'zh' ? '当前定位' : 'Active Session'}
-							value={activeSessionLabel}
-							helper={examDate}
-						/>
-					</div>
-
-					<ActionPanel
-						icon={<Download className="size-5" />}
-						title={copy.exportTitle}
-						body={copy.exportBody}
-						actionLabel={copy.exportAction}
-						onAction={handleExport}
-					/>
-					<ActionPanel
-						icon={<Upload className="size-5" />}
-						title={copy.importTitle}
-						body={copy.importBody}
-						actionLabel={copy.importAction}
-						onAction={handleImportClick}
-					/>
-					<ActionPanel
-						icon={<Link2 className="size-5" />}
-						title={copy.syncTitle}
-						body={copy.syncBody}
-						actionLabel={copy.syncAction}
-						onAction={() => {
-							void handleGenerateSyncLink();
+					<motion.div 
+						className="xl:col-span-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+						variants={{
+							hidden: { opacity: 0 },
+							show: { opacity: 1, transition: { staggerChildren: 0.08 } }
 						}}
-					/>
-					<ActionPanel
-						icon={<RotateCcw className="size-5" />}
-						title={copy.resetTitle}
-						body={copy.resetBody}
-						actionLabel={copy.resetAction}
-						onAction={() => setResetOpen(true)}
-						danger
-					/>
+						initial="hidden"
+						animate="show"
+					>
+						{[
+							{ label: locale === 'zh' ? '已录入套题' : 'Recorded Sets', value: `${recordedSessions}/20`, helper: locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data' },
+							{ label: locale === 'zh' ? '已完成复盘' : 'Reviewed', value: `${reviewedSessions}/20`, helper: locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed' },
+							{ label: locale === 'zh' ? '历史成绩' : 'History Records', value: `${historicalScores.length}`, helper: locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated score entries' },
+							{ label: locale === 'zh' ? '当前定位' : 'Active Session', value: activeSessionLabel, helper: examDate }
+						].map((item, i) => (
+							<motion.div key={i} variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }}>
+								<SummaryTile {...item} />
+							</motion.div>
+						))}
+					</motion.div>
+
+					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Link2 className="size-5" />} title={copy.syncTitle} body={copy.syncBody} actionLabel={copy.syncAction} onAction={() => { void handleGenerateSyncLink(); }} />
+						</motion.div>
+						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
+						</motion.div>
+					</motion.div>
+
+					{autoBackups.length > 0 && (
+						<div className="xl:col-span-4 deck-surface overflow-hidden">
+							<div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+								<h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+									<RotateCcw className="w-4 h-4 text-emerald-500" />
+									{locale === 'zh' ? '自动备份 (防灾恢复)' : 'Auto-Backups (Disaster Recovery)'}
+								</h3>
+								<span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+									{locale === 'zh' ? '最新 3 次' : 'Last 3 states'}
+								</span>
+							</div>
+							<div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+								{autoBackups.map((bk) => (
+									<div key={bk.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors">
+										<div>
+											<div className="font-mono text-[12px] text-zinc-800 dark:text-zinc-300">
+												{formatExportedAt(bk.exportedAt)}
+											</div>
+											<div className="text-[11px] text-zinc-500 mt-1">
+												{bk.sessionCount} {locale === 'zh' ? '组记录' : 'records'}, {bk.debuggedCount} {locale === 'zh' ? '已复盘' : 'reviewed'}
+											</div>
+										</div>
+										<Button 
+											variant="secondary" 
+											size="sm" 
+											className="h-8 text-[11px] tracking-wider uppercase shrink-0"
+											onClick={() => handleRestoreBackup(bk.key)}
+										>
+											{locale === 'zh' ? '载入快照' : 'Load Snapshot'}
+										</Button>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
 
 					{syncDraft ? (
 						<div className="xl:col-span-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">
@@ -417,6 +518,7 @@ export function DataVaultPanel() {
 							<div className="mt-4 flex flex-col gap-2 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
 								<p>{copy.dataVaultNoteExport}</p>
 								<p>{copy.dataVaultNoteImport}</p>
+								<p>{locale === 'zh' ? '您也可以直接在此页面按 Ctrl+V 粘贴包含快照的 JSON 代码。' : 'You can quickly import by pressing Ctrl+V anywhere on this page to paste snapshot JSON directly.'}</p>
 								<p>{copy.dataVaultNoteSync}</p>
 								<p>{copy.dataVaultNoteReset}</p>
 							</div>
@@ -497,12 +599,22 @@ export function DataVaultPanel() {
 								<SyncMetric label={copy.importPreviewFile} value={pendingFileImport.fileName} />
 								<SyncMetric label={copy.syncPreviewVersion} value={formatImportedVersion(locale, pendingFileImport.parsed.result.importedVersion)} />
 								<SyncMetric label={copy.importPreviewSource} value={formatImportSourceLabel(locale, pendingFileImport.parsed.result.source)} />
-								<SyncMetric label={copy.syncPreviewSessions} value={`${pendingFileImport.parsed.sessions.length}`} />
-								<SyncMetric label={copy.syncPreviewHistory} value={`${pendingFileImport.parsed.historicalScores.length}`} />
-								<SyncMetric label={copy.syncPreviewActive} value={pendingFileImport.parsed.activeSessionId} />
-								<SyncMetric label={copy.importPreviewExamDate} value={pendingFileImport.parsed.examDate} />
+								<SyncMetric label={copy.syncPreviewSessions} value={`${pendingFileImport.parsed.sessions.length}`} diff={fileDiff?.sessionsAdded ? `+${fileDiff.sessionsAdded}` : undefined} />
+								<SyncMetric label={copy.syncPreviewHistory} value={`${pendingFileImport.parsed.historicalScores.length}`} diff={fileDiff?.scoreHistoryDelta ? (fileDiff.scoreHistoryDelta > 0 ? `+${fileDiff.scoreHistoryDelta}` : `${fileDiff.scoreHistoryDelta}`) : undefined} />
+								<SyncMetric label={locale === 'zh' ? '生词本' : 'Vocabulary'} value={`${pendingFileImport.parsed.vocabularyEntries.length}`} diff={fileDiff?.vocabEntriesDelta ? (fileDiff.vocabEntriesDelta > 0 ? `+${fileDiff.vocabEntriesDelta}` : `${fileDiff.vocabEntriesDelta}`) : undefined} />
+								<SyncMetric label={copy.importPreviewExamDate} value={pendingFileImport.parsed.examDate} changed={fileDiff?.examDateChanges} />
 								<SyncMetric label={copy.importPreviewSize} value={formatBytes(pendingFileImport.rawBytes)} />
 							</div>
+							
+							{fileDiff && fileDiff.sessionsWillChange > 0 && (
+								<div className="flex items-center gap-2 rounded-[14px] bg-amber-50 dark:bg-amber-500/10 px-4 py-2 border border-amber-200/50 dark:border-amber-500/20">
+									<ArrowRight className="size-4 text-amber-500" />
+									<span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+										{locale === 'zh' ? `将覆盖更新 ${fileDiff.sessionsWillChange} 个已有进度的套题` : `Will overwrite progress for ${fileDiff.sessionsWillChange} existing sets`}
+									</span>
+								</div>
+							)}
+
 							<div className="rounded-[22px] border border-amber-400/20 bg-amber-400/8 px-4 py-3 text-sm leading-6 text-amber-800 dark:text-amber-200">
 								{copy.importDialogWarning}
 							</div>
@@ -585,11 +697,15 @@ export function DataVaultPanel() {
 	);
 }
 
-function SyncMetric({ label, value }: { label: string; value: string }) {
+function SyncMetric({ label, value, diff, changed }: { label: string; value: string; diff?: string; changed?: boolean }) {
 	return (
-		<div className="min-w-0 rounded-[22px] border border-white/65 bg-white/78 px-4 py-3 dark:border-white/10 dark:bg-white/3">
+		<div className={`min-w-0 rounded-[22px] border bg-white/78 px-4 py-3 dark:bg-white/3 ${changed ? 'border-amber-400/40 bg-amber-400/5 dark:bg-amber-400/5' : 'border-white/65 dark:border-white/10'}`}>
 			<div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">{label}</div>
-			<div className="mt-2 wrap-break-word text-sm font-semibold leading-6 text-zinc-950 dark:text-zinc-50">{value}</div>
+			<div className="mt-2 text-sm font-semibold leading-6 text-zinc-950 dark:text-zinc-50 flex items-center gap-2 flex-wrap">
+				<span className="wrap-break-word">{value}</span>
+				{diff && <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">{diff}</span>}
+				{changed && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 rounded-full px-2 py-0.5 border border-amber-200 dark:border-amber-500/30">Modified</span>}
+			</div>
 		</div>
 	);
 }

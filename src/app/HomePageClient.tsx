@@ -2,25 +2,30 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { ArrowRight, ChartNoAxesColumn, Clock3, Database, LayoutDashboard, ListChecks, Route } from 'lucide-react';
+import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-import { DashboardShell, SectionShell, useDashboardContext } from '@/components/DashboardShell';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
+import { ActivityCalendar } from '@/components/ActivityCalendar';
+import { WeeklyReport } from '@/components/WeeklyReport';
 import { getNextStepRecommendation } from '@/lib/nextStep';
+import { estimateToeicCombinedScore, TOEIC_SPRINT_SESSIONS } from '@/lib/toeic';
+import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
 export default function HomePageClient() {
   return (
     <DashboardShell>
-      <HomeOverview />
+      <MissionControl />
     </DashboardShell>
   );
 }
 
-function HomeOverview() {
-  const { locale, copy, activeSession, sessions } = useDashboardContext();
+function MissionControl() {
+  const { locale, activeSession, sessions, homeMetrics } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const examDate = useStore((state) => state.examDate);
   const historicalScoreCount = useStore((state) => state.historicalScores.length);
 
   const nextStep = useMemo(
@@ -34,177 +39,253 @@ function HomeOverview() {
     [activeSession.id, historicalScoreCount, locale, sessions]
   );
 
-  const routes = [
-    {
-      href: '/plan',
-      title: copy.dashboardTitle,
-      description: locale === 'zh' ? '切换 session，查看 20 天冲刺全局排布。' : 'Switch sessions and inspect the full sprint layout.',
-      icon: Route,
-      accent: 'amber' as const,
-    },
-    {
-      href: '/timer',
-      title: locale === 'zh' ? '计时与录入' : 'Timer & Review',
-      description: locale === 'zh' ? '进入当前套题的计时、瀑布图和复盘录入。' : 'Open the active timer, waterfall, and review form.',
-      icon: Clock3,
-      accent: 'cyan' as const,
-    },
-    {
-      href: '/unfinished',
-      title: copy.unfinishedTrackerTitle,
-      description: locale === 'zh' ? '集中查看超时后未完成题与影响范围。' : 'Track leftover questions from timed runs.',
-      icon: ListChecks,
-      accent: 'coral' as const,
-    },
-    {
-      href: '/analytics',
-      title: copy.analyticsTitle,
-      description: locale === 'zh' ? '集中查看趋势、短板和高频错因。' : 'Review trends, weak spots, and root causes in one place.',
-      icon: ChartNoAxesColumn,
-      accent: 'slate' as const,
-    },
-    {
-      href: '/scores',
-      title: copy.scoreEstimatorTitle,
-      description: locale === 'zh' ? '独立查看听力、阅读与总分估算。' : 'Inspect listening, reading, and total estimates.',
-      icon: LayoutDashboard,
-      accent: 'amber' as const,
-    },
-    {
-      href: '/vault',
-      title: copy.dataVaultTitle,
-      description: locale === 'zh' ? '备份、恢复和重置本地数据。' : 'Backup, restore, or reset local data.',
-      icon: Database,
-      accent: 'cyan' as const,
-    },
-  ];
+  const nextStepHref = nextStep.href === '/timer' ? '/practice' :
+                       nextStep.href === '/analytics' ? '/insights' :
+                       nextStep.href === '/scores' ? '/insights' :
+                       nextStep.href === '/unfinished' ? '/insights' : nextStep.href;
+
+  const daysUntilExam = useMemo(() => {
+    const target = new Date(`${examDate}T09:00:00`);
+    const diff = target.getTime() - Date.now();
+    return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
+  }, [examDate]);
+
+  const scoreEstimate = useMemo(() => {
+    const latestL = [...sessions].reverse().find((s) => s.type === 'L' && s.status !== 'not-started');
+    const latestR = [...sessions].reverse().find((s) => s.type === 'R' && s.status !== 'not-started');
+    if (!latestL && !latestR) return null;
+    const combined = estimateToeicCombinedScore(latestL, latestR, 'strict');
+    return combined.available ? combined : null;
+  }, [sessions]);
+
+  const weakestPart = useMemo(() => {
+    const completed = sessions.filter((s) => s.status !== 'not-started');
+    if (completed.length === 0) return null;
+    let worst: string | null = null;
+    let worstRate = -1;
+    for (const s of completed) {
+      const parts = s.type === 'L' ? ['Part 1', 'Part 2', 'Part 3', 'Part 4'] : ['Part 5', 'Part 6', 'Part 7 Single', 'Part 7 Multiple'];
+      for (const p of parts) {
+        const mistakes = (s.mistakes as Record<string, number>)[p] ?? 0;
+        const total = ({ 'Part 1': 6, 'Part 2': 25, 'Part 3': 39, 'Part 4': 30, 'Part 5': 30, 'Part 6': 16, 'Part 7 Single': 29, 'Part 7 Multiple': 25 } as Record<string, number>)[p] ?? 1;
+        const rate = mistakes / total;
+        if (rate > worstRate) { worstRate = rate; worst = p; }
+      }
+    }
+    return worst;
+  }, [sessions]);
+
+  const stageLabel = nextStep.kind === 'start-active' ? (locale === 'zh' ? '准备开始' : 'Ready') :
+    nextStep.kind === 'resume-active' ? (locale === 'zh' ? '进行中' : 'In Progress') :
+    nextStep.kind === 'resolve-backlog' ? (locale === 'zh' ? '有积压' : 'Backlog') :
+    locale === 'zh' ? '下一步' : 'Next Step';
 
   return (
-    <>
-      <SectionShell
-        index="01"
-        title={locale === 'zh' ? '工作区导航' : 'Workspace Navigation'}
-        description={locale === 'zh' ? '首页只保留总览和入口，具体操作进入对应页面。' : 'Overview stays here; detailed workflows live on dedicated pages.'}
+    <div className="space-y-8">
+      {/* ─── Main Task Card (Premium CTA) ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {routes.map((item) => (
-            <Link key={item.href} href={item.href} className="group">
-              <Card className="glass-panel h-full rounded-[30px] border border-white/65 transition-transform duration-200 group-hover:-translate-y-1 dark:border-white/10">
-                <CardHeader className="px-6 py-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div
-                      className={cn(
-                        'flex size-12 items-center justify-center rounded-2xl shadow-[0_18px_34px_-18px_rgba(15,23,42,0.35)]',
-                        item.accent === 'amber'
-                          ? 'bg-[linear-gradient(135deg,#ffd36d_0%,#ff9a5c_100%)]'
-                          : item.accent === 'coral'
-                            ? 'bg-[linear-gradient(135deg,#ffb091_0%,#ef7154_100%)]'
-                            : item.accent === 'slate'
-                              ? 'bg-[linear-gradient(135deg,#e4e4e7_0%,#71717a_100%)] text-white'
-                              : 'bg-[linear-gradient(135deg,#98ecff_0%,#54d4ff_100%)]'
-                      )}
-                    >
-                      <item.icon className="size-5 text-zinc-950" />
-                    </div>
-                    <ArrowRight className="mt-1 size-4 text-zinc-400 transition-transform duration-200 group-hover:translate-x-1" />
-                  </div>
-                  <CardTitle className="pt-4 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    {item.title}
-                  </CardTitle>
-                  <CardDescription className="text-sm leading-7 text-zinc-500 dark:text-zinc-400">
-                    {item.description}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </SectionShell>
-
-      <SectionShell
-        index="02"
-        title={locale === 'zh' ? '下一步建议' : 'Next Recommended Move'}
-        description={locale === 'zh' ? '首页会优先给出当前最值得执行的一步，而不是平均分配注意力。' : 'The home page surfaces the single next move with the highest payoff instead of splitting your attention.'}
-      >
-        <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
-          <CardContent className="grid gap-5 p-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={cn(
-                    'rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em]',
-                    nextStep.tone === 'coral'
-                      ? 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300'
-                      : nextStep.tone === 'amber'
-                        ? 'border-amber-400/30 bg-amber-400/12 text-amber-700 dark:text-amber-300'
-                        : nextStep.tone === 'cyan'
-                          ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300'
-                          : 'border-zinc-300/70 bg-zinc-200/50 text-zinc-700 dark:border-white/12 dark:bg-white/6 dark:text-zinc-300'
-                  )}
-                >
-                  {locale === 'zh' ? 'Priority 01' : 'Priority 01'}
-                </span>
-                {nextStep.targetSessionId ? <span className="deck-pill text-[10px] tracking-[0.18em]">{nextStep.targetSessionId}</span> : null}
-              </div>
-
-              <div className="mt-4 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{nextStep.title}</div>
-              <div className="mt-3 max-w-3xl text-sm leading-7 text-zinc-500 dark:text-zinc-400">{nextStep.body}</div>
-              <div className="mt-4 rounded-[20px] border border-zinc-200/80 bg-white/78 px-4 py-3 text-sm leading-6 text-zinc-600 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-300">
-                {nextStep.helper}
-              </div>
+        <div className="cheese-card overflow-hidden">
+          {/* Amber accent top bar */}
+          <div className="h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500" />
+          <div className="p-6 sm:p-8">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex size-2.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(217,119,6,0.4)]" />
+              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">
+                {stageLabel}
+              </span>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <h1 className="mt-4 text-2xl font-bold tracking-tight text-[var(--label-primary)] sm:text-3xl">
+              {nextStep.title}
+            </h1>
+
+            <p className="mt-2.5 max-w-2xl text-[15px] leading-relaxed text-[var(--label-secondary)]">
+              {nextStep.body}
+            </p>
+
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                href={nextStep.href}
-                onClick={() => {
-                  if (nextStep.targetSessionId) {
-                    selectSession(nextStep.targetSessionId);
-                  }
-                }}
-                className="inline-flex items-center justify-center rounded-2xl bg-zinc-950 px-5 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                href={nextStepHref}
+                onClick={() => { if (nextStep.targetSessionId) selectSession(nextStep.targetSessionId); }}
+                className="inline-flex items-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-7 py-3.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 active:scale-[0.97] dark:text-zinc-900"
               >
                 {nextStep.cta}
+                <ArrowRight className="size-4" />
               </Link>
 
-              <div className="deck-surface-soft rounded-[22px] p-4 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh'
-                  ? '只有当前高优先级动作做完，后面的趋势、估分和热点分析才更可信。'
-                  : 'The rest of the charts and projections become more trustworthy only after this highest-priority move is done.'}
-              </div>
+              {nextStep.targetSessionId && (
+                <span className="cheese-pill">{nextStep.targetSessionId}</span>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      </SectionShell>
+          </div>
+        </div>
+      </motion.div>
 
-      <SectionShell
-        index="03"
-        title={locale === 'zh' ? '当前套题入口' : 'Current Set'}
-        description={locale === 'zh' ? '当前活跃 session 可以直接跳转到计时与复盘页。' : 'Jump directly into the active timer and review flow.'}
+      {/* ─── Sprint Progress Grid ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.5, delay: 0.08 }}
       >
-        <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
-          <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="font-mono text-[11px] uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? 'Active Session' : 'Active Session'}
+        <div className="flex items-center justify-between px-1 mb-3">
+          <h2 className="text-sm font-bold text-[var(--label-primary)]">
+            {locale === 'zh' ? '冲刺进度' : 'Sprint Progress'}
+          </h2>
+          <span className="text-xs font-medium text-[var(--label-secondary)]">
+            {homeMetrics.completionPct}% · {homeMetrics.debuggedCount}/20
+          </span>
+        </div>
+
+        <div className="cheese-card p-4 sm:p-5">
+          {/* Progress bar */}
+          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-[var(--surface-grouped)]">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${homeMetrics.completionPct}%` }}
+              transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-400 to-amber-500"
+            />
+          </div>
+
+          {/* 10×2 dot grid */}
+          <div className="grid grid-cols-10 gap-1.5 sm:gap-2.5">
+            {TOEIC_SPRINT_SESSIONS.map((blueprint) => {
+              const session = sessions.find((s) => s.id === blueprint.id);
+              const isActive = session?.id === activeSession.id;
+              const isDone = session?.status === 'debugged';
+              const isInProgress = session?.status === 'in-progress';
+
+              return (
+                <button
+                  key={blueprint.id}
+                  type="button"
+                  onClick={() => selectSession(blueprint.id)}
+                  title={`${blueprint.label} — ${blueprint.title}`}
+                  className={cn(
+                    'group flex flex-col items-center gap-1.5 rounded-[10px] p-1.5 transition-all sm:p-2',
+                    isActive
+                      ? 'bg-[var(--cheese-gold-soft)] ring-2 ring-[var(--cheese-gold)]/40'
+                      : isDone
+                        ? 'bg-emerald-500/8 hover:bg-emerald-500/15 dark:bg-emerald-500/10'
+                        : isInProgress
+                          ? 'bg-amber-500/8 hover:bg-amber-500/15 dark:bg-amber-500/10'
+                          : 'hover:bg-[var(--surface-grouped)]'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'size-3 rounded-full transition-transform sm:size-4',
+                      isDone
+                        ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]'
+                        : isInProgress || isActive
+                          ? 'bg-amber-500 shadow-[0_0_6px_rgba(217,119,6,0.3)]'
+                          : 'bg-[var(--label-tertiary)]',
+                      'group-hover:scale-110'
+                    )}
+                  />
+                  <span className={cn(
+                    'text-[9px] font-bold leading-none sm:text-[10px]',
+                    isActive ? 'text-[var(--cheese-gold)]' : 'text-[var(--label-tertiary)]'
+                  )}>
+                    {blueprint.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ─── 3 Signal Cards ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.5, delay: 0.16 }}
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Score Estimate */}
+          <Link href="/insights" className="group">
+            <div className="cheese-card cheese-card-amber h-full p-5">
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-gold-soft)]">
+                  <Zap className="size-3.5 text-[var(--cheese-gold)]" />
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
+                  {locale === 'zh' ? '估分' : 'Score'}
+                </span>
               </div>
-              <div className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">{activeSession.label}</div>
-              <div className="mt-2 text-sm leading-7 text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh'
-                  ? `${activeSession.type === 'L' ? '听力' : '阅读'}第 ${activeSession.setNumber} 套，直接进入操作页继续。`
-                  : `${activeSession.title}. Continue from the dedicated workflow page.`}
+              <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
+                {scoreEstimate ? scoreEstimate.total : '—'}
+              </div>
+              <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
+                {scoreEstimate
+                  ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
+                  : locale === 'zh' ? '完成至少一套后可估分' : 'Complete a set to estimate'}
               </div>
             </div>
+          </Link>
 
-            <Link
-              href="/timer"
-              className="inline-flex items-center justify-center rounded-2xl bg-zinc-950 px-5 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-            >
-              {locale === 'zh' ? '打开计时页' : 'Open Timer Page'}
-            </Link>
-          </CardContent>
-        </Card>
-      </SectionShell>
-    </>
+          {/* Weakest Part */}
+          <Link href="/insights" className="group">
+            <div className="cheese-card cheese-card-rose h-full p-5">
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 items-center justify-center rounded-full bg-rose-500/10 dark:bg-rose-500/15">
+                  <Crosshair className="size-3.5 text-rose-600 dark:text-rose-400" />
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
+                  {locale === 'zh' ? '弱项' : 'Weak Spot'}
+                </span>
+              </div>
+              <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
+                {weakestPart ? translatePart(locale, weakestPart as any) : '—'}
+              </div>
+              <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
+                {weakestPart
+                  ? locale === 'zh' ? '当前最大失分源' : 'Highest loss source'
+                  : locale === 'zh' ? '暂无数据' : 'No data yet'}
+              </div>
+            </div>
+          </Link>
+
+          {/* Exam Countdown */}
+          <div className="cheese-card cheese-card-cyan h-full p-5">
+            <div className="flex items-center gap-2">
+              <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-cyan-soft)]">
+                <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
+                {locale === 'zh' ? '倒计时' : 'Countdown'}
+              </span>
+            </div>
+            <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
+              {daysUntilExam}
+              <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
+                {locale === 'zh' ? '天' : 'days'}
+              </span>
+            </div>
+            <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
+              {examDate}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ─── Engagement Area (Heatmap & Digest) ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.5, delay: 0.24 }}
+        className="grid gap-6 lg:grid-cols-[1fr_300px]"
+      >
+        <ActivityCalendar />
+        <div className="flex flex-col justify-end">
+           <WeeklyReport />
+        </div>
+      </motion.div>
+    </div>
   );
 }

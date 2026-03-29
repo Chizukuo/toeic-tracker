@@ -274,7 +274,7 @@ type Copy = {
 
 const copy: Record<Locale, Copy> = {
 	zh: {
-		appName: 'Cheese-TOEIC-Tracker',
+		appName: 'Cheese TOEIC Tracker',
 		heroTitle: '20 天 TOEIC 冲刺工具',
 		heroBody: '集中管理进度、计时、复盘和估分。',
 		examCountdownTitle: '考试倒计时',
@@ -476,7 +476,7 @@ const copy: Record<Locale, Copy> = {
 		scoreUnavailableBody: '先完成计时或保存错题数据，再进行估分会更准确。',
 	},
 	en: {
-		appName: 'Cheese-TOEIC-Tracker',
+		appName: 'Cheese TOEIC Tracker',
 		heroTitle: '20-day TOEIC sprint tool',
 		heroBody: 'Track progress, timing, review, and score estimates in one place.',
 		examCountdownTitle: 'Exam Countdown',

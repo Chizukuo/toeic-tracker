@@ -4,7 +4,9 @@ export type UXEventType =
   | 'review_saved'
   | 'review_undone'
   | 'overtime_saved'
-  | 'auto_advance_triggered';
+  | 'auto_advance_triggered'
+  | 'listening_start'
+  | 'listening_complete';
 
 export type UXEvent = {
   id: string;
@@ -46,8 +48,9 @@ function writeEvents(events: UXEvent[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-MAX_EVENTS)));
 }
 
-export function trackUXEvent(type: UXEventType, sessionId?: string) {
+export function trackUXEvent(type: UXEventType, sessionIdOrExtra?: string | { sessionId?: string; [key: string]: unknown }) {
   const events = readEvents();
+  const sessionId = typeof sessionIdOrExtra === 'string' ? sessionIdOrExtra : sessionIdOrExtra?.sessionId;
   events.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     at: new Date().toISOString(),

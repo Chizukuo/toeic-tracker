@@ -13,11 +13,7 @@ export function LocaleToggle() {
   const copy = getCopy(locale);
 
   return (
-    <div className="control-shell inline-flex items-center gap-1 p-1">
-      <div className="flex items-center gap-2 px-2 text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-        <Languages className="size-3.5" />
-        <span className="hidden sm:inline">{copy.languageLabel}</span>
-      </div>
+    <div className="rounded-full border border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.02] inline-flex items-center gap-1 p-1">
       {(['zh', 'en'] as const).map((value) => {
         const active = value === locale;
         return (
@@ -28,10 +24,10 @@ export function LocaleToggle() {
             size="sm"
             onClick={() => setLocale(value)}
             className={cn(
-              'rounded-full px-3 font-mono text-[11px] uppercase tracking-[0.22em] transition-all',
+              'h-7 rounded-full border px-3 text-[10px] font-bold uppercase tracking-widest transition-all active:scale-[0.94]',
               active
-                ? 'bg-[linear-gradient(135deg,#ffd971_0%,#ff8f56_100%)] text-zinc-950 shadow-[0_14px_26px_-16px_rgba(245,158,11,0.9)] hover:text-zinc-950'
-                : 'text-zinc-500 hover:bg-white/80 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-zinc-100'
+                ? 'border-black/[0.04] bg-white text-amber-600 shadow-sm dark:border-white/[0.04] dark:bg-[#2C2C2E] dark:text-amber-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
             )}
             aria-pressed={active}
           >

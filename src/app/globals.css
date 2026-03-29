@@ -47,86 +47,154 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ═══════════════════════════════════════════════════════════
+   CHEESE DESIGN LANGUAGE — Light Mode Tokens
+   ═══════════════════════════════════════════════════════════ */
+
 :root {
   color-scheme: light;
-  --background: oklch(0.975 0.006 84);
-  --foreground: oklch(0.18 0.012 80);
-  --card: oklch(0.995 0.004 84);
-  --card-foreground: oklch(0.145 0.01 80);
-  --popover: oklch(0.998 0.004 84);
-  --popover-foreground: oklch(0.145 0.01 80);
-  --primary: oklch(0.78 0.17 73);
-  --primary-foreground: oklch(0.1 0 0);
-  --secondary: oklch(0.963 0.008 84);
-  --secondary-foreground: oklch(0.22 0.01 80);
-  --muted: oklch(0.955 0.01 84);
-  --muted-foreground: oklch(0.53 0.018 80);
-  --accent: oklch(0.965 0.02 72);
-  --accent-foreground: oklch(0.22 0.01 80);
-  --destructive: oklch(0.62 0.2 28);
-  --border: oklch(0.89 0.01 84);
-  --input: oklch(0.91 0.01 84);
-  --ring: oklch(0.78 0.17 73);
-  --chart-1: oklch(0.78 0.17 73);
-  --chart-2: oklch(0.72 0.14 215);
-  --chart-3: oklch(0.67 0.16 150);
-  --chart-4: oklch(0.61 0.18 28);
-  --chart-5: oklch(0.58 0.13 260);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 
-  /* Custom vars for charts */
-  --tooltip-bg: #ffffff;
-  --tooltip-border: #e4e4e7;
-  --tooltip-color: #18181b;
+  /* ── shadcn/ui semantic ── */
+  --background: #fafaf8;
+  --foreground: #1a1a1c;
+  --card: hsla(38, 30%, 99%, 0.82);
+  --card-foreground: #1a1a1c;
+  --popover: hsla(38, 20%, 99%, 0.92);
+  --popover-foreground: #1a1a1c;
+  --primary: #d97706;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f3ef;
+  --secondary-foreground: #1a1a1c;
+  --muted: #f5f3ef;
+  --muted-foreground: #78716c;
+  --accent: #d97706;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: rgba(120, 90, 50, 0.08);
+  --input: rgba(120, 90, 50, 0.10);
+  --ring: rgba(217, 119, 6, 0.35);
+  --chart-1: #d97706;
+  --chart-2: #16a34a;
+  --chart-3: #2563eb;
+  --chart-4: #ea580c;
+  --chart-5: #dc2626;
+  --radius: 1rem;
+  --sidebar: #f5f3ef;
+  --sidebar-foreground: #1a1a1c;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebe8e2;
+  --sidebar-accent-foreground: #1a1a1c;
+  --sidebar-border: rgba(120, 90, 50, 0.08);
+  --sidebar-ring: rgba(217, 119, 6, 0.35);
+
+  /* ── Cheese Design Language — Surface System ── */
+  --surface-primary: #fafaf8;
+  --surface-grouped: #f3f1ec;
+  --surface-elevated: hsla(38, 30%, 99%, 0.82);
+  --separator: rgba(120, 90, 50, 0.10);
+  --separator-opaque: #e8e4dc;
+  --label-primary: #1a1a1c;
+  --label-secondary: #78716c;
+  --label-tertiary: #a8a29e;
+
+  /* ── Cheese Brand Colors ── */
+  --cheese-gold: #d97706;
+  --cheese-gold-soft: rgba(217, 119, 6, 0.12);
+  --cheese-cyan: #0891b2;
+  --cheese-cyan-soft: rgba(8, 145, 178, 0.10);
+
+  /* ── Shadows (3-tier) ── */
+  --shadow-soft: 0 1px 3px rgba(80, 60, 30, 0.04), 0 2px 8px rgba(80, 60, 30, 0.03);
+  --shadow-elevated: 0 4px 16px rgba(80, 60, 30, 0.06), 0 8px 32px rgba(80, 60, 30, 0.04);
+  --shadow-floating: 0 12px 40px rgba(80, 60, 30, 0.10), 0 24px 64px rgba(80, 60, 30, 0.06);
+
+  /* ── Glass Material ── */
+  --glass-bg: hsla(38, 30%, 99%, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.60);
+  --glass-highlight: inset 0 0.5px 0 rgba(255, 255, 255, 0.80);
+
+  /* ── Charts ── */
+  --tooltip-bg: hsla(38, 20%, 99%, 0.92);
+  --tooltip-border: rgba(120, 90, 50, 0.10);
+  --tooltip-color: #1a1a1c;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CHEESE DESIGN LANGUAGE — Dark Mode Tokens
+   ═══════════════════════════════════════════════════════════ */
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.15 0.012 75);
-  --foreground: oklch(0.975 0.004 90);
-  --card: oklch(0.185 0.014 76);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.185 0.014 76);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.8 0.17 73);
-  --primary-foreground: oklch(0.1 0 0);
-  --secondary: oklch(0.24 0.012 76);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.24 0.012 76);
-  --muted-foreground: oklch(0.76 0.012 86);
-  --accent: oklch(0.8 0.17 73 / 20%);
-  --accent-foreground: oklch(0.86 0.15 74);
-  --destructive: oklch(0.6 0.2 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.8 0.17 73);
-  --chart-1: oklch(0.8 0.17 73);
-  --chart-2: oklch(0.72 0.14 215);
-  --chart-3: oklch(0.67 0.16 150);
-  --chart-4: oklch(0.61 0.18 28);
-  --chart-5: oklch(0.58 0.13 260);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 
-  /* Custom vars for charts */
-  --tooltip-bg: #18181b;
-  --tooltip-border: #27272a;
-  --tooltip-color: #d4d4d8;
+  /* ── shadcn/ui semantic ── */
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --card: hsla(24, 6%, 12%, 0.75);
+  --card-foreground: #fafaf9;
+  --popover: hsla(24, 6%, 14%, 0.88);
+  --popover-foreground: #fafaf9;
+  --primary: #fbbf24;
+  --primary-foreground: #1a1a1c;
+  --secondary: #1c1917;
+  --secondary-foreground: #fafaf9;
+  --muted: #1c1917;
+  --muted-foreground: #a8a29e;
+  --accent: rgba(251, 191, 36, 0.18);
+  --accent-foreground: #fbbf24;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.07);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: rgba(251, 191, 36, 0.40);
+  --chart-1: #fbbf24;
+  --chart-2: #22c55e;
+  --chart-3: #3b82f6;
+  --chart-4: #f97316;
+  --chart-5: #ef4444;
+  --sidebar: #1c1917;
+  --sidebar-foreground: #fafaf9;
+  --sidebar-primary: #fbbf24;
+  --sidebar-primary-foreground: #1a1a1c;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #fafaf9;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: rgba(251, 191, 36, 0.40);
+
+  /* ── Cheese Design Language — Surface System ── */
+  --surface-primary: #0c0a09;
+  --surface-grouped: hsla(24, 6%, 10%, 0.90);
+  --surface-elevated: hsla(24, 6%, 14%, 0.72);
+  --separator: rgba(255, 255, 255, 0.07);
+  --separator-opaque: #292524;
+  --label-primary: #fafaf9;
+  --label-secondary: #a8a29e;
+  --label-tertiary: #57534e;
+
+  /* ── Cheese Brand Colors ── */
+  --cheese-gold: #fbbf24;
+  --cheese-gold-soft: rgba(251, 191, 36, 0.15);
+  --cheese-cyan: #22d3ee;
+  --cheese-cyan-soft: rgba(34, 211, 238, 0.12);
+
+  /* ── Shadows (subtle in dark — not disabled) ── */
+  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.35), 0 8px 28px rgba(0, 0, 0, 0.20);
+  --shadow-floating: 0 12px 40px rgba(0, 0, 0, 0.45), 0 20px 56px rgba(0, 0, 0, 0.25);
+
+  /* ── Glass Material ── */
+  --glass-bg: hsla(24, 6%, 12%, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: inset 0 0.5px 0 rgba(255, 255, 255, 0.10);
+
+  /* ── Charts ── */
+  --tooltip-bg: hsla(24, 6%, 14%, 0.90);
+  --tooltip-border: rgba(255, 255, 255, 0.07);
+  --tooltip-color: #fafaf9;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BASE LAYER
+   ═══════════════════════════════════════════════════════════ */
 
 @layer base {
   * {
@@ -134,20 +202,17 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans), "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--font-sans), "-apple-system", "BlinkMacSystemFont", "Inter", "San Francisco", "PingFang SC", "Microsoft YaHei", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    background-color: var(--surface-primary);
     background-image:
-      radial-gradient(circle at 10% 12%, color-mix(in oklab, oklch(0.86 0.13 74) 28%, transparent) 0%, transparent 22%),
-      radial-gradient(circle at 88% 12%, color-mix(in oklab, oklch(0.78 0.1 225) 20%, transparent) 0%, transparent 18%),
-      radial-gradient(circle at 50% 120%, color-mix(in oklab, oklch(0.72 0.16 32) 14%, transparent) 0%, transparent 24%),
-      linear-gradient(180deg, color-mix(in oklab, var(--background) 88%, white) 0%, var(--background) 100%);
-    background-attachment: fixed;
+      radial-gradient(ellipse 60% 50% at 15% 10%, rgba(217, 119, 6, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 85% 80%, rgba(8, 145, 178, 0.03) 0%, transparent 55%);
     transition:
-      background-color 360ms cubic-bezier(0.22, 1, 0.36, 1),
-      color 260ms ease,
-      background-image 560ms cubic-bezier(0.22, 1, 0.36, 1);
+      background-color 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      color 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
   html {
     @apply font-sans;
@@ -184,11 +249,11 @@
   label[for] {
     cursor: pointer;
     transition:
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 180ms ease,
-      border-color 180ms ease,
-      color 180ms ease;
+      transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      box-shadow 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease;
   }
 
   @media (hover: hover) {
@@ -206,7 +271,7 @@
   [role="button"]:not([aria-disabled="true"]):active,
   summary:active,
   label[for]:active {
-    transform: translateY(0) scale(0.985);
+    transform: translateY(0) scale(0.97);
   }
 
   button:disabled,
@@ -228,6 +293,10 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   CHEESE DESIGN LANGUAGE — Utility Classes
+   ═══════════════════════════════════════════════════════════ */
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;
@@ -238,187 +307,188 @@
     display: none;
   }
 
-  .panel-sheen {
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
+  /* ── Card: page-level container (Glass Material) ── */
+  .cheese-card {
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    box-shadow: var(--shadow-soft), var(--glass-highlight);
+    transition:
+      box-shadow 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      transform 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  .panel-sheen::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(135deg, color-mix(in oklab, white 76%, transparent), transparent 52%),
-      linear-gradient(180deg, rgba(255,255,255,0.32), transparent 32%),
-      radial-gradient(circle at top right, rgba(255,255,255,0.4), transparent 26%);
-    opacity: 0.82;
-    pointer-events: none;
-    z-index: -1;
+  @media (hover: hover) {
+    .cheese-card:hover {
+      box-shadow: var(--shadow-elevated), var(--glass-highlight);
+      transform: translateY(-2px);
+    }
   }
 
-  .dark .panel-sheen::before {
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.028), transparent 52%),
-      linear-gradient(180deg, rgba(255,255,255,0.018), transparent 30%),
-      radial-gradient(circle at top right, rgba(255,196,75,0.06), transparent 24%);
-    opacity: 0.72;
+  .cheese-card-header {
+    border-bottom: 1px solid var(--separator);
+    padding: 20px 24px;
   }
 
-  .dashboard-grid {
-    background-image:
-      linear-gradient(to right, rgba(113,113,122,0.035) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(113,113,122,0.035) 1px, transparent 1px);
-    background-size: 30px 30px;
+  /* ── Grouped: inner container within a card ── */
+  .cheese-grouped {
+    border-radius: 16px;
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
   }
 
-  .dark .dashboard-grid {
-    background-image:
-      linear-gradient(to right, rgba(244,244,245,0.025) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(244,244,245,0.025) 1px, transparent 1px);
+  /* ── Stat: metric display tile ── */
+  .cheese-stat {
+    border-radius: 16px;
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
+    padding: 20px;
   }
 
-  .glass-panel {
-    background: color-mix(in oklab, var(--card) 86%, transparent);
-    backdrop-filter: blur(24px) saturate(135%);
-    box-shadow: 0 28px 100px -56px rgba(15, 23, 42, 0.32);
+  /* ── Pill: small status badge ── */
+  .cheese-pill {
+    @apply rounded-full text-[10px] font-bold uppercase tracking-[0.12em];
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
+    padding: 4px 12px;
+    color: var(--label-secondary);
   }
 
-  .dark .glass-panel {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.015), transparent 34%),
-      linear-gradient(180deg, rgba(0,0,0,0.08), transparent 55%),
-      color-mix(in oklab, var(--card) 90%, transparent);
-    box-shadow:
-      0 34px 110px -58px rgba(0, 0, 0, 0.82),
-      inset 0 1px 0 rgba(255,255,255,0.015);
+  /* ── Empty state ── */
+  .cheese-empty {
+    border-radius: 16px;
+    border: 1px dashed var(--separator);
+    background: var(--surface-grouped);
   }
 
-  .noise-overlay {
-    opacity: 0.08;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0.55)),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.34'/%3E%3C/svg%3E");
-    mix-blend-mode: soft-light;
+  /* ── Tooltip for charts ── */
+  .cheese-tooltip {
+    background: var(--tooltip-bg);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border: 1px solid var(--tooltip-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-elevated);
+    font-size: 13px;
+    color: var(--tooltip-color);
+    padding: 8px 12px;
   }
 
-  .deck-card {
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-    border-radius: 32px;
-    border: 1px solid color-mix(in oklab, white 65%, transparent);
-    background: color-mix(in oklab, var(--card) 86%, transparent);
-    backdrop-filter: blur(24px) saturate(135%);
-    box-shadow: 0 24px 90px -50px rgba(15, 23, 42, 0.3);
-  }
-
-  .dark .deck-card {
-    border-color: rgba(255,255,255,0.1);
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.015), transparent 34%),
-      linear-gradient(180deg, rgba(0,0,0,0.08), transparent 55%),
-      color-mix(in oklab, var(--card) 90%, transparent);
-    box-shadow: 0 30px 120px -60px rgba(0,0,0,0.72);
-  }
-
-  .deck-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(135deg, color-mix(in oklab, white 76%, transparent), transparent 52%),
-      linear-gradient(180deg, rgba(255,255,255,0.32), transparent 32%),
-      radial-gradient(circle at top right, rgba(255,255,255,0.4), transparent 26%);
-    opacity: 0.82;
-    pointer-events: none;
-    z-index: -1;
-  }
-
-  .dark .deck-card::before {
-    background:
-      linear-gradient(135deg, rgba(255,255,255,0.028), transparent 52%),
-      linear-gradient(180deg, rgba(255,255,255,0.018), transparent 30%),
-      radial-gradient(circle at top right, rgba(255,196,75,0.06), transparent 24%);
-    opacity: 0.72;
-  }
-
-  .deck-card-header {
-    @apply border-b border-zinc-200/70 bg-white/55 dark:border-white/8 dark:bg-zinc-950/80;
-  }
-
-  .deck-surface {
-    @apply rounded-[28px] border border-white/60 bg-white/68 shadow-[0_20px_60px_-44px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-white/8 dark:bg-zinc-950/78 dark:shadow-[0_24px_80px_-50px_rgba(0,0,0,0.64)];
-  }
-
-  .deck-surface-soft {
-    @apply rounded-[24px] border border-zinc-200/80 bg-zinc-50/82 dark:border-white/8 dark:bg-zinc-950/76;
-  }
-
-  .deck-surface-strong {
-    @apply rounded-[24px] border border-zinc-200/80 bg-white/82 dark:border-white/8 dark:bg-zinc-950/88;
-  }
-
-  .deck-pill {
-    @apply rounded-full border border-zinc-200/80 bg-white/80 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400;
-  }
-
-  .deck-empty {
-    @apply rounded-[24px] border border-dashed border-zinc-200/80 bg-white/72 dark:border-white/8 dark:bg-zinc-950/82;
-  }
-
-  .control-shell {
-    @apply rounded-full border border-white/65 bg-white/70 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/84 dark:shadow-[0_22px_48px_-32px_rgba(0,0,0,0.72)];
-  }
-
-  .mission-orbit {
-    position: relative;
-    overflow: hidden;
-    isolation: isolate;
-  }
-
-  .mission-orbit::before {
-    content: "";
-    position: absolute;
-    inset: -18% -10% auto auto;
-    width: 180px;
-    height: 180px;
-    border-radius: 999px;
-    background: radial-gradient(circle, rgba(255,214,102,0.55) 0%, rgba(255,214,102,0.08) 42%, transparent 72%);
-    opacity: 0.7;
-    z-index: -1;
-  }
-
-  .mission-orbit::after {
-    content: "";
-    position: absolute;
-    inset: auto auto -52px -36px;
-    width: 160px;
-    height: 160px;
-    border-radius: 999px;
-    background: radial-gradient(circle, rgba(84,212,255,0.28) 0%, rgba(84,212,255,0.05) 44%, transparent 74%);
-    z-index: -1;
-  }
-
+  /* ── Brand gradient text ── */
   .text-gradient-cheese {
-    background: linear-gradient(135deg, #f59e0b 0%, #facc15 48%, #fb923c 100%);
+    background: linear-gradient(135deg, #b45309 0%, #d97706 48%, #ea580c 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark .text-gradient-cheese {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 48%, #f97316 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
+  /* ── Control shell (theme toggle, etc.) ── */
+  .control-shell {
+    @apply rounded-full;
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
+  }
+
+  /* ── Accent card variants ── */
+  .cheese-card-amber {
+    border-top: 2px solid var(--cheese-gold);
+  }
+  .cheese-card-cyan {
+    border-top: 2px solid var(--cheese-cyan);
+  }
+  .cheese-card-rose {
+    border-top: 2px solid #e11d48;
+  }
+  .dark .cheese-card-rose {
+    border-top-color: #fb7185;
+  }
+
+  /* ═══ Backward Compatibility Aliases ═══
+     Old class names still work but now point to the unified system.
+     These will be cleaned up as components switch to cheese-* names. */
+
+  .deck-card {
+    border-radius: 20px;
+    border: 1px solid var(--separator);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .dark .deck-card {
+    box-shadow: none;
+  }
+
+  .deck-card-header {
+    border-bottom: 1px solid var(--separator);
+  }
+
+  .deck-surface {
+    @apply rounded-[20px];
+    border: 1px solid var(--separator);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .deck-surface-soft {
+    @apply rounded-[16px];
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
+  }
+
+  .deck-surface-strong {
+    @apply rounded-[16px];
+    border: 1px solid var(--separator);
+    background: var(--surface-elevated);
+  }
+
+  .deck-pill {
+    @apply rounded-full text-[10px] font-bold uppercase tracking-[0.12em];
+    border: 1px solid var(--separator);
+    background: var(--surface-grouped);
+    padding: 4px 12px;
+    color: var(--label-secondary);
+  }
+
+  .deck-empty {
+    border-radius: 16px;
+    border: 1px dashed var(--separator);
+    background: var(--surface-grouped);
+  }
+
+  .glass-panel {
+    border-radius: 20px;
+    border: 1px solid var(--separator);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-soft);
+  }
+
   .reveal-fade {
-    animation: revealFade 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: revealFade 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE — Subtle ambient warmth (matches brand icon blooms)
+   ═══════════════════════════════════════════════════════════ */
+
 .dark body {
   background-image:
-    radial-gradient(circle at 12% 14%, rgba(255,196,75,0.11) 0%, transparent 20%),
-    radial-gradient(circle at 86% 12%, rgba(84,212,255,0.08) 0%, transparent 18%),
-    radial-gradient(circle at 50% 118%, rgba(239,114,84,0.07) 0%, transparent 22%),
-    linear-gradient(180deg, color-mix(in oklab, var(--background) 92%, black) 0%, color-mix(in oklab, var(--background) 84%, black) 100%);
+    radial-gradient(ellipse 55% 45% at 10% 8%, rgba(251, 191, 36, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at 88% 85%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW TRANSITIONS — Theme switching animation
+   ═══════════════════════════════════════════════════════════ */
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -427,12 +497,16 @@
 }
 
 html.theme-switching::view-transition-new(root) {
-  animation: themeReveal 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: themeReveal 380ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 html.theme-switching::view-transition-old(root) {
   animation: themeFade 260ms ease;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   KEYFRAMES
+   ═══════════════════════════════════════════════════════════ */
 
 @keyframes revealFade {
   from {
@@ -465,7 +539,7 @@ html.theme-switching::view-transition-old(root) {
   }
 }
 
-/* Glow animation for the running timer */
+/* Timer breathing glow */
 @keyframes timerGlow {
   0%, 100% { box-shadow: 0 0 0 0 oklch(0.8 0.16 85 / 0%); }
   50% { box-shadow: 0 0 32px 4px oklch(0.8 0.16 85 / 22%); }
@@ -476,6 +550,10 @@ html.theme-switching::view-transition-old(root) {
 }
 .timer-glow-amber { animation: timerGlow 2s ease-in-out infinite; }
 .timer-glow-red   { animation: redGlow 1.5s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {
   html {

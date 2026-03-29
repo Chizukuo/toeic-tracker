@@ -187,7 +187,7 @@ function TimerPageContent() {
       description={`${activeSession.label} · ${formatSessionTitle(locale, activeSession)}`}
     >
       <div className="space-y-6">
-        <Card className="glass-panel overflow-hidden rounded-[28px] border border-white/65 dark:border-white/10">
+        <Card className="cheese-card overflow-hidden">
           <CardContent className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_320px] md:items-center">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
@@ -201,7 +201,7 @@ function TimerPageContent() {
               <div className="mt-3 w-full max-w-md">
                 <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
                   <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,#ffcc57_0%,#ff8f56_52%,#54d4ff_100%)] transition-all duration-500"
+                    className="h-full rounded-full bg-amber-500 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
                     style={{ width: `${stageProgress.percent}%` }}
                   />
                 </div>
@@ -213,7 +213,7 @@ function TimerPageContent() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200/80 bg-white/70 p-3 dark:border-white/8 dark:bg-zinc-950/78">
+            <div className="cheese-grouped p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
                   {locale === 'zh' ? '流程状态机' : 'Flow State'}
@@ -239,8 +239,8 @@ function TimerPageContent() {
         </Card>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 shadow-[0_24px_80px_-44px_rgba(15,23,42,0.24)] dark:border-white/10">
-          <CardHeader className="border-b border-zinc-200/70 bg-white/55 px-6 py-5 dark:border-white/8 dark:bg-zinc-950/80">
+        <Card className="cheese-card overflow-hidden">
+          <CardHeader className="cheese-card-header px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
@@ -252,7 +252,7 @@ function TimerPageContent() {
                   <span className="text-zinc-600 dark:text-zinc-400">{formatSessionTitle(locale, activeSession)}</span>
                 </CardTitle>
               </div>
-              <div className="rounded-full border border-zinc-200/90 bg-white/75 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-400">
+              <div className="cheese-pill">
                 {translateStatus(locale, activeSession.status)}
               </div>
             </div>
@@ -319,8 +319,8 @@ function TimerPageContent() {
 
         <div className="grid gap-6">
           <TimeWaterfallChart session={activeSession} />
-          <Card className="glass-panel overflow-hidden rounded-[32px] border border-white/65 dark:border-white/10">
-            <CardHeader className="border-b border-zinc-200/70 px-6 py-5 dark:border-white/8">
+          <Card className="cheese-card overflow-hidden">
+            <CardHeader className="cheese-card-header px-6 py-5">
               <CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-700 dark:text-amber-300">
                 {copy.sprintProtocol}
               </CardTitle>
@@ -354,7 +354,7 @@ function TimerPageContent() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 w-[min(92vw,420px)] rounded-2xl border border-zinc-200/85 bg-white/95 p-4 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/92"
+          className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 w-[min(92vw,420px)] rounded-[16px] border border-[var(--separator)] bg-[var(--surface-elevated)] p-4 shadow-[var(--shadow-elevated)] backdrop-blur-xl"
         >
           <div className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{flowToast.title}</div>
           <div className="mt-1 text-xs leading-6 text-zinc-500 dark:text-zinc-400">{flowToast.body}</div>
@@ -362,7 +362,7 @@ function TimerPageContent() {
             <div className="mt-2">
               <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800/80">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#ffcc57_0%,#ff8f56_52%,#54d4ff_100%)] transition-all duration-100"
+                  className="h-full rounded-full bg-amber-500 transition-all duration-100 ease-linear"
                   style={{ width: `${Math.max(0, Math.min(100, (autoAdvanceCountdownMs / 3200) * 100))}%` }}
                 />
               </div>
@@ -374,14 +374,14 @@ function TimerPageContent() {
           <div className="mt-3 flex items-center gap-2">
             <Link
               href={flowToast.href}
-              className="inline-flex items-center rounded-full bg-zinc-950 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+              className="inline-flex items-center rounded-full bg-amber-500 px-4 py-2 text-[10px] uppercase font-bold tracking-[0.12em] text-white transition-all hover:bg-amber-600 active:scale-[0.97] dark:text-zinc-900"
             >
               {flowToast.cta}
             </Link>
             <button
               type="button"
               onClick={dismissFlowToast}
-              className="inline-flex items-center rounded-full border border-zinc-200/80 bg-white/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-white/10 dark:bg-zinc-950/80 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="inline-flex items-center rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 py-2 text-[10px] uppercase tracking-[0.12em] text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] active:scale-[0.97]"
             >
               {flowToast.autoNavigate ? (locale === 'zh' ? '取消跳转' : 'Cancel') : (locale === 'zh' ? '关闭' : 'Dismiss')}
             </button>
@@ -396,8 +396,8 @@ function StagePill({ active, label }: { active: boolean; label: string }) {
   return (
     <span
       className={active
-        ? 'rounded-full border border-amber-400/35 bg-amber-400/12 px-2.5 py-1 font-mono tracking-[0.12em] text-amber-700 dark:text-amber-300'
-        : 'rounded-full border border-zinc-200/85 bg-white/80 px-2.5 py-1 font-mono tracking-[0.12em] text-zinc-500 dark:border-white/8 dark:bg-zinc-950/70 dark:text-zinc-400'}
+        ? 'cheese-pill border-amber-400/35 bg-amber-400/12 text-amber-700 dark:text-amber-300'
+        : 'cheese-pill'}
     >
       {label}
     </span>
