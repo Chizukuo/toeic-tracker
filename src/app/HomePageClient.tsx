@@ -6,6 +6,8 @@ import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
+import { ActivityCalendar } from '@/components/ActivityCalendar';
+import { WeeklyReport } from '@/components/WeeklyReport';
 import { getNextStepRecommendation } from '@/lib/nextStep';
 import { estimateToeicCombinedScore, TOEIC_SPRINT_SESSIONS } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
@@ -269,6 +271,19 @@ function MissionControl() {
               {examDate}
             </div>
           </div>
+        </div>
+      </motion.div>
+
+      {/* ─── Engagement Area (Heatmap & Digest) ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.5, delay: 0.24 }}
+        className="grid gap-6 lg:grid-cols-[1fr_300px]"
+      >
+        <ActivityCalendar />
+        <div className="flex flex-col justify-end">
+           <WeeklyReport />
         </div>
       </motion.div>
     </div>

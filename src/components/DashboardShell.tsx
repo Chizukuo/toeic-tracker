@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 
 import type { ComponentType, ReactNode } from 'react';
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BarChart2, CalendarDays, CheckCircle, Clock, Database, Home, Menu, Target, Trophy, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart2, BookOpen, CalendarDays, CheckCircle, Clock, Database, Home, Menu, Target, Trophy, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { LocaleToggle } from '@/components/LocaleToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AchievementToast } from '@/components/AchievementToast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { BrandIconSvg } from '@/lib/brandIcon';
@@ -128,6 +129,7 @@ export function DashboardShell({
       unfinishedTotal,
       unfinishedSessionsCount,
       completionPct: sessions.length > 0 ? Math.round((debuggedCount / sessions.length) * 100) : 0,
+      totalSessions: sessions.length,
     };
   }, [activeSessionId, sessions]);
 
@@ -233,7 +235,7 @@ export function DashboardShell({
   const overviewSignals = [
     {
       label: copy.summaryDebugged,
-      value: `${homeMetrics.debuggedCount}/20`,
+      value: `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions}`,
       detail: copy.summaryDebuggedHelper,
       tone: 'amber' as const,
     },
@@ -261,6 +263,7 @@ export function DashboardShell({
     { href: '/', label: locale === 'zh' ? '任务台' : 'Mission', icon: Home },
     { href: '/practice', label: locale === 'zh' ? '训练场' : 'Practice', icon: Clock },
     { href: '/insights', label: locale === 'zh' ? '参考台' : 'Insights', icon: BarChart2 },
+    { href: '/vocab', label: locale === 'zh' ? '生词本' : 'Vocab', icon: BookOpen },
     { href: '/vault', label: locale === 'zh' ? '数据' : 'Data', icon: Database },
   ];
 
@@ -277,7 +280,9 @@ export function DashboardShell({
     {
       label: locale === 'zh' ? '总进度' : 'Progress',
       value: `${homeMetrics.completionPct}%`,
-      helper: locale === 'zh' ? `${homeMetrics.debuggedCount}/20 已复盘` : `${homeMetrics.debuggedCount}/20 reviewed`,
+      helper: locale === 'zh'
+        ? `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} 已复盘`
+        : `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} reviewed`,
     },
     {
       label: copy.worstPart,
@@ -299,6 +304,7 @@ export function DashboardShell({
         timedOutFlag,
       }}
     >
+      <AchievementToast />
       <main className="relative min-h-screen overflow-x-hidden pt-24 px-4 pb-14 text-[var(--label-primary)] sm:px-6 lg:px-8">
 
         <header className="fixed top-4 left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-[var(--glass-border)] bg-[var(--glass-bg)] px-2 py-2 shadow-[var(--shadow-elevated)] backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>

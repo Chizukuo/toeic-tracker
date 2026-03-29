@@ -10,6 +10,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  ReferenceArea,
 } from 'recharts';
 import {
   CircleGauge,
@@ -17,6 +18,7 @@ import {
   LibraryBig,
   Sigma,
   Sparkles,
+  Target,
   Trash2,
 } from 'lucide-react';
 
@@ -37,12 +39,14 @@ import {
 } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
+import { WhatIfSimulator } from '@/components/WhatIfSimulator';
 
 type ScoreMode = 'L' | 'R' | 'T';
 
 type ScoreTrendPoint = {
   label: string;
   score?: number;
+  potentialScore?: number;
   rawCorrect?: number;
   adjustedRaw?: number;
   active: boolean;
@@ -102,6 +106,8 @@ export function ScoreEstimatorPanel() {
   const sessions = useStore((state) => state.sessions);
   const locale = useStore((state) => state.locale);
   const historicalScores = useStore((state) => state.historicalScores);
+  const targetScore = useStore((state) => state.targetScore);
+  const setTargetScore = useStore((state) => state.setTargetScore);
   const addHistoricalScore = useStore((state) => state.addHistoricalScore);
   const removeHistoricalScore = useStore((state) => state.removeHistoricalScore);
   const copy = getCopy(locale);
@@ -150,6 +156,7 @@ export function ScoreEstimatorPanel() {
         return {
           label: session.label,
           score: estimate?.strict.available ? estimate.strict.scaled : undefined,
+          potentialScore: estimate?.potential.available ? estimate.potential.scaled : undefined,
           rawCorrect: estimate?.strict.available ? estimate.strict.rawCorrect : undefined,
           adjustedRaw: estimate?.strict.available ? estimate.strict.adjustedRawCorrect : undefined,
           active: session.id === selectedListeningId,
@@ -165,6 +172,7 @@ export function ScoreEstimatorPanel() {
         return {
           label: session.label,
           score: estimate?.strict.available ? estimate.strict.scaled : undefined,
+          potentialScore: estimate?.potential.available ? estimate.potential.scaled : undefined,
           rawCorrect: estimate?.strict.available ? estimate.strict.rawCorrect : undefined,
           adjustedRaw: estimate?.strict.available ? estimate.strict.adjustedRawCorrect : undefined,
           active: session.id === selectedReadingId,
@@ -179,11 +187,13 @@ export function ScoreEstimatorPanel() {
         const pair = `${index + 1}`;
         const listening = sessionMap.get(`L${pair}`);
         const reading = sessionMap.get(`R${pair}`);
-        const estimate = estimateToeicCombinedDualScore(listening, reading).strict;
+        const estimateCombined = estimateToeicCombinedDualScore(listening, reading);
+        const estimate = estimateCombined.strict;
 
         return {
           label: `S${pair}`,
           score: estimate.available ? estimate.total : undefined,
+          potentialScore: estimateCombined.potential.available ? estimateCombined.potential.total : undefined,
           rawCorrect: estimate.available ? estimate.rawCorrect : undefined,
           adjustedRaw: estimate.available ? estimate.adjustedRawCorrect : undefined,
           active: selectedPair === pair,
@@ -342,13 +352,40 @@ export function ScoreEstimatorPanel() {
             <span className="text-[12px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase mb-1">
               {activeSummary.title}
             </span>
-            <div className="flex items-baseline">
+            <div className="flex items-baseline gap-4">
               <span className="text-[64px] md:text-[72px] font-bold tracking-tighter text-zinc-900 dark:text-zinc-50 leading-none">
                 {activeSummary.score}
               </span>
+              {mode === 'T' && (
+                <div className="flex flex-col gap-1 hidden md:flex">
+                  <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                    <Target className="size-3" />
+                    {locale === 'zh' ? '目标分' : 'Target'}
+                  </span>
+                  <input
+                    type="number"
+                    min="10" max="990" step="5"
+                    value={targetScore}
+                    onChange={(e) => setTargetScore(Number(e.target.value) || 850)}
+                    className="w-[72px] bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+                  />
+                </div>
+              )}
             </div>
             
             <div className="mt-3 flex flex-wrap items-center justify-center md:justify-start gap-2">
+              {mode === 'T' && (
+                <span className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] font-semibold border",
+                  activeSummary.score >= targetScore
+                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                    : "bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-400"
+                )}>
+                  {activeSummary.score >= targetScore
+                    ? (locale === 'zh' ? `已达标 (+${activeSummary.score - targetScore})` : `Target Met (+${activeSummary.score - targetScore})`)
+                    : (locale === 'zh' ? `距目标分 ${targetScore - activeSummary.score}` : `Gap to Target: ${targetScore - activeSummary.score}`)}
+                </span>
+              )}
               <span className="px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-[#2C2C2E] text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
                 {locale === 'zh' ? '波动' : 'Range'} {activeSummary.interval}
               </span>
@@ -432,6 +469,13 @@ export function ScoreEstimatorPanel() {
         </motion.div>
       )}
 
+      {/* Simulator (Total Mode Only) */}
+      {mode === 'T' && activeSummary?.available && (
+        <motion.div variants={{ hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }}>
+          <WhatIfSimulator listeningSession={selectedPairListening} readingSession={selectedPairReading} />
+        </motion.div>
+      )}
+
       {/* ── Charts & History Section ── */}
       <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="bg-white dark:bg-[#1C1C1E] rounded-[32px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04] flex flex-col lg:flex-row overflow-hidden">
         {/* Trend Chart */}
@@ -463,6 +507,15 @@ export function ScoreEstimatorPanel() {
                     }}
                     itemStyle={{ color: '#18181b', fontWeight: 600 }}
                   />
+                  {(historicalTrend.length > 0 || mode === 'T') && (
+                    <>
+                      <ReferenceArea y1={120} y2={220} fill="#f43f5e" fillOpacity={0.03} />
+                      <ReferenceArea y1={225} y2={545} fill="#f97316" fillOpacity={0.03} />
+                      <ReferenceArea y1={550} y2={780} fill="#eab308" fillOpacity={0.03} />
+                      <ReferenceArea y1={785} y2={940} fill="#22c55e" fillOpacity={0.03} />
+                      <ReferenceArea y1={945} y2={990} fill="#3b82f6" fillOpacity={0.03} />
+                    </>
+                  )}
                   {historicalTrend.length > 0 ? (
                     <>
                       <Line key="total" type="monotone" dataKey="total" name={locale === 'zh' ? '总分' : 'Total'} stroke="#ef4444" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 7, strokeWidth: 0 }} />
@@ -470,19 +523,33 @@ export function ScoreEstimatorPanel() {
                       <Line key="reading" type="monotone" dataKey="reading" name={locale === 'zh' ? '阅读' : 'Reading'} stroke="#38bdf8" strokeWidth={2.5} strokeOpacity={0.6} dot={false} />
                     </>
                   ) : (
-                    <Line
-                      key="active-score"
-                      type="monotone"
-                      dataKey="score"
-                      name={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
-                      stroke={activeSummary?.color || "#18181b"}
-                      strokeWidth={3}
-                      dot={(props) => {
-                        const { cx, cy, payload, index } = props;
-                        if (cx === undefined || cy === undefined || !payload) return <g key={`dot-empty-${index}`} />;
-                        return <circle key={`dot-${payload.label}-${index}`} cx={cx} cy={cy} r={payload.active ? 7 : 4} fill={payload.active ? (activeSummary?.color || "#18181b") : '#fff'} stroke={activeSummary?.color || "#18181b"} strokeWidth={2} />;
-                      }}
-                    />
+                    <>
+                      <Line
+                        key="active-score"
+                        type="monotone"
+                        dataKey="score"
+                        name={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
+                        stroke={activeSummary?.color || "#18181b"}
+                        strokeWidth={3}
+                        dot={(props) => {
+                          const { cx, cy, payload, index } = props;
+                          if (cx === undefined || cy === undefined || !payload) return <g key={`dot-empty-${index}`} />;
+                          return <circle key={`dot-${payload.label}-${index}`} cx={cx} cy={cy} r={payload.active ? 7 : 4} fill={payload.active ? (activeSummary?.color || "#18181b") : '#fff'} stroke={activeSummary?.color || "#18181b"} strokeWidth={2} />;
+                        }}
+                      />
+                      <Line
+                        key="active-potential"
+                        type="monotone"
+                        dataKey="potentialScore"
+                        name={locale === 'zh' ? '最高潜力' : 'Potential'}
+                        stroke={activeSummary?.color || "#18181b"}
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.4}
+                        dot={false}
+                        activeDot={false}
+                      />
+                    </>
                   )}
                 </LineChart>
               </ResponsiveContainer>

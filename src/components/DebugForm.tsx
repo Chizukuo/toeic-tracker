@@ -61,6 +61,7 @@ export function DebugForm({
   const [mistakes, setMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.mistakes);
   const [overtimeMistakes, setOvertimeMistakes] = useState<Partial<Record<MistakeKey, number>>>(activeSession.overtimeMistakes ?? {});
   const [reasons, setReasons] = useState<string[]>(activeSession.reasons);
+  const [notes, setNotes] = useState<string>(activeSession.notes ?? '');
   const [saved, setSaved] = useState(false);
   const [overtimeSaved, setOvertimeSaved] = useState(false);
   const [undoVisible, setUndoVisible] = useState(false);
@@ -68,6 +69,7 @@ export function DebugForm({
   const undoPayloadRef = useRef<{
     mistakes: Partial<Record<MistakeKey, number>>;
     reasons: string[];
+    notes?: string;
     status: SessionRecord['status'];
   } | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -89,9 +91,10 @@ export function DebugForm({
   const dirtyReview = useMemo(() => {
     return (
       !sameNumberRecord<MistakeKey>(mistakes, activeSession.mistakes) ||
-      !sameStringArray(reasons, activeSession.reasons)
+      !sameStringArray(reasons, activeSession.reasons) ||
+      notes !== (activeSession.notes ?? '')
     );
-  }, [activeSession.mistakes, activeSession.reasons, mistakes, reasons]);
+  }, [activeSession.mistakes, activeSession.reasons, activeSession.notes, mistakes, reasons, notes]);
 
   const dirtyOvertime = useMemo(() => {
     return !sameNumberRecord<MistakeKey>(overtimeMistakes, activeSession.overtimeMistakes ?? {});
@@ -161,6 +164,7 @@ export function DebugForm({
   const resetReviewDraft = () => {
     setMistakes(activeSession.mistakes);
     setReasons(activeSession.reasons);
+    setNotes(activeSession.notes ?? '');
   };
 
   const resetOvertimeDraft = () => {
@@ -171,12 +175,14 @@ export function DebugForm({
     undoPayloadRef.current = {
       mistakes: activeSession.mistakes,
       reasons: activeSession.reasons,
+      notes: activeSession.notes,
       status: activeSession.status,
     };
 
     saveDiagnostics(activeSession.id, {
       mistakes,
       reasons,
+      notes: notes.trim() || undefined,
       status: 'debugged',
     });
     setSaved(true);
@@ -205,6 +211,7 @@ export function DebugForm({
     saveDiagnostics(activeSession.id, {
       mistakes: previous.mistakes,
       reasons: previous.reasons,
+      notes: previous.notes,
       status: previous.status,
     });
 
@@ -483,6 +490,22 @@ export function DebugForm({
               );
             })}
           </div>
+        </div>
+
+        {/* Notes (Phase 2 feature) */}
+        <div>
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-400 dark:text-zinc-500">
+              {locale === 'zh' ? '复盘笔记 (可选)' : 'Session Notes (Optional)'}
+            </div>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={locale === 'zh' ? '记录本次复盘的心得、教训或盲区…' : 'Record observations, lessons learned, or blind spots…'}
+            rows={3}
+            className="w-full resize-none rounded-[16px] border border-zinc-200/80 bg-white/50 p-4 text-sm leading-relaxed text-zinc-700 transition-all placeholder:text-zinc-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20 dark:border-white/10 dark:bg-zinc-900/50 dark:text-zinc-300 dark:placeholder:text-zinc-600 dark:focus:bg-zinc-950/80"
+          />
         </div>
 
         <div className="deck-surface-strong p-3">

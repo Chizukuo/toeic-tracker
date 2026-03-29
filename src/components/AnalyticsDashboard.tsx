@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import {
   CartesianGrid,
   Line,
+  LineChart,
   ComposedChart,
   PolarAngleAxis,
   PolarGrid,
@@ -42,6 +43,7 @@ type LossTrendPoint = {
   Reading?: number;
   Total?: number;
   paired: boolean;
+  [key: string]: string | number | boolean | undefined;
 };
 
 type LossTrendSummary = {
@@ -78,6 +80,7 @@ type RadarSummary = {
 
 export function AnalyticsDashboard() {
   const sessions = useStore((state) => state.sessions);
+  const sprintConfig = useStore((state) => state.sprintConfig);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const deferredSessions = useDeferredValue(sessions);
@@ -107,7 +110,8 @@ export function AnalyticsDashboard() {
       }
     }
 
-    const trendData: LossTrendPoint[] = Array.from({ length: 10 }, (_, index) => {
+    const trendCount = Math.max(sprintConfig.listeningCount, sprintConfig.readingCount);
+    const trendData: LossTrendPoint[] = Array.from({ length: trendCount }, (_, index) => {
       const setNumber = index + 1;
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
@@ -115,12 +119,21 @@ export function AnalyticsDashboard() {
       const readingLoss = reading && reading.status !== 'not-started' ? getIncorrectAnswers(reading) : undefined;
       const hasAnyData = listeningLoss !== undefined || readingLoss !== undefined;
 
+      const listeningMistakes: Record<string, number> = listening && listening.status !== 'not-started'
+        ? Object.fromEntries(Object.entries(listening.mistakes))
+        : {};
+      const readingMistakes: Record<string, number> = reading && reading.status !== 'not-started'
+        ? Object.fromEntries(Object.entries(reading.mistakes))
+        : {};
+
       return {
         set: `S${setNumber}`,
         Listening: listeningLoss,
         Reading: readingLoss,
         Total: hasAnyData ? (listeningLoss ?? 0) + (readingLoss ?? 0) : undefined,
         paired: listeningLoss !== undefined && readingLoss !== undefined,
+        ...listeningMistakes,
+        ...readingMistakes,
       };
     });
 
@@ -182,7 +195,7 @@ export function AnalyticsDashboard() {
       },
       reasonData,
     };
-  }, [deferredSessions, locale]);
+  }, [deferredSessions, locale, sprintConfig]);
 
   return (
     <motion.section 
@@ -348,6 +361,63 @@ export function AnalyticsDashboard() {
               </ResponsiveContainer>
             ) : (
                <EmptyState message={locale === 'zh' ? '完成测试以生成雷达图' : 'Complete a test for radar chart'} />
+            )}
+          </div>
+        </WidgetCard>
+
+        {/* Hotspot Convergence Chart */}
+        <WidgetCard className="flex flex-col">
+          <div className="mb-5">
+            <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{locale === 'zh' ? '弱点收敛趋势' : 'Hotspot Convergence'}</h2>
+            <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh' ? '最高错题率题型的演变过程' : 'Mistake trend for highest pressure parts'}
+            </p>
+          </div>
+          
+          <div className="flex-1 min-h-[260px]">
+            {radarSummary.hotspots.length > 0 && lossSummary.availableCount > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="currentColor" opacity={0.04} vertical={false} />
+                  <XAxis dataKey="set" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} dy={10} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} allowDecimals={false} dx={-10} />
+                  <Tooltip
+                    cursor={{ stroke: 'currentColor', strokeOpacity: 0.1, strokeWidth: 1, strokeDasharray: '4 4' }}
+                    contentStyle={{
+                      background: 'rgba(255, 255, 255, 0.85)',
+                      backdropFilter: 'blur(20px)',
+                      WebkitBackdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(0,0,0,0.06)',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      fontSize: '13px',
+                      color: '#18181b',
+                      padding: '10px 14px'
+                    }}
+                    itemStyle={{ color: '#18181b', fontWeight: 600 }}
+                    labelStyle={{ color: '#71717a', marginBottom: '4px', fontWeight: 500 }}
+                    formatter={(value: number, name: string) => [`${value} err`, name]}
+                  />
+                  {radarSummary.hotspots.map((h, i) => {
+                    const colors = ['#ef4444', '#f59e0b', '#38bdf8'];
+                    return (
+                      <Line
+                        key={h.partKey}
+                        type="monotone"
+                        dataKey={h.partKey}
+                        name={h.part}
+                        stroke={colors[i % colors.length]}
+                        strokeWidth={2.5}
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                        activeDot={{ r: 6, strokeWidth: 0, fill: colors[i % colors.length] }}
+                        connectNulls
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState message={locale === 'zh' ? '需要更多历史记录生成趋势' : 'More history needed for convergence chart'} />
             )}
           </div>
         </WidgetCard>

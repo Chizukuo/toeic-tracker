@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Clock3, Flag, Hourglass, Play, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock3, Flag, Hourglass, Play, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
@@ -133,7 +133,208 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
   };
 }
 
+// ─── Listening Session — Calm Stopwatch Flow ───────────────────────────────
+
+function ListeningFlow({
+  session,
+  onStrictAttemptSaved,
+}: {
+  session: SessionRecord;
+  onStrictAttemptSaved?: (sessionId: string) => void;
+}) {
+  const patchSession = useStore((state) => state.patchSession);
+  const locale = useStore((state) => state.locale);
+  const copy = getCopy(locale);
+
+  // Elapsed stopwatch (informational only, no pressure)
+  const [elapsedMs, setElapsedMs] = useState(() => {
+    const runtime = session.timerRuntime;
+    if (!runtime?.startedAt) return 0;
+    const startMs = toValidTime(runtime.startedAt);
+    return startMs ? Math.max(Date.now() - startMs, 0) : 0;
+  });
+  const [isActive, setIsActive] = useState(() => {
+    const runtime = session.timerRuntime;
+    return Boolean(runtime?.startedAt && !session.timerSummary);
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const startedAtRef = useRef<number | null>(
+    (() => {
+      const runtime = session.timerRuntime;
+      if (!runtime?.startedAt) return null;
+      return toValidTime(runtime.startedAt);
+    })()
+  );
+
+  // Start stopwatch
+  const handleStart = useCallback(() => {
+    const now = Date.now();
+    startedAtRef.current = now;
+    setIsActive(true);
+    setElapsedMs(0);
+    patchSession(session.id, {
+      status: 'in-progress',
+      timerRuntime: {
+        startedAt: new Date(now).toISOString(),
+        lapStartedAt: new Date(now).toISOString(),
+        currentLapIndex: 0,
+        readingLapTimes: {},
+        isOvertime: false,
+        overtimeStartedAt: undefined,
+        overtimeElapsedMs: 0,
+        pendingSubmit: undefined,
+      },
+    });
+    trackUXEvent('listening_start', { sessionId: session.id });
+  }, [session.id, patchSession]);
+
+  // Mark complete
+  const handleComplete = useCallback(() => {
+    setIsSubmitting(true);
+    const totalElapsedMs = elapsedMs;
+    patchSession(session.id, {
+      timerSummary: {
+        totalElapsedMs,
+        forcedSubmit: false,
+        timedOut: false,
+        unfinishedQuestions: 0,
+        resolvedUnfinished: true,
+        completedAt: new Date().toISOString(),
+      },
+      timerRuntime: undefined,
+    });
+    trackUXEvent('listening_complete', { sessionId: session.id, totalElapsedMs });
+    onStrictAttemptSaved?.(session.id);
+  }, [session.id, elapsedMs, patchSession, onStrictAttemptSaved]);
+
+  // Tick
+  useEffect(() => {
+    if (!isActive) return;
+    const id = window.setInterval(() => {
+      const start = startedAtRef.current;
+      setElapsedMs(start ? Date.now() - start : 0);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isActive]);
+
+  const elapsedFormatted = formatClock(elapsedMs);
+  const hasPrevious = Boolean(session.timerSummary);
+  const previousTime = hasPrevious ? session.timerSummary!.totalElapsedMs : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Mode badge */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 py-2">
+          <div className={cn(
+            'size-2 rounded-full',
+            isActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300 dark:bg-zinc-600'
+          )} />
+          <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--label-secondary)]">
+            {isActive
+              ? (locale === 'zh' ? '跟着音频走' : 'Follow the audio')
+              : (locale === 'zh' ? '听力模式' : 'Listening Mode')}
+          </span>
+        </div>
+        {hasPrevious && (
+          <div className="text-xs text-[var(--label-tertiary)]">
+            {locale === 'zh' ? `上次 ${formatClock(previousTime)}` : `Last ${formatClock(previousTime)}`}
+          </div>
+        )}
+      </div>
+
+      {/* Elapsed clock — large, calm, no pressure color */}
+      <div className="flex flex-col items-center py-8 sm:py-12">
+        <motion.div
+          key={isActive ? 'active' : 'idle'}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+          className="tabular-nums text-[4.5rem] font-bold tracking-tight leading-none text-[var(--label-primary)] sm:text-[6rem]"
+        >
+          {elapsedFormatted}
+        </motion.div>
+        <p className="mt-4 text-sm text-[var(--label-tertiary)] text-center max-w-xs leading-relaxed">
+          {locale === 'zh'
+            ? '以音频为节奏，不需要严格计时。完成后点击下方按钮进入复盘。'
+            : 'Let the audio set the pace. No strict timing needed. Tap below when done.'}
+        </p>
+      </div>
+
+      {/* Action */}
+      {!isActive && !hasPrevious && (
+        <motion.button
+          type="button"
+          onClick={handleStart}
+          whileTap={{ scale: 0.97 }}
+          className="flex w-full items-center justify-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
+        >
+          <Play className="size-4" />
+          {locale === 'zh' ? '开始计时（可选）' : 'Start Stopwatch (optional)'}
+        </motion.button>
+      )}
+
+      {isActive && (
+        <motion.button
+          type="button"
+          onClick={handleComplete}
+          disabled={isSubmitting}
+          whileTap={{ scale: 0.97 }}
+          className="flex w-full items-center justify-center gap-2.5 rounded-full bg-emerald-500 px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(16,185,129,0.40)] hover:brightness-110 disabled:opacity-60"
+        >
+          <CheckCircle2 className="size-4" />
+          {locale === 'zh' ? '标记完成，进入复盘' : 'Mark Complete — Go to Review'}
+        </motion.button>
+      )}
+
+      {!isActive && hasPrevious && (
+        <motion.button
+          type="button"
+          onClick={handleComplete}
+          disabled={isSubmitting}
+          whileTap={{ scale: 0.97 }}
+          className="flex w-full items-center justify-center gap-2.5 rounded-full bg-emerald-500 px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(16,185,129,0.40)] hover:brightness-110 disabled:opacity-60"
+        >
+          <CheckCircle2 className="size-4" />
+          {locale === 'zh' ? '继续进入复盘' : 'Continue to Review'}
+        </motion.button>
+      )}
+
+      {!isActive && !hasPrevious && (
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={handleComplete}
+            className="text-xs text-[var(--label-tertiary)] underline-offset-2 hover:underline hover:text-[var(--label-secondary)] transition-colors"
+          >
+            {locale === 'zh' ? '跳过计时，直接进入复盘' : 'Skip stopwatch and go to review'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LapTimer main export ───────────────────────────────────────────────
+
 export function LapTimer({
+  session,
+  onFocusModeChange,
+  onStrictAttemptSaved,
+}: {
+  session: SessionRecord;
+  onFocusModeChange?: (enabled: boolean) => void;
+  onStrictAttemptSaved?: (sessionId: string) => void;
+}) {
+  // Route listening sessions to the simplified flow
+  if (session.type === 'L') {
+    return <ListeningFlow session={session} onStrictAttemptSaved={onStrictAttemptSaved} />;
+  }
+
+  return <ReadingTimer session={session} onFocusModeChange={onFocusModeChange} onStrictAttemptSaved={onStrictAttemptSaved} />;
+}
+
+function ReadingTimer({
   session,
   onFocusModeChange,
   onStrictAttemptSaved,

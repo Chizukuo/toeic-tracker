@@ -1,3 +1,34 @@
+// ─── Vocabulary / Phrase Notebook ──────────────────────────────────────────
+
+export type VocabularyEntry = {
+	id: string;
+	text: string;
+	reading?: string;
+	definition?: string;
+	enDefinition?: string;
+	partOfSpeech?: string;
+	exampleSentence?: string;
+	sessionIds: string[];
+	encounterCount: number;
+	tags: string[];
+	createdAt: string;
+	updatedAt: string;
+};
+
+// ─── Sprint Configuration ────────────────────────────────────────────────────
+
+export type SprintConfig = {
+	listeningCount: number;
+	readingCount: number;
+};
+
+export const SPRINT_DEFAULT_CONFIG: SprintConfig = {
+	listeningCount: 10,
+	readingCount: 10,
+};
+
+// ─── Session Model ───────────────────────────────────────────────────────────
+
 export type SessionType = "L" | "R";
 
 export type SessionStatus = "not-started" | "in-progress" | "debugged";
@@ -52,6 +83,7 @@ export type SessionRecord = SessionBlueprint & {
 	readingLapTimes: Partial<Record<ReadingLapKey, number>>;
 	timerSummary?: TimerSummary;
 	timerRuntime?: TimerRuntimeState;
+	notes?: string;
 	updatedAt?: string;
 };
 
@@ -273,15 +305,18 @@ const SECTION_CEFR_THRESHOLDS: Array<{
 	{ level: "A1", minimum: 60 },
 ];
 
-export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
-	{ length: 10 },
-	(_, index) => {
-		const setNumber = index + 1;
-		const listeningDay = index * 2 + 1;
-		const readingDay = index * 2 + 2;
+/** Build the blueprint list for an arbitrary sprint shape. */
+export function buildSprintBlueprints(config: SprintConfig = SPRINT_DEFAULT_CONFIG): SessionBlueprint[] {
+	const maxCount = Math.max(config.listeningCount, config.readingCount);
+	const sessions: SessionBlueprint[] = [];
 
-		return [
-			{
+	for (let i = 0; i < maxCount; i++) {
+		const setNumber = i + 1;
+		const listeningDay = i * 2 + 1;
+		const readingDay = i * 2 + 2;
+
+		if (i < config.listeningCount) {
+			sessions.push({
 				id: `L${setNumber}`,
 				sprintDay: listeningDay,
 				type: "L" as const,
@@ -289,8 +324,10 @@ export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
 				label: `L${setNumber}`,
 				title: `Listening Set ${setNumber}`,
 				targetMinutes: 45,
-			},
-			{
+			});
+		}
+		if (i < config.readingCount) {
+			sessions.push({
 				id: `R${setNumber}`,
 				sprintDay: readingDay,
 				type: "R" as const,
@@ -298,36 +335,44 @@ export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = Array.from(
 				label: `R${setNumber}`,
 				title: `Reading Set ${setNumber}`,
 				targetMinutes: 75,
-			},
-		];
+			});
+		}
 	}
-).flat();
 
-const INITIAL_SESSIONS_TEMPLATE: SessionRecord[] = TOEIC_SPRINT_SESSIONS.map((session) => ({
-	...session,
-	status: "not-started",
-	mistakes: {},
-	reasons: [],
-	readingLapTimes: {},
-}));
+	// Sort by sprint day so L/R alternate naturally
+	return sessions.sort((a, b) => a.sprintDay - b.sprintDay);
+}
+
+/** Canonical default 10L+10R =20-session sprint (backward-compat reference). */
+export const TOEIC_SPRINT_SESSIONS: SessionBlueprint[] = buildSprintBlueprints(SPRINT_DEFAULT_CONFIG);
+
+function buildInitialSessions(blueprints: SessionBlueprint[]): SessionRecord[] {
+	return blueprints.map((session) => ({
+		...session,
+		status: "not-started" as SessionStatus,
+		mistakes: {},
+		reasons: [],
+		readingLapTimes: {},
+	}));
+}
+
+const DEFAULT_INITIAL_SESSIONS = buildInitialSessions(TOEIC_SPRINT_SESSIONS);
 
 const SESSION_BLUEPRINT_MAP = new Map(
 	TOEIC_SPRINT_SESSIONS.map((session) => [session.id, session])
 );
 
 const INITIAL_SESSION_MAP = new Map(
-	INITIAL_SESSIONS_TEMPLATE.map((session) => [session.id, session])
+	DEFAULT_INITIAL_SESSIONS.map((session) => [session.id, session])
 );
 
-export function createInitialSessions(): SessionRecord[] {
-	return INITIAL_SESSIONS_TEMPLATE.map((session) => ({
+export function createInitialSessions(config?: SprintConfig): SessionRecord[] {
+	const blueprints = config ? buildSprintBlueprints(config) : TOEIC_SPRINT_SESSIONS;
+	return buildInitialSessions(blueprints).map((session) => ({
 		...session,
-		mistakes: { ...session.mistakes },
-		overtimeMistakes: session.overtimeMistakes
-			? { ...session.overtimeMistakes }
-			: undefined,
-		reasons: [...session.reasons],
-		readingLapTimes: { ...session.readingLapTimes },
+		mistakes: {},
+		reasons: [],
+		readingLapTimes: {},
 	}));
 }
 
@@ -922,15 +967,29 @@ export function getWorstPartLabel(sessions: SessionRecord[]) {
 export function mergeSessionWithDefaults(
 	incoming: Partial<SessionRecord> & Pick<SessionRecord, "id">
 ) {
-	const blueprint = SESSION_BLUEPRINT_MAP.get(incoming.id);
-	if (!blueprint) {
-		throw new Error(`Unknown TOEIC session id: ${incoming.id}`);
-	}
+	// Parse type and set number from id like "L3" or "R10"
+	const idMatch = /^([LR])(\d+)$/.exec(incoming.id);
+	const knownBlueprint = SESSION_BLUEPRINT_MAP.get(incoming.id);
+	const knownInitial = INITIAL_SESSION_MAP.get(incoming.id);
 
-	const initial = INITIAL_SESSION_MAP.get(incoming.id);
-	if (!initial) {
-		throw new Error(`Missing initial TOEIC session id: ${incoming.id}`);
-	}
+	// Gracefully reconstruct blueprint for dynamic session counts
+	const blueprint: SessionBlueprint = knownBlueprint ?? (idMatch ? {
+		id: incoming.id,
+		sprintDay: incoming.sprintDay ?? 1,
+		type: idMatch[1] as SessionType,
+		setNumber: Number(idMatch[2]),
+		label: incoming.id,
+		title: incoming.title ?? incoming.id,
+		targetMinutes: idMatch[1] === "L" ? 45 : 75,
+	} : (() => { throw new Error(`Unknown TOEIC session id: ${incoming.id}`); })());
+
+	const initial: SessionRecord = knownInitial ?? {
+		...blueprint,
+		status: "not-started",
+		mistakes: {},
+		reasons: [],
+		readingLapTimes: {},
+	};
 
 	return {
 		...initial,
@@ -940,6 +999,7 @@ export function mergeSessionWithDefaults(
 		overtimeMistakes: incoming.overtimeMistakes ?? undefined,
 		reasons: incoming.reasons ?? [],
 		readingLapTimes: incoming.readingLapTimes ?? {},
+		notes: incoming.notes ?? undefined,
 		timerSummary: incoming.timerSummary
 			? {
 				...incoming.timerSummary,
@@ -947,4 +1007,89 @@ export function mergeSessionWithDefaults(
 			}
 			: undefined,
 	} as SessionRecord;
+}
+
+// ─── Aggregated Score Estimation ─────────────────────────────────────────────
+
+/**
+ * Aggregate multiple (L, R) session pairs into a single combined estimate.
+ * Uses simple average across available pairs.
+ */
+export function estimateAggregatedScore(
+	sessions: SessionRecord[],
+	mode: "strict" | "potential" = "strict"
+): ToeicCombinedEstimate | null {
+	const listeningDone = sessions.filter((s) => s.type === "L" && hasRecordedSessionData(s));
+	const readingDone = sessions.filter((s) => s.type === "R" && hasRecordedSessionData(s));
+
+	if (listeningDone.length === 0 && readingDone.length === 0) return null;
+
+	// Average across pairs by set number
+	const setPairs = new Map<number, { l?: SessionRecord; r?: SessionRecord }>();
+	for (const s of listeningDone) {
+		const pair = setPairs.get(s.setNumber) ?? {};
+		pair.l = s;
+		setPairs.set(s.setNumber, pair);
+	}
+	for (const s of readingDone) {
+		const pair = setPairs.get(s.setNumber) ?? {};
+		pair.r = s;
+		setPairs.set(s.setNumber, pair);
+	}
+
+	const estimates = [...setPairs.values()]
+		.map(({ l, r }) => estimateToeicCombinedScore(l, r, mode))
+		.filter((e) => e.available);
+
+	if (estimates.length === 0) return estimateToeicCombinedScore(
+		listeningDone[listeningDone.length - 1],
+		readingDone[readingDone.length - 1],
+		mode
+	);
+
+	const avgTotal = Math.round(estimates.reduce((sum, e) => sum + e.total, 0) / estimates.length);
+	// Take the last estimate as the reference for metadata, override total
+	const ref = estimates[estimates.length - 1];
+	return { ...ref, total: avgTotal };
+}
+
+// ─── Target Gap Analysis ──────────────────────────────────────────────────────
+
+export type TargetGapAnalysis = {
+	targetTotal: number;
+	currentTotal: number;
+	gap: number;
+	achieved: boolean;
+	/** Per-part how many fewer mistakes needed if we assume equal distribution */
+	partSuggestions: Array<{ part: MistakeKey; currentMistakes: number; suggestedMistakes: number; delta: number }>;
+};
+
+export function getTargetGapAnalysis(
+	sessions: SessionRecord[],
+	targetTotal: number,
+	mode: "strict" | "potential" = "strict"
+): TargetGapAnalysis | null {
+	const latest = estimateToeicCombinedScore(
+		[...sessions].reverse().find((s) => s.type === "L" && hasRecordedSessionData(s)),
+		[...sessions].reverse().find((s) => s.type === "R" && hasRecordedSessionData(s)),
+		mode
+	);
+
+	if (!latest.available) return null;
+
+	const achieved = latest.total >= targetTotal;
+	const gap = targetTotal - latest.total;
+
+	const completed = sessions.filter((s) => hasRecordedSessionData(s));
+	const partSuggestions: TargetGapAnalysis["partSuggestions"] = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
+		const matching = completed.filter((s) => getPartsForType(s.type).includes(part as never));
+		if (matching.length === 0) return { part, currentMistakes: 0, suggestedMistakes: 0, delta: 0 };
+		const avgMistakes = matching.reduce((sum, s) => sum + (s.mistakes[part] ?? 0), 0) / matching.length;
+		// Very rough suggestion: reduce by ~10% per 50-point gap
+		const reductionFactor = Math.max(0, Math.min(1, gap / 200));
+		const suggested = Math.max(0, Math.round(avgMistakes * (1 - reductionFactor)));
+		return { part, currentMistakes: Math.round(avgMistakes), suggestedMistakes: suggested, delta: Math.round(avgMistakes) - suggested };
+	}).filter((s) => s.currentMistakes > 0 || s.delta !== 0);
+
+	return { targetTotal, currentTotal: latest.total, gap, achieved, partSuggestions };
 }
