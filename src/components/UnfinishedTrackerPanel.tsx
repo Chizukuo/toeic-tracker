@@ -16,7 +16,6 @@ import {
 import { ClipboardList, Orbit, TimerReset } from 'lucide-react';
 
 import { buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCopy } from '@/lib/i18n';
 import {
   estimateToeicSessionDualScore,
@@ -166,23 +165,23 @@ export function UnfinishedTrackerPanel() {
   }, [activeSessionId, locale, sessions]);
 
   return (
-    <motion.div 
-      className="space-y-6"
+    <motion.section 
+      className="w-full max-w-6xl mx-auto space-y-6"
       variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
       initial="hidden" animate="show"
     >
-      <Card className="overflow-hidden rounded-[32px] border border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none">
-        <CardHeader className="px-6 py-6 border-b border-black/[0.04] dark:border-white/[0.04]">
-          <CardTitle className="text-[12px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             {copy.unfinishedTrackerTitle}
-          </CardTitle>
-          <CardDescription className="max-w-3xl text-[14px] leading-relaxed text-zinc-500 mt-1">
+          </h1>
+          <p className="mt-1 text-[15px] text-zinc-500 dark:text-zinc-400">
             {copy.unfinishedTrackerDescription}
-          </CardDescription>
-        </CardHeader>
+          </p>
+        </div>
+      </div>
 
-        <CardContent className="grid gap-6 p-6">
-          <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-4 md:grid-cols-3">
+      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-4 md:grid-cols-3">
             <TrackerStat
               icon={<ClipboardList className="size-4" />}
               label={copy.unfinishedTotal}
@@ -207,7 +206,7 @@ export function UnfinishedTrackerPanel() {
           </motion.div>
 
           <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_360px]">
-            <div className="rounded-[28px] bg-zinc-50/50 dark:bg-zinc-900/20 p-6 border border-black/[0.04] dark:border-white/[0.04]">
+            <WidgetCard className="flex flex-col">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.06] pb-4">
                 <div>
                   <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
@@ -285,9 +284,9 @@ export function UnfinishedTrackerPanel() {
                   </ResponsiveContainer>
                 </div>
               )}
-            </div>
+            </WidgetCard>
 
-            <div className="rounded-[28px] bg-zinc-50/50 dark:bg-zinc-900/20 p-6 border border-black/[0.04] dark:border-white/[0.04]">
+            <WidgetCard className="flex flex-col">
               <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                 {locale === 'zh' ? '处理清单' : 'Resolution Queue'}
               </div>
@@ -341,11 +340,11 @@ export function UnfinishedTrackerPanel() {
                   ))
                 )}
               </div>
-            </div>
+            </WidgetCard>
           </motion.div>
 
           <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-            <div className="rounded-[28px] bg-zinc-50/50 dark:bg-zinc-900/20 p-6 border border-black/[0.04] dark:border-white/[0.04]">
+            <WidgetCard className="flex flex-col">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.06] pb-4">
                 <div>
                   <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
@@ -392,9 +391,9 @@ export function UnfinishedTrackerPanel() {
                   tone="slate"
                 />
               </div>
-            </div>
+            </WidgetCard>
 
-            <div className="rounded-[28px] bg-zinc-50/50 dark:bg-zinc-900/20 p-6 border border-black/[0.04] dark:border-white/[0.04]">
+            <WidgetCard className="flex flex-col">
               <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                 {locale === 'zh' ? '关键观察' : 'Key Observations'}
               </div>
@@ -428,11 +427,20 @@ export function UnfinishedTrackerPanel() {
                   onClick={overtimeInsight.latestTimedOut ? () => openSession(overtimeInsight.latestTimedOut!.id) : undefined}
                 />
               </div>
-            </div>
+            </WidgetCard>
           </motion.div>
-        </CardContent>
-      </Card>
-    </motion.div>
+    </motion.section>
+  );
+}
+
+function WidgetCard({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn(
+      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04]",
+      className
+    )}>
+      {children}
+    </div>
   );
 }
 

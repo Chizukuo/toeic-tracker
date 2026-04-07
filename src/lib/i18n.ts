@@ -270,6 +270,12 @@ type Copy = {
 	scoreTotalLabel: string;
 	scoreUnavailable: string;
 	scoreUnavailableBody: string;
+	missionGoalTitle: string;
+	missionGoalDesc: string;
+	sprintLength: string;
+	sprintLengthDesc: string;
+	setsCount: (count: number) => string;
+	saveConfig: string;
 };
 
 const copy: Record<Locale, Copy> = {
@@ -474,6 +480,12 @@ const copy: Record<Locale, Copy> = {
 		scoreTotalLabel: '总分',
 		scoreUnavailable: '当前还不能估分',
 		scoreUnavailableBody: '先完成计时或保存错题数据，再进行估分会更准确。',
+		missionGoalTitle: '任务目标',
+		missionGoalDesc: '设置考试日期与要完成的冲刺套题数。',
+		sprintLength: '冲刺题量',
+		sprintLengthDesc: '设置包含听力和阅读的完整套题数量。',
+		setsCount: (count) => `${count} 套`,
+		saveConfig: '保存目标',
 	},
 	en: {
 		appName: 'Cheese TOEIC Tracker',
@@ -676,6 +688,12 @@ const copy: Record<Locale, Copy> = {
 		scoreTotalLabel: 'Total',
 		scoreUnavailable: 'No score estimate yet',
 		scoreUnavailableBody: 'Finish a timed run or save mistake data first for a meaningful estimate.',
+		missionGoalTitle: 'Mission Goal',
+		missionGoalDesc: 'Configure your exam date and sprint set length.',
+		sprintLength: 'Sprint Length',
+		sprintLengthDesc: 'Number of full test sets to complete.',
+		setsCount: (count) => `${count} Sets`,
+		saveConfig: 'Save Goal',
 	},
 };
 

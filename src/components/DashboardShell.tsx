@@ -33,6 +33,7 @@ type DashboardContextValue = {
     unfinishedTotal: number;
     unfinishedSessionsCount: number;
     completionPct: number;
+    totalSessions: number;
   };
   focusSignals: Array<{
     label: string;

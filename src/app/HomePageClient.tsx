@@ -9,10 +9,12 @@ import { DashboardShell, useDashboardContext } from '@/components/DashboardShell
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { WeeklyReport } from '@/components/WeeklyReport';
 import { getNextStepRecommendation } from '@/lib/nextStep';
-import { estimateToeicCombinedScore, TOEIC_SPRINT_SESSIONS } from '@/lib/toeic';
+import { estimateToeicCombinedScore } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
+import { MissionConfigDialog } from '@/components/MissionConfigDialog';
+import { useState } from 'react';
 
 export default function HomePageClient() {
   return (
@@ -27,6 +29,7 @@ function MissionControl() {
   const selectSession = useStore((state) => state.selectSession);
   const examDate = useStore((state) => state.examDate);
   const historicalScoreCount = useStore((state) => state.historicalScores.length);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
 
   const nextStep = useMemo(
     () =>
@@ -136,7 +139,7 @@ function MissionControl() {
             {locale === 'zh' ? '冲刺进度' : 'Sprint Progress'}
           </h2>
           <span className="text-xs font-medium text-[var(--label-secondary)]">
-            {homeMetrics.completionPct}% · {homeMetrics.debuggedCount}/20
+            {homeMetrics.completionPct}% · {homeMetrics.debuggedCount}/{homeMetrics.totalSessions}
           </span>
         </div>
 
@@ -151,29 +154,31 @@ function MissionControl() {
             />
           </div>
 
-          {/* 10×2 dot grid */}
-          <div className="grid grid-cols-10 gap-1.5 sm:gap-2.5">
-            {TOEIC_SPRINT_SESSIONS.map((blueprint) => {
-              const session = sessions.find((s) => s.id === blueprint.id);
-              const isActive = session?.id === activeSession.id;
-              const isDone = session?.status === 'debugged';
-              const isInProgress = session?.status === 'in-progress';
+          {/* Dynamic dot grid */}
+          <div 
+            className="grid gap-1.5 sm:gap-2.5" 
+            style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(sessions.length / 2))}, minmax(0, 1fr))` }}
+          >
+            {sessions.map((session) => {
+              const isActive = session.id === activeSession.id;
+              const isDone = session.status === 'debugged';
+              const isInProgress = session.status === 'in-progress';
 
               return (
                 <button
-                  key={blueprint.id}
+                  key={session.id}
                   type="button"
-                  onClick={() => selectSession(blueprint.id)}
-                  title={`${blueprint.label} — ${blueprint.title}`}
+                  onClick={() => selectSession(session.id)}
+                  title={`${session.label} — ${session.title}`}
                   className={cn(
-                    'group flex flex-col items-center gap-1.5 rounded-[10px] p-1.5 transition-all sm:p-2',
+                    'group flex flex-col items-center justify-center gap-1.5 rounded-[10px] p-1.5 transition-all sm:p-2',
                     isActive
                       ? 'bg-[var(--cheese-gold-soft)] ring-2 ring-[var(--cheese-gold)]/40'
                       : isDone
                         ? 'bg-emerald-500/8 hover:bg-emerald-500/15 dark:bg-emerald-500/10'
                         : isInProgress
                           ? 'bg-amber-500/8 hover:bg-amber-500/15 dark:bg-amber-500/10'
-                          : 'hover:bg-[var(--surface-grouped)]'
+                          : 'bg-[var(--surface-grouped)]/50 hover:bg-[var(--surface-grouped)]'
                   )}
                 >
                   <div
@@ -182,7 +187,7 @@ function MissionControl() {
                       isDone
                         ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]'
                         : isInProgress || isActive
-                          ? 'bg-amber-500 shadow-[0_0_6px_rgba(217,119,6,0.3)]'
+                          ? 'bg-[var(--cheese-gold)] shadow-[0_0_6px_rgba(217,119,6,0.3)]'
                           : 'bg-[var(--label-tertiary)]',
                       'group-hover:scale-110'
                     )}
@@ -191,7 +196,7 @@ function MissionControl() {
                     'text-[9px] font-bold leading-none sm:text-[10px]',
                     isActive ? 'text-[var(--cheese-gold)]' : 'text-[var(--label-tertiary)]'
                   )}>
-                    {blueprint.label}
+                    {session.label}
                   </span>
                 </button>
               );
@@ -251,14 +256,18 @@ function MissionControl() {
             </div>
           </Link>
 
-          {/* Exam Countdown */}
-          <div className="cheese-card cheese-card-cyan h-full p-5">
+          {/* Exam Countdown (Clickable for Goal Config) */}
+          <button 
+             type="button"
+             onClick={() => setIsConfigOpen(true)}
+             className="cheese-card cheese-card-cyan h-full p-5 text-left w-full hover:scale-[1.02] active:scale-[0.98] transition-transform"
+          >
             <div className="flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-cyan-soft)]">
                 <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
               </div>
               <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                {locale === 'zh' ? '倒计时' : 'Countdown'}
+                {locale === 'zh' ? '目标配置' : 'Mission Goal'}
               </span>
             </div>
             <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
@@ -267,10 +276,12 @@ function MissionControl() {
                 {locale === 'zh' ? '天' : 'days'}
               </span>
             </div>
-            <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
-              {examDate}
+            <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
+              <span className="font-medium">{examDate}</span>
+              <span className="opacity-50">·</span>
+              <span>{locale === 'zh' ? `设为 ${sessions.length / 2} 套` : `${sessions.length / 2} Sets`}</span>
             </div>
-          </div>
+          </button>
         </div>
       </motion.div>
 
@@ -286,6 +297,11 @@ function MissionControl() {
            <WeeklyReport />
         </div>
       </motion.div>
+
+      <MissionConfigDialog 
+        isOpen={isConfigOpen} 
+        onClose={() => setIsConfigOpen(false)} 
+      />
     </div>
   );
 }
