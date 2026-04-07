@@ -403,8 +403,8 @@ export function DataVaultPanel() {
 						animate="show"
 					>
 						{[
-							{ label: locale === 'zh' ? '已录入套题' : 'Recorded Sets', value: `${recordedSessions}/20`, helper: locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data' },
-							{ label: locale === 'zh' ? '已完成复盘' : 'Reviewed', value: `${reviewedSessions}/20`, helper: locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed' },
+							{ label: locale === 'zh' ? '已录入套题' : 'Recorded Sets', value: `${recordedSessions}/${sessions.length}`, helper: locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review data' },
+							{ label: locale === 'zh' ? '已完成复盘' : 'Reviewed', value: `${reviewedSessions}/${sessions.length}`, helper: locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed' },
 							{ label: locale === 'zh' ? '历史成绩' : 'History Records', value: `${historicalScores.length}`, helper: locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated score entries' },
 							{ label: locale === 'zh' ? '当前定位' : 'Active Session', value: activeSessionLabel, helper: examDate }
 						].map((item, i) => (
@@ -415,16 +415,16 @@ export function DataVaultPanel() {
 					</motion.div>
 
 					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
-						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
 						</motion.div>
-						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
 						</motion.div>
-						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<Link2 className="size-5" />} title={copy.syncTitle} body={copy.syncBody} actionLabel={copy.syncAction} onAction={() => { void handleGenerateSyncLink(); }} />
 						</motion.div>
-						<motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
 						</motion.div>
 					</motion.div>
@@ -744,7 +744,7 @@ function ActionPanel({
 	danger?: boolean;
 }) {
 	return (
-		<div className="deck-surface flex flex-col p-4 sm:p-5">
+		<div className="deck-surface flex flex-col p-4 sm:p-5 h-full">
 			<div className={`flex size-10 items-center justify-center rounded-2xl ${danger ? 'bg-red-500/10 text-red-500' : 'bg-amber-400/12 text-amber-700 dark:text-amber-300'}`}>
 				{icon}
 			</div>

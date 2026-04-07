@@ -46,7 +46,18 @@ export function WeeklyReport() {
   }, [sessions]);
 
   if (report.thisWeekCount === 0 && report.lastWeekCount === 0) {
-    return null;
+    return (
+      <div className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-[16px] border border-black/5 dark:border-white/5 opacity-60 grayscale">
+        <div className="flex flex-col pr-4">
+          <span className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
+            {locale === 'zh' ? '本周回顾' : 'Weekly Digest'}
+          </span>
+          <span className="text-[12px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">
+            {locale === 'zh' ? '暂无练习数据，期待你的新产出。' : 'No records yet. Ready when you are.'}
+          </span>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -366,7 +366,7 @@ export function AnalyticsDashboard() {
         </WidgetCard>
 
         {/* Hotspot Convergence Chart */}
-        <WidgetCard className="flex flex-col">
+        <WidgetCard className="flex flex-col md:col-span-2">
           <div className="mb-5">
             <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{locale === 'zh' ? '弱点收敛趋势' : 'Hotspot Convergence'}</h2>
             <p className="mt-1 text-[14px] text-zinc-500 dark:text-zinc-400">
