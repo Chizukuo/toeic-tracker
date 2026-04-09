@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowRight, Check, CheckCircle2, Copy, Database, Download, Info, Link2, QrCode, RotateCcw, ShieldAlert, Upload, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, Bot, Check, CheckCircle2, Copy, Database, Download, Info, Link2, QrCode, RotateCcw, ShieldAlert, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import {
@@ -134,7 +134,7 @@ export function DataVaultPanel() {
 				try {
 					const parsed = JSON.parse(trimmed);
 					if (parsed?.app === SNAPSHOT_APP || parsed?.schema === 'cheese-toeic-snapshot') {
-						const preview = parseImportSnapshot(parsed);
+						const preview = parseImportSnapshot(parsed, useStore.getState());
 						setPendingFileImport({
 							fileName: 'Clipboard Import',
 							payload: parsed,
@@ -255,6 +255,63 @@ export function DataVaultPanel() {
 		}
 	};
 
+	const handleGenerateAIPrompt = async () => {
+		const wordsSubset = [...new Map(vocabularyEntries
+			.filter((entry) => typeof entry?.text === 'string' && entry.text.trim())
+			.map(entry => [entry.text.trim().toLowerCase(), {
+				text: entry.text.trim(),
+				reading: entry.reading || "",
+				partOfSpeech: entry.partOfSpeech || "",
+				definition: entry.definition || "",
+				enDefinition: entry.enDefinition || "",
+				exampleSentence: entry.exampleSentence || "",
+				encounterCount: entry.encounterCount || 0,
+				knockdownCount: entry.knockdownCount || 0
+			}])
+		).values()].sort((a, b) => a.text.localeCompare(b.text));
+
+		if (wordsSubset.length === 0) {
+			pushFeedback('error', copy.exportVocabularyEmpty);
+			return;
+		}
+
+		const { generateToeicOptimizationPrompt } = await import('@/lib/aiPrompts');
+		const prompt = generateToeicOptimizationPrompt(wordsSubset);
+
+		try {
+			await navigator.clipboard.writeText(prompt);
+			pushFeedback('success', copy.copyAiPromptSuccess);
+		} catch {
+			pushFeedback('error', copy.exportFailure);
+		}
+	};
+
+	const handleGenerateAssessmentPrompt = async () => {
+		const wordsSubset = [...new Map(vocabularyEntries
+			.filter((entry) => typeof entry?.text === 'string' && entry.text.trim())
+			.map(entry => [entry.text.trim().toLowerCase(), {
+				text: entry.text.trim(),
+				encounterCount: entry.encounterCount || 0,
+				knockdownCount: entry.knockdownCount || 0
+			}])
+		).values()].sort((a, b) => a.text.localeCompare(b.text));
+
+		if (wordsSubset.length === 0) {
+			pushFeedback('error', copy.exportVocabularyEmpty);
+			return;
+		}
+
+		const { generateVocabAssessmentPrompt } = await import('@/lib/aiPrompts');
+		const prompt = generateVocabAssessmentPrompt(wordsSubset);
+
+		try {
+			await navigator.clipboard.writeText(prompt);
+			pushFeedback('success', locale === 'zh' ? '测评 Prompt 已复制' : 'Assessment Prompt copied');
+		} catch {
+			pushFeedback('error', copy.exportFailure);
+		}
+	};
+
 	const handleGenerateSyncLink = async () => {
 		if (typeof window === 'undefined') {
 			return;
@@ -336,7 +393,7 @@ export function DataVaultPanel() {
 		try {
 			const rawText = await file.text();
 			const parsed = JSON.parse(rawText) as unknown;
-			const preview = parseImportSnapshot(parsed);
+			const preview = parseImportSnapshot(parsed, useStore.getState());
 			setPendingFileImport({
 				fileName: file.name,
 				payload: parsed,
@@ -415,7 +472,7 @@ export function DataVaultPanel() {
 			const raw = window.localStorage.getItem(key);
 			if (raw) {
 				const parsed = JSON.parse(raw);
-				const preview = parseImportSnapshot(parsed);
+				const preview = parseImportSnapshot(parsed, useStore.getState());
 				setPendingFileImport({
 					fileName: locale === 'zh' ? '自动备份恢复' : 'Auto-Backup Restore',
 					payload: parsed,
@@ -524,23 +581,42 @@ export function DataVaultPanel() {
 						))}
 					</motion.div>
 
-					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
-						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
-							<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
+					<div className="xl:col-span-4 mt-2">
+						<div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3 flex items-center gap-2">
+							<Database className="w-4 h-4 text-zinc-500" />
+							{locale === 'zh' ? '数据备份与同步' : 'Snapshots & Sync'}
+						</div>
+						<motion.div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
+							</motion.div>
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
+							</motion.div>
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<Link2 className="size-5" />} title={copy.syncTitle} body={copy.syncBody} actionLabel={copy.syncAction} onAction={() => { void handleGenerateSyncLink(); }} />
+							</motion.div>
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
+							</motion.div>
 						</motion.div>
-						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
-							<ActionPanel icon={<Download className="size-5" />} title={copy.exportVocabularyTitle} body={copy.exportVocabularyBody} actionLabel={copy.exportVocabularyAction} onAction={handleExportVocabularyList} />
+					</div>
+
+					<div className="xl:col-span-4 mt-2">
+						<div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3 flex items-center gap-2">
+							<Bot className="w-4 h-4 text-zinc-500" />
+							{locale === 'zh' ? '词表管理与 AI 优化' : 'Vocabulary & AI Tools'}
+						</div>
+						<motion.div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } } }} initial="hidden" animate="show">
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<Bot className="size-5 text-(--cheese-gold)" />} title={copy.copyAiPromptTitle} body={copy.copyAiPromptBody} actionLabel={copy.copyAiPromptAction} onAction={() => { void handleGenerateAIPrompt(); }} />
+								<ActionPanel icon={<Bot className="size-5 text-(--cheese-gold-soft)" />} title={locale === 'zh' ? '综合水平测评' : 'Vocab Assessment'} body={locale === 'zh' ? '生成你的错题与难度报告Prompt' : 'Generate an assessment prompt for AI'} actionLabel={locale === 'zh' ? '复制 Prompt' : 'Copy Prompt'} onAction={() => { void handleGenerateAssessmentPrompt(); }} />
+							</motion.div>
+							<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+								<ActionPanel icon={<Download className="size-5" />} title={copy.exportVocabularyTitle} body={copy.exportVocabularyBody} actionLabel={copy.exportVocabularyAction} onAction={handleExportVocabularyList} />
+							</motion.div>
 						</motion.div>
-						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
-							<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
-						</motion.div>
-						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
-							<ActionPanel icon={<Link2 className="size-5" />} title={copy.syncTitle} body={copy.syncBody} actionLabel={copy.syncAction} onAction={() => { void handleGenerateSyncLink(); }} />
-						</motion.div>
-						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
-							<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
-						</motion.div>
-					</motion.div>
+					</div>
 
 					<div className="xl:col-span-4 deck-surface-soft flex flex-col gap-3 rounded-[22px] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
 						<div className="space-y-1">

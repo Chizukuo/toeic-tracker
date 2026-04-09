@@ -66,7 +66,7 @@ export type SprintSnapshot = {
 };
 
 export type ImportSnapshotResult = {
-  source: 'snapshot' | 'state' | 'persisted-state' | 'legacy-records';
+  source: 'snapshot' | 'state' | 'persisted-state' | 'legacy-records' | 'vocabulary-list';
   importedVersion: number | 'legacy';
   migrated: boolean;
   futureVersion: boolean;
@@ -276,7 +276,61 @@ export function migrateLegacyRecords(records: LegacyRecord[] | undefined) {
   return sessions;
 }
 
-export function parseImportSnapshot(snapshot: unknown) {
+export function parseImportSnapshot(
+  snapshot: unknown,
+  currentState?: {
+    sessions: SessionRecord[];
+    activeSessionId: string;
+    locale: AppLocale;
+    examDate: string;
+    historicalScores: HistoricalScoreRecord[];
+    sprintConfig: SprintConfig;
+    vocabularyEntries: VocabularyEntry[];
+    unlockedAchievements: string[];
+  }
+) {
+  // If it's a direct array of vocabulary entries
+  if (Array.isArray(snapshot)) {
+    const isVocabList = snapshot.length > 0 && snapshot.every((item) => isObjectRecord(item) && typeof item.text === 'string');
+    if (isVocabList && currentState) {
+      // Merge vocabularies: prefer imported
+      const importedVocab = normalizeVocabularyEntries(snapshot);
+      const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
+      for (const entry of importedVocab) {
+        mergedMap.set(entry.text.toLowerCase(), entry);
+      }
+      return {
+        ...currentState,
+        vocabularyEntries: Array.from(mergedMap.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        result: {
+          source: 'vocabulary-list' as const,
+          importedVersion: 'legacy' as const,
+          migrated: false,
+          futureVersion: false,
+        },
+      } satisfies ParsedImportSnapshot;
+    }
+  }
+
+  // If it's a standalone object wrapper for vocabularies (e.g. { vocabularyEntries: [...] })
+  if (isObjectRecord(snapshot) && Array.isArray(snapshot.vocabularyEntries) && snapshot.vocabularyEntries.length > 0 && !('sessions' in snapshot) && !('data' in snapshot) && !('state' in snapshot) && currentState) {
+    const importedVocab = normalizeVocabularyEntries(snapshot.vocabularyEntries);
+    const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
+    for (const entry of importedVocab) {
+      mergedMap.set(entry.text.toLowerCase(), entry);
+    }
+    return {
+      ...currentState,
+      vocabularyEntries: Array.from(mergedMap.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      result: {
+        source: 'vocabulary-list' as const,
+        importedVersion: 'legacy' as const,
+        migrated: false,
+        futureVersion: false,
+      },
+    } satisfies ParsedImportSnapshot;
+  }
+
   if (!isObjectRecord(snapshot)) {
     throw new Error('Invalid snapshot payload');
   }

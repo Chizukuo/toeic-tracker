@@ -499,9 +499,9 @@ export const useStore = create<AppState>()(
 
       importSnapshot: (snapshot) => {
         createAutoBackup(get(), getPersistStorage() as Storage);
-        const next = parseImportSnapshot(snapshot);
+        const next = parseImportSnapshot(snapshot, get());
         const importedAchievements =
-          next.result.source === 'snapshot'
+          next.result.source === 'snapshot' || next.result.source === 'vocabulary-list'
             ? next.unlockedAchievements
             : get().unlockedAchievements;
         set({

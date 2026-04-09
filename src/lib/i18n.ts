@@ -188,6 +188,10 @@ type Copy = {
 	exportVocabularyAction: string;
 	exportVocabularyEmpty: string;
 	exportVocabularySuccess: (count: number) => string;
+	copyAiPromptTitle: string;
+	copyAiPromptBody: string;
+	copyAiPromptAction: string;
+	copyAiPromptSuccess: string;
 	exportSuccess: string;
 	exportFailure: string;
 	importTitle: string;
@@ -406,6 +410,10 @@ const copy: Record<Locale, Copy> = {
 		exportVocabularyAction: '导出词表',
 		exportVocabularyEmpty: '当前没有可导出的生词。',
 		exportVocabularySuccess: (count) => `生词表导出成功，共 ${count} 个单词。`,
+		copyAiPromptTitle: '生成 AI 专属词表 Prompt',
+		copyAiPromptBody: '自动打包生词表并生成优化 Prompt。去 AI 面板拷贝回复内容后，仍旧使用上面的【导入数据】按钮就能合并优化后的释义，而不丢失复习进度。',
+		copyAiPromptAction: '拷贝 Prompt',
+		copyAiPromptSuccess: '提示词已复制！请直接粘贴给 ChatGPT、Claude 等大模型',
 		exportSuccess: '数据成功导出。',
 		exportFailure: '导出失败，请重试。',
 		importTitle: '导入数据快照',
@@ -622,6 +630,10 @@ const copy: Record<Locale, Copy> = {
 		exportVocabularyAction: 'Export words',
 		exportVocabularyEmpty: 'No vocabulary words available to export.',
 		exportVocabularySuccess: (count) => `Vocabulary list exported (${count} words).`,
+		copyAiPromptTitle: 'Copy AI Optimization Prompt',
+		copyAiPromptBody: 'Pack your vocabulary words and copy a specialized AI prompt to clipboard. Let AI re-evaluate definitions contextually for TOEIC, then just re-import the optimized JSON file right above.',
+		copyAiPromptAction: 'Copy Prompt',
+		copyAiPromptSuccess: 'Prompt copied! Now paste into ChatGPT or Claude!',
 		exportSuccess: 'Data exported successfully.',
 		exportFailure: 'Export failed. Please try again.',
 		importTitle: 'Import Snapshot',
