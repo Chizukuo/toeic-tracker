@@ -771,7 +771,7 @@ function AddEntryForm({
         <div className="relative flex-1">
           <textarea
             ref={inputRef}
-            rows={text.includes('\\n') ? Math.min(text.split('\\n').length, 5) : 1}
+            rows={text.includes('\n') ? Math.min(text.split('\n').length, 5) : 1}
             value={text}
             onChange={(e) => {
               const nextText = e.target.value;
@@ -782,8 +782,8 @@ function AddEntryForm({
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder={locale === 'zh' ? '输入生词并回车添加。支持 Shift+回车换行或逗号分隔批量录入…' : 'Type a word, Enter to add. Use commas or newlines for bulk entry…'}
-            className="w-full resize-none min-h-11 rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-2.5 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide"
+            placeholder={locale === 'zh' ? '输入单词或短语，支持换行 / 逗号批量录入...' : 'Type a word or phrase, Enter to add...'}
+            className="w-full resize-none min-h-11 rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-3 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide flex items-center shadow-xs"
           />
           {isLooking && (
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -1009,6 +1009,9 @@ export function VocabularyPanel() {
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Background migration for legacy entries missing definitions
   useEffect(() => {
     const missing = vocabularyEntries.filter((e) => {
@@ -1171,6 +1174,14 @@ export function VocabularyPanel() {
   }, [vocabularyEntries, filterMode, searchQuery]);
 
   const repeatCount = useMemo(() => vocabularyEntries.filter((e) => e.encounterCount >= 2).length, [vocabularyEntries]);
+
+  if (!mounted) {
+    return (
+      <div className="flex h-32 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-(--cheese-gold)" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
