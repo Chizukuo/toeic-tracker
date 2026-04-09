@@ -85,6 +85,7 @@ type SnapshotLike = {
     records?: LegacyRecord[];
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
+    unlockedAchievements?: unknown;
   };
   state?: {
     sessions?: unknown;
@@ -95,6 +96,7 @@ type SnapshotLike = {
     records?: LegacyRecord[];
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
+    unlockedAchievements?: unknown;
   };
   sessions?: unknown;
   activeSessionId?: string;
@@ -104,6 +106,7 @@ type SnapshotLike = {
   records?: LegacyRecord[];
   sprintConfig?: unknown;
   vocabularyEntries?: unknown;
+  unlockedAchievements?: unknown;
 };
 
 export type ParsedImportSnapshot = {
@@ -114,6 +117,7 @@ export type ParsedImportSnapshot = {
   historicalScores: HistoricalScoreRecord[];
   sprintConfig: SprintConfig;
   vocabularyEntries: VocabularyEntry[];
+  unlockedAchievements: string[];
   result: ImportSnapshotResult;
 };
 
@@ -129,6 +133,12 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 
 function isLocale(value: unknown): value is AppLocale {
   return value === 'zh' || value === 'en';
+}
+
+function normalizeUnlockedAchievements(incoming: unknown): string[] {
+  return Array.isArray(incoming)
+    ? incoming.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 export function getPersistStorage() {
@@ -300,6 +310,7 @@ export function parseImportSnapshot(snapshot: unknown) {
       historicalScores: normalizeHistoricalScores(source.historicalScores),
       sprintConfig: SPRINT_DEFAULT_CONFIG,
       vocabularyEntries: [],
+      unlockedAchievements: [],
       result: {
         source: 'legacy-records' as const,
         importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
@@ -327,6 +338,7 @@ export function parseImportSnapshot(snapshot: unknown) {
     historicalScores: normalizeHistoricalScores(source.historicalScores),
     sprintConfig: normalizeSprintConfig(source.sprintConfig),
     vocabularyEntries: normalizeVocabularyEntries(source.vocabularyEntries),
+    unlockedAchievements: normalizeUnlockedAchievements(source.unlockedAchievements),
     result: {
       source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',
       importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',

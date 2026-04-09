@@ -501,11 +501,8 @@ export const useStore = create<AppState>()(
         createAutoBackup(get(), getPersistStorage() as Storage);
         const next = parseImportSnapshot(snapshot);
         const importedAchievements =
-          next.result.source === 'snapshot' &&
-          Array.isArray((next as { unlockedAchievements?: unknown }).unlockedAchievements)
-            ? (next as { unlockedAchievements: unknown[] }).unlockedAchievements.filter(
-                (item): item is string => typeof item === 'string'
-              )
+          next.result.source === 'snapshot'
+            ? next.unlockedAchievements
             : get().unlockedAchievements;
         set({
           sessions: next.sessions,
