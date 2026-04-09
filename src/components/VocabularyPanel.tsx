@@ -16,6 +16,123 @@ interface LookupResult {
   reading?: string;
 }
 
+const PLACEHOLDER_DEFINITIONS = new Set(['-', '--', '—', 'n/a', 'na']);
+const VIOLENT_DEFINITION_HINTS = [
+  'bullet',
+  'ammunition',
+  'gunpowder',
+  'firearm',
+  'weapon',
+  'rifle',
+  'pistol',
+  'grenade',
+  'bomb',
+];
+const TOEIC_FRIENDLY_HINTS = [
+  'business',
+  'office',
+  'printer',
+  'toner',
+  'document',
+  'meeting',
+  'contract',
+  'invoice',
+  'shipment',
+  'schedule',
+  'email',
+  'computer',
+  'software',
+  'data',
+  'company',
+  'customer',
+  'employee',
+  'manager',
+  'sale',
+  'service',
+  'equipment',
+];
+
+function normalizeDefinitionText(value?: string) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '';
+  if (PLACEHOLDER_DEFINITIONS.has(trimmed.toLowerCase())) return '';
+  return trimmed;
+}
+
+function containsViolentHint(text?: string) {
+  const normalized = normalizeDefinitionText(text).toLowerCase();
+  if (!normalized) return false;
+  return VIOLENT_DEFINITION_HINTS.some((keyword) => normalized.includes(keyword));
+}
+
+function isLikelyEnglishText(text?: string) {
+  const normalized = normalizeDefinitionText(text);
+  return /[a-z]/i.test(normalized);
+}
+
+type DictionaryCandidate = {
+  definition: string;
+  partOfSpeech: string;
+  exampleSentence?: string;
+};
+
+type DictionaryApiDefinition = {
+  definition?: string;
+  example?: string;
+};
+
+type DictionaryApiMeaning = {
+  partOfSpeech?: string;
+  definitions?: DictionaryApiDefinition[];
+};
+
+type DictionaryApiPhonetic = {
+  text?: string;
+};
+
+type DictionaryApiEntry = {
+  meanings?: DictionaryApiMeaning[];
+  phonetics?: DictionaryApiPhonetic[];
+};
+
+function scoreDictionaryCandidate(candidate: DictionaryCandidate) {
+  const normalized = candidate.definition.toLowerCase();
+  let score = 0;
+
+  if (containsViolentHint(candidate.definition)) score -= 8;
+  if (normalized.includes('(by extension)')) score += 2;
+  if (candidate.partOfSpeech === 'noun') score += 1;
+
+  for (const keyword of TOEIC_FRIENDLY_HINTS) {
+    if (normalized.includes(keyword)) score += 2;
+  }
+
+  return score;
+}
+
+function pickBestDictionaryCandidate(entry: DictionaryApiEntry): DictionaryCandidate | null {
+  const candidates: DictionaryCandidate[] = [];
+  const meanings = Array.isArray(entry.meanings) ? entry.meanings : [];
+
+  meanings.forEach((meaning) => {
+    const partOfSpeech = typeof meaning?.partOfSpeech === 'string' ? meaning.partOfSpeech : '';
+    const definitions = Array.isArray(meaning?.definitions) ? meaning.definitions : [];
+
+    definitions.forEach((item) => {
+      const definition = normalizeDefinitionText(item?.definition);
+      if (!definition) return;
+      const exampleSentence = normalizeDefinitionText(item?.example) || undefined;
+      candidates.push({ definition, partOfSpeech, exampleSentence });
+    });
+  });
+
+  if (candidates.length === 0) return null;
+
+  return candidates
+    .map((candidate, index) => ({ candidate, index, score: scoreDictionaryCandidate(candidate) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)[0]?.candidate ?? null;
+}
+
 const DICT_CACHE_KEY = 'cheese-dict-cache-v1';
 
 function getCache(): Record<string, LookupResult> {
@@ -67,20 +184,19 @@ async function lookupWord(text: string): Promise<LookupResult | null> {
     try {
       const enRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${q}`);
       if (enRes.ok) {
-        const enData = await enRes.json();
+        const enData = (await enRes.json()) as DictionaryApiEntry[];
         const entry = enData[0];
         if (entry) {
-          const meaning = entry.meanings?.[0];
-          const defItem = meaning?.definitions?.[0];
-          
-          definition = defItem?.definition || '';
-          enDefinition = defItem?.definition || '';
-          partOfSpeech = meaning?.partOfSpeech || '';
-          exampleSentence = defItem?.example || '';
-          reading = entry.phonetics?.find((p: any) => p.text)?.text || '';
+          const bestCandidate = pickBestDictionaryCandidate(entry);
+
+          definition = bestCandidate?.definition || '';
+          enDefinition = bestCandidate?.definition || '';
+          partOfSpeech = bestCandidate?.partOfSpeech || '';
+          exampleSentence = bestCandidate?.exampleSentence || '';
+          reading = entry.phonetics?.find((p) => p.text)?.text || '';
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore English dict error
     }
 
@@ -105,12 +221,12 @@ async function lookupWord(text: string): Promise<LookupResult | null> {
           definition = translated;
         }
       }
-    } catch (e) {
+    } catch {
       // Fallback to English definition if translation fails
     }
     const result: LookupResult = {
-      definition,
-      enDefinition,
+      definition: normalizeDefinitionText(definition),
+      enDefinition: normalizeDefinitionText(enDefinition) || undefined,
       partOfSpeech,
       exampleSentence,
       reading,
@@ -139,6 +255,7 @@ function VocabCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isRepeatOffender = entry.encounterCount >= 2;
+  const normalizedEnDefinition = normalizeDefinitionText(entry.enDefinition);
 
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -224,15 +341,15 @@ function VocabCard({
             )}
 
             {/* Always visible English definition and example */}
-            {(entry.enDefinition || entry.exampleSentence) && (
+            {(normalizedEnDefinition || entry.exampleSentence) && (
               <div className="mt-2.5 space-y-2">
-                {entry.enDefinition && entry.enDefinition !== entry.definition && (
+                {normalizedEnDefinition && normalizedEnDefinition !== entry.definition && (
                   <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1">
                       {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
                     </div>
                     <p className="text-sm leading-relaxed text-(--label-secondary)">
-                      {entry.enDefinition}
+                      {normalizedEnDefinition}
                     </p>
                   </div>
                 )}
@@ -468,7 +585,7 @@ function AddEntryForm({
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
     inputRef.current?.focus();
-  }, [text, lookupResult, manualDefinition, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
+  }, [text, lookupResult, manualDefinition, processInput, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
@@ -690,18 +807,34 @@ export function VocabularyPanel() {
 
   // Background migration for legacy entries missing definitions
   useEffect(() => {
-    const missing = vocabularyEntries.filter((e) => e.enDefinition === undefined || !e.definition?.trim());
+    const missing = vocabularyEntries.filter((e) => {
+      const enDefinition = normalizeDefinitionText(e.enDefinition);
+      const definition = normalizeDefinitionText(e.definition);
+      const definitionLooksUnsafe = containsViolentHint(enDefinition) && (!definition || definition === enDefinition);
+      return !definition || !enDefinition || definitionLooksUnsafe;
+    });
     if (missing.length === 0) return;
 
     const buildMigrationPatch = (entry: VocabularyEntry, res?: LookupResult) => {
-      const fallbackEnDefinition = (res?.enDefinition || entry.definition || '-').trim() || '-';
+      const normalizedDefinition = normalizeDefinitionText(entry.definition);
+      const normalizedEntryEnDefinition = normalizeDefinitionText(entry.enDefinition);
+      const normalizedLookupDefinition = normalizeDefinitionText(res?.definition);
+      const normalizedLookupEnDefinition = normalizeDefinitionText(res?.enDefinition);
+      const fallbackEnDefinition =
+        normalizedLookupEnDefinition ||
+        normalizedEntryEnDefinition ||
+        (isLikelyEnglishText(normalizedDefinition) ? normalizedDefinition : '');
       const patch: Partial<VocabularyEntry> = {};
 
-      if (!entry.definition && res?.definition) {
-        patch.definition = res.definition;
+      if ((!normalizedDefinition || containsViolentHint(normalizedDefinition)) && normalizedLookupDefinition) {
+        patch.definition = normalizedLookupDefinition;
       }
-      if (entry.enDefinition !== fallbackEnDefinition) {
+
+      if (fallbackEnDefinition && entry.enDefinition !== fallbackEnDefinition) {
         patch.enDefinition = fallbackEnDefinition;
+      }
+      if (!fallbackEnDefinition && entry.enDefinition !== undefined) {
+        patch.enDefinition = undefined;
       }
       if (!entry.reading && res?.reading) {
         patch.reading = res.reading;
