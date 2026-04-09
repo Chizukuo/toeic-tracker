@@ -226,7 +226,7 @@ export function AnalyticsDashboard() {
         </div>
 
         {lossSummary.availableCount > 0 ? (
-          <div className="h-[280px] w-full mt-2">
+          <div className="h-70 w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="4 4" stroke="currentColor" opacity={0.04} vertical={false} />
@@ -286,10 +286,10 @@ export function AnalyticsDashboard() {
                 {radarSummary.hotspots.map((item, index) => (
                   <div key={item.partKey} className={cn(
                     "flex items-center justify-between p-4",
-                    index !== radarSummary.hotspots.length - 1 && "border-b border-black/[0.04] dark:border-white/[0.04]"
+                    index !== radarSummary.hotspots.length - 1 && "border-b border-black/4 dark:border-white/4"
                   )}>
                     <div className="flex items-center gap-3.5">
-                      <div className="flex size-7 items-center justify-center rounded-full bg-white dark:bg-[#1C1C1E] text-[13px] font-bold text-zinc-700 dark:text-zinc-300 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-black/[0.02] dark:border-white/5">
+                      <div className="flex size-7 items-center justify-center rounded-full bg-white dark:bg-[#1C1C1E] text-[13px] font-bold text-zinc-700 dark:text-zinc-300 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-black/2 dark:border-white/5">
                         {index + 1}
                       </div>
                       <div className="flex flex-col">
@@ -321,7 +321,7 @@ export function AnalyticsDashboard() {
             </p>
           </div>
           
-          <div className="flex-1 min-h-[220px] relative mt-2">
+          <div className="flex-1 min-h-55 relative mt-2">
             {radarSummary.recordedSessions > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData} outerRadius="70%">
@@ -374,7 +374,7 @@ export function AnalyticsDashboard() {
             </p>
           </div>
           
-          <div className="flex-1 min-h-[260px]">
+          <div className="flex-1 min-h-65">
             {radarSummary.hotspots.length > 0 && lossSummary.availableCount > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -439,7 +439,7 @@ export function AnalyticsDashboard() {
               const percentage = Math.max((item.count / maxCount) * 100, 2);
               return (
                 <div key={item.reason} className="flex items-center gap-4">
-                  <div className="w-[110px] sm:w-[140px] shrink-0">
+                  <div className="w-27.5 sm:w-35 shrink-0">
                     <span className="text-[14px] font-medium text-zinc-700 dark:text-zinc-300 truncate block">
                       {item.reason}
                     </span>
@@ -451,7 +451,7 @@ export function AnalyticsDashboard() {
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <span className="text-[15px] font-bold text-zinc-900 dark:text-zinc-50 min-w-[28px] text-right">
+                    <span className="text-[15px] font-bold text-zinc-900 dark:text-zinc-50 min-w-7 text-right">
                       {item.count}
                     </span>
                   </div>
@@ -512,7 +512,7 @@ function HeaderInsight({ locale, confidence, summary, radarSummary }: { locale: 
 function WidgetCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn(
-      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04]",
+      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/4 dark:border-white/4",
       className
     )}>
       {children}
@@ -522,7 +522,7 @@ function WidgetCard({ children, className }: { children: ReactNode; className?: 
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex h-full min-h-[160px] w-full items-center justify-center rounded-[16px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20">
+    <div className="flex h-full min-h-40 w-full items-center justify-center rounded-[16px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20">
       <p className="text-[14px] font-medium text-zinc-400 dark:text-zinc-500">{message}</p>
     </div>
   );

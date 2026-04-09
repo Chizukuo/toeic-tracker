@@ -76,7 +76,7 @@ type LegacyCompactSyncSnapshot = {
 type CompactSyncSnapshot = [
   typeof SYNC_COMPACT_FORMAT_VERSION,
   string,
-  [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[]],
+  [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], string[]?],
   [number, string, number, number, number]?
 ];
 
@@ -86,8 +86,13 @@ export type SyncPreview = {
   exportedAt: string;
   sessionCount: number;
   historyCount: number;
+  vocabularyCount: number;
   activeSessionId: string;
   locale: 'zh' | 'en';
+};
+
+export type SyncPayloadOptions = {
+  includeVocabulary?: boolean;
 };
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -596,7 +601,7 @@ function decodeSessions(compactSessions: CompactSessionDelta[], anchor: string) 
   const decoded: SprintSnapshot['data']['sessions'] = SESSION_DEFAULTS.map((session) => ({
     ...session,
     mistakes: { ...session.mistakes },
-    overtimeMistakes: session.overtimeMistakes ? { ...session.overtimeMistakes } : undefined,
+    ...(session.overtimeMistakes ? { overtimeMistakes: { ...session.overtimeMistakes } } : {}),
     reasons: [...session.reasons],
     readingLapTimes: { ...session.readingLapTimes },
   }));
@@ -626,15 +631,19 @@ function decodeSessions(compactSessions: CompactSessionDelta[], anchor: string) 
     const overtimeMistakes = flags & SESSION_FLAG_OVERTIME_MISTAKES ? nextValue() : undefined;
     const updatedAt = flags & SESSION_FLAG_UPDATED_AT ? nextValue() : undefined;
 
+    const decodedOvertimeMistakes = Array.isArray(overtimeMistakes)
+      ? decodeNumberPairs(overtimeMistakes as number[], MISTAKE_KEYS)
+      : undefined;
+
     const nextSession: SprintSnapshot['data']['sessions'][number] = {
       ...base,
       status: nextStatus ?? base.status,
       mistakes: Array.isArray(mistakes) ? decodeNumberPairs(mistakes as number[], MISTAKE_KEYS) : {},
-      overtimeMistakes: Array.isArray(overtimeMistakes)
-        ? decodeNumberPairs(overtimeMistakes as number[], MISTAKE_KEYS)
-        : undefined,
       reasons: Array.isArray(reasons) ? decodeReasons(reasons.filter((item): item is number => typeof item === 'number') as number[]) : [],
       readingLapTimes: Array.isArray(lapTimes) ? decodeNumberPairs(lapTimes as number[], LAP_KEYS) : {},
+      ...(decodedOvertimeMistakes && Object.keys(decodedOvertimeMistakes).length > 0
+        ? { overtimeMistakes: decodedOvertimeMistakes }
+        : {}),
     };
 
     const nextTimerSummary = Array.isArray(timerSummary) ? decodeTimerSummary(timerSummary as CompactTimerSummary, anchor) : undefined;
@@ -688,6 +697,34 @@ function decodeHistoricalScores(scores: CompactHistoricalScore[], examDate: stri
   } satisfies HistoricalScoreRecord));
 }
 
+function extractVocabularyWords(snapshot: SprintSnapshot) {
+  const words = new Set<string>();
+
+  for (const entry of snapshot.data.vocabularyEntries ?? []) {
+    const text = entry.text.trim();
+
+    if (text) {
+      words.add(text);
+    }
+  }
+
+  return [...words].sort((left, right) => left.localeCompare(right));
+}
+
+function createVocabularyEntriesFromWords(words: string[]) {
+  const now = new Date().toISOString();
+
+  return words.map((word, index) => ({
+    id: `sync-vocab-${index}-${Date.now()}`,
+    text: word,
+    encounterCount: 1,
+    sessionIds: [],
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
+
 function expandCompactSnapshotV1(compact: LegacyCompactSyncSnapshot): SprintSnapshot {
   const locale = LOCALE_CODES[compact.d.l] ?? 'zh';
   const activeSessionId = SESSION_DEFAULTS[compact.d.a]?.id ?? 'L1';
@@ -732,19 +769,26 @@ function getMetadataOverride(snapshot: SprintSnapshot) {
       ] as [number, string, number, number, number];
 }
 
-function compactSnapshot(snapshot: SprintSnapshot): CompactSyncSnapshot {
+function compactSnapshot(snapshot: SprintSnapshot, options?: SyncPayloadOptions): CompactSyncSnapshot {
   const localeCode = LOCALE_CODES.indexOf(snapshot.data.locale) as LocaleCode;
   const activeSessionIndex = SESSION_INDEX.get(snapshot.data.activeSessionId) ?? 0;
+  const vocabularyWords = options?.includeVocabulary ? extractVocabularyWords(snapshot) : undefined;
+  const compactData: [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], string[]?] = [
+    encodeSessions(snapshot),
+    activeSessionIndex,
+    localeCode >= 0 ? localeCode : 0,
+    encodeDate(snapshot.data.examDate),
+    encodeHistoricalScores(snapshot.data.historicalScores, snapshot.data.examDate, snapshot.exportedAt),
+  ];
+
+  if (vocabularyWords && vocabularyWords.length > 0) {
+    compactData[5] = vocabularyWords;
+  }
+
   const base: CompactSyncSnapshot = [
     SYNC_COMPACT_FORMAT_VERSION,
     encodeInstant(snapshot.exportedAt),
-    [
-      encodeSessions(snapshot),
-      activeSessionIndex,
-      localeCode >= 0 ? localeCode : 0,
-      encodeDate(snapshot.data.examDate),
-      encodeHistoricalScores(snapshot.data.historicalScores, snapshot.data.examDate, snapshot.exportedAt),
-    ],
+    compactData,
   ];
   const metadata = getMetadataOverride(snapshot);
 
@@ -761,6 +805,9 @@ function expandCompactSnapshot(compact: CompactSyncSnapshot): SprintSnapshot {
   const metadata = compact[3];
   const locale = LOCALE_CODES[data[2]] ?? 'zh';
   const examDate = decodeDate(data[3]);
+  const vocabularyWords = Array.isArray(data[5])
+    ? data[5].filter((word): word is string => typeof word === 'string' && word.trim().length > 0)
+    : [];
 
   return {
     app: SNAPSHOT_APP,
@@ -778,6 +825,9 @@ function expandCompactSnapshot(compact: CompactSyncSnapshot): SprintSnapshot {
       locale,
       examDate,
       historicalScores: decodeHistoricalScores(data[4], examDate, exportedAt),
+      ...(vocabularyWords.length > 0
+        ? { vocabularyEntries: createVocabularyEntriesFromWords(vocabularyWords) }
+        : {}),
     },
   };
 }
@@ -805,8 +855,8 @@ function fromBase64Url(value: string) {
   return bytes;
 }
 
-export function encodeSnapshotToSyncPayload(snapshot: SprintSnapshot) {
-  const json = JSON.stringify(compactSnapshot(snapshot));
+export function encodeSnapshotToSyncPayload(snapshot: SprintSnapshot, options?: SyncPayloadOptions) {
+  const json = JSON.stringify(compactSnapshot(snapshot, options));
   const compressed = deflateSync(strToU8(json), { level: 9 });
 
   return toBase64Url(compressed);
@@ -844,13 +894,13 @@ export function decodeSnapshotFromSyncPayload(payload: string) {
   }
 }
 
-export function buildSyncHash(snapshot: SprintSnapshot) {
-  return `#${SYNC_HASH_PREFIX}${encodeSnapshotToSyncPayload(snapshot)}`;
+export function buildSyncHash(snapshot: SprintSnapshot, options?: SyncPayloadOptions) {
+  return `#${SYNC_HASH_PREFIX}${encodeSnapshotToSyncPayload(snapshot, options)}`;
 }
 
-export function buildSyncUrl(snapshot: SprintSnapshot, currentUrl: string) {
+export function buildSyncUrl(snapshot: SprintSnapshot, currentUrl: string, options?: SyncPayloadOptions) {
   const baseUrl = currentUrl.split('#')[0];
-  return `${baseUrl}${buildSyncHash(snapshot)}`;
+  return `${baseUrl}${buildSyncHash(snapshot, options)}`;
 }
 
 export function extractSyncPayloadFromHash(hash: string) {
@@ -870,6 +920,7 @@ export function getSyncPreview(snapshot: SprintSnapshot): SyncPreview {
     exportedAt: snapshot.exportedAt,
     sessionCount: snapshot.data.sessions.length,
     historyCount: snapshot.data.historicalScores.length,
+    vocabularyCount: extractVocabularyWords(snapshot).length,
     activeSessionId: snapshot.data.activeSessionId,
     locale: snapshot.data.locale,
   };

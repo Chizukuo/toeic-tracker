@@ -73,7 +73,7 @@ export function WeeklyReport() {
         </span>
       </div>
       {(report.thisWeekCount > 0 && report.lastWeekCount > 0) && (
-        <div className="flex flex-col items-end flex-shrink-0">
+        <div className="flex flex-col items-end shrink-0">
           <div className="flex items-center gap-1.5">
             {report.errorRateDiff < 0 ? (
               <TrendingDown className="size-3.5 text-emerald-500" />

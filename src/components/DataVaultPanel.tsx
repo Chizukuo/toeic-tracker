@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import type { ChangeEvent, ReactNode } from 'react';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, Database, Download, Link2, QrCode, RotateCcw, ShieldAlert, Upload } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, CheckCircle2, Copy, Database, Download, Info, Link2, QrCode, RotateCcw, ShieldAlert, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import {
@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { getCopy } from '@/lib/i18n';
 import { getAutoBackups, parseImportSnapshot, type ParsedImportSnapshot, type AutoBackupEntry } from '@/lib/storeSnapshot';
 import { MAX_SYNC_URL_LENGTH, buildSyncUrl, decodeSnapshotFromSyncPayload, extractSyncPayloadFromHash, getSyncPreview, type SyncPreview } from '@/lib/syncLink';
@@ -79,6 +80,7 @@ export function DataVaultPanel() {
 	const [pendingFileImport, setPendingFileImport] = useState<PendingFileImport | null>(null);
 	const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
 	const [autoBackups, setAutoBackups] = useState<AutoBackupEntry[]>([]);
+	const [includeVocabularyInSync, setIncludeVocabularyInSync] = useState(true);
 
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
@@ -92,6 +94,22 @@ export function DataVaultPanel() {
 
 	const pushFeedback = (tone: FeedbackTone, text: string) => {
 		setFeedback({ tone, text, at: Date.now() });
+	};
+
+	const triggerFileDownload = (blob: Blob, fileName: string) => {
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+
+		anchor.href = url;
+		anchor.download = fileName;
+		anchor.style.display = 'none';
+		document.body.appendChild(anchor);
+		anchor.click();
+
+		window.setTimeout(() => {
+			URL.revokeObjectURL(url);
+			anchor.remove();
+		}, 1000);
 	};
 
 	useEffect(() => {
@@ -151,6 +169,20 @@ export function DataVaultPanel() {
 	}, [copyState]);
 
 	useEffect(() => {
+		if (!feedback) {
+			return undefined;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			setFeedback(null);
+		}, 3600);
+
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	}, [feedback]);
+
+	useEffect(() => {
 		if (typeof window === 'undefined') {
 			return undefined;
 		}
@@ -190,18 +222,34 @@ export function DataVaultPanel() {
 		try {
 			const snapshot = exportSnapshot();
 			const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement('a');
 			const date = snapshot.exportedAt.slice(0, 10);
 
-			anchor.href = url;
-			anchor.download = `cheese-toeic-tracker-v${snapshot.version}-${date}.json`;
-			document.body.appendChild(anchor);
-			anchor.click();
-			anchor.remove();
-			URL.revokeObjectURL(url);
+			triggerFileDownload(blob, `cheese-toeic-tracker-v${snapshot.version}-${date}.json`);
 
 			pushFeedback('success', `${copy.exportSuccess} v${snapshot.version}`);
+		} catch {
+			pushFeedback('error', copy.exportFailure);
+		}
+	};
+
+	const handleExportVocabularyList = () => {
+		try {
+			const words = [...new Set(vocabularyEntries
+				.map((entry) => (typeof entry?.text === 'string' ? entry.text.trim() : ''))
+				.filter(Boolean))]
+				.sort((left, right) => left.localeCompare(right));
+
+			if (words.length === 0) {
+				pushFeedback('error', copy.exportVocabularyEmpty);
+				return;
+			}
+
+			const blob = new Blob([`${words.join('\n')}\n`], { type: 'text/plain;charset=utf-8' });
+			const date = new Date().toISOString().slice(0, 10);
+
+			triggerFileDownload(blob, `cheese-toeic-vocabulary-${date}.txt`);
+
+			pushFeedback('success', copy.exportVocabularySuccess(words.length));
 		} catch {
 			pushFeedback('error', copy.exportFailure);
 		}
@@ -215,7 +263,9 @@ export function DataVaultPanel() {
 		try {
 			const snapshot = exportSnapshot();
 			const rawBytes = new TextEncoder().encode(JSON.stringify(snapshot)).length;
-			const url = buildSyncUrl(snapshot, window.location.href);
+			const url = buildSyncUrl(snapshot, window.location.href, {
+				includeVocabulary: includeVocabularyInSync,
+			});
 
 			if (url.length > MAX_SYNC_URL_LENGTH) {
 				setSyncDraft(null);
@@ -240,7 +290,11 @@ export function DataVaultPanel() {
 				setSyncDraft({
 					url,
 					qrDataUrl,
-					preview: getSyncPreview(snapshot),
+					preview: getSyncPreview(
+						includeVocabularyInSync
+							? snapshot
+							: { ...snapshot, data: { ...snapshot.data, vocabularyEntries: [] } }
+					),
 					linkLength: url.length,
 					rawBytes,
 					compressionRatio: Math.max(1, Math.round((url.length / rawBytes) * 100)),
@@ -383,6 +437,62 @@ export function DataVaultPanel() {
 
 	return (
 		<>
+			<AnimatePresence>
+				{feedback ? (
+					<motion.div
+						initial={{ opacity: 0, y: -14, x: 8, scale: 0.97 }}
+						animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+						exit={{ opacity: 0, y: -10, x: 8, scale: 0.98 }}
+						transition={{ type: 'spring', bounce: 0.16, duration: 0.34 }}
+						className="pointer-events-none fixed right-3 top-22 z-60 w-72 max-w-[calc(100%-1.5rem)] sm:right-5 sm:top-24"
+					>
+						<div className={`pointer-events-auto overflow-hidden rounded-[20px] border backdrop-blur-2xl ${feedbackClassName(feedback.tone)}`}>
+							<div className="flex items-start gap-2.5 px-3.5 pb-2.5 pt-2.5">
+								<div className={`mt-0.5 rounded-full p-1.5 ${feedbackIconWrapClassName(feedback.tone)}`}>
+									{feedback.tone === 'success' ? (
+										<CheckCircle2 className="size-4" />
+									) : feedback.tone === 'error' ? (
+										<AlertCircle className="size-4" />
+									) : (
+										<Info className="size-4" />
+									)}
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="flex items-start justify-between gap-3">
+										<div>
+											<div className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-80">
+												{copy.lastOperation}
+											</div>
+											<div className="mt-1 text-[13px] leading-5 wrap-break-word">{feedback.text}</div>
+										</div>
+										<button
+											type="button"
+											onClick={() => setFeedback(null)}
+											className="-mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:bg-white/30 hover:opacity-100 dark:hover:bg-black/20"
+											aria-label={locale === 'zh' ? '关闭提示' : 'Dismiss notification'}
+										>
+											<X className="size-3" />
+										</button>
+									</div>
+									<div className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] opacity-65">
+										{formatFeedbackTime(feedback.at, locale)}
+									</div>
+								</div>
+							</div>
+							<div className="h-1 w-full bg-white/30 dark:bg-black/20">
+								<motion.div
+									key={feedback.at}
+									initial={{ width: '100%' }}
+									animate={{ width: '0%' }}
+									transition={{ duration: 3.6, ease: 'linear' }}
+									className={feedbackProgressClassName(feedback.tone)}
+								/>
+							</div>
+						</div>
+					</motion.div>
+				) : null}
+			</AnimatePresence>
+
 			<Card className="deck-card">
 				<CardHeader className="deck-card-header px-6 py-5">
 					<CardTitle className="font-mono text-[11px] uppercase tracking-[0.3em] text-amber-600 dark:text-amber-400">
@@ -414,9 +524,12 @@ export function DataVaultPanel() {
 						))}
 					</motion.div>
 
-					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
+					<motion.div className="xl:col-span-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } } }} initial="hidden" animate="show">
 						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<Download className="size-5" />} title={copy.exportTitle} body={copy.exportBody} actionLabel={copy.exportAction} onAction={handleExport} />
+						</motion.div>
+						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
+							<ActionPanel icon={<Download className="size-5" />} title={copy.exportVocabularyTitle} body={copy.exportVocabularyBody} actionLabel={copy.exportVocabularyAction} onAction={handleExportVocabularyList} />
 						</motion.div>
 						<motion.div className="h-full" variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }}>
 							<ActionPanel icon={<Upload className="size-5" />} title={copy.importTitle} body={copy.importBody} actionLabel={copy.importAction} onAction={handleImportClick} />
@@ -428,6 +541,19 @@ export function DataVaultPanel() {
 							<ActionPanel icon={<RotateCcw className="size-5" />} title={copy.resetTitle} body={copy.resetBody} actionLabel={copy.resetAction} onAction={() => setResetOpen(true)} danger />
 						</motion.div>
 					</motion.div>
+
+					<div className="xl:col-span-4 deck-surface-soft flex flex-col gap-3 rounded-[22px] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+						<div className="space-y-1">
+							<div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{copy.syncIncludeVocabularyLabel}</div>
+							<div className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">{copy.syncIncludeVocabularyHint}</div>
+						</div>
+						<div className="flex items-center gap-3">
+							<span className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+								{includeVocabularyInSync ? copy.yes : copy.no}
+							</span>
+							<Switch checked={includeVocabularyInSync} onCheckedChange={setIncludeVocabularyInSync} aria-label={copy.syncIncludeVocabularyLabel} />
+						</div>
+					</div>
 
 					{autoBackups.length > 0 && (
 						<div className="xl:col-span-4 deck-surface overflow-hidden">
@@ -501,6 +627,7 @@ export function DataVaultPanel() {
 								<SyncMetric label={copy.syncPreviewVersion} value={`v${syncDraft.preview.version}`} />
 								<SyncMetric label={copy.syncPreviewSessions} value={`${syncDraft.preview.sessionCount}`} />
 								<SyncMetric label={copy.syncPreviewHistory} value={`${syncDraft.preview.historyCount}`} />
+								<SyncMetric label={copy.syncPreviewVocabulary} value={`${syncDraft.preview.vocabularyCount}`} />
 								<SyncMetric label={copy.syncPreviewActive} value={syncDraft.preview.activeSessionId} />
 								<SyncMetric label={copy.syncPreviewExportedAt} value={formatExportedAt(syncDraft.preview.exportedAt)} />
 								<SyncMetric label={copy.syncPreviewSize} value={`${syncDraft.linkLength}`} />
@@ -509,33 +636,17 @@ export function DataVaultPanel() {
 						</div>
 					) : null}
 
-					<div className="xl:col-span-4 grid gap-4 xl:grid-cols-[2fr_1fr]">
-						<div className="deck-surface-soft flex flex-col justify-center p-4 sm:p-5">
-							<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-								<Database className="size-3.5" />
-								{copy.dataVaultNotes}
-							</div>
-							<div className="mt-4 flex flex-col gap-2 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
-								<p>{copy.dataVaultNoteExport}</p>
-								<p>{copy.dataVaultNoteImport}</p>
-								<p>{locale === 'zh' ? '您也可以直接在此页面按 Ctrl+V 粘贴包含快照的 JSON 代码。' : 'You can quickly import by pressing Ctrl+V anywhere on this page to paste snapshot JSON directly.'}</p>
-								<p>{copy.dataVaultNoteSync}</p>
-								<p>{copy.dataVaultNoteReset}</p>
-							</div>
+					<div className="xl:col-span-4 deck-surface-soft flex flex-col justify-center p-4 sm:p-5">
+						<div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
+							<Database className="size-3.5" />
+							{copy.dataVaultNotes}
 						</div>
-
-						<div className="deck-surface-strong flex flex-col p-4 sm:p-5">
-							<div className="flex items-center justify-between gap-3">
-								<div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
-									{copy.lastOperation}
-								</div>
-								<div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500">
-									{feedback ? formatFeedbackTime(feedback.at, locale) : copy.dataVaultIdleMeta}
-								</div>
-							</div>
-							<div className={`mt-4 flex flex-1 items-center rounded-xl border px-4 py-3 text-sm leading-tight ${feedbackClassName(feedback?.tone)}`}>
-								{feedback?.text ?? copy.dataVaultIdle}
-							</div>
+						<div className="mt-4 flex flex-col gap-2 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
+							<p>{copy.dataVaultNoteExport}</p>
+							<p>{copy.dataVaultNoteImport}</p>
+							<p>{locale === 'zh' ? '您也可以直接在此页面按 Ctrl+V 粘贴包含快照的 JSON 代码。' : 'You can quickly import by pressing Ctrl+V anywhere on this page to paste snapshot JSON directly.'}</p>
+							<p>{copy.dataVaultNoteSync}</p>
+							<p>{copy.dataVaultNoteReset}</p>
 						</div>
 					</div>
 
@@ -656,6 +767,7 @@ export function DataVaultPanel() {
 								<SyncMetric label={copy.syncPreviewVersion} value={`v${pendingSyncImport.preview.version}`} />
 								<SyncMetric label={copy.syncPreviewSessions} value={`${pendingSyncImport.preview.sessionCount}`} />
 								<SyncMetric label={copy.syncPreviewHistory} value={`${pendingSyncImport.preview.historyCount}`} />
+								<SyncMetric label={copy.syncPreviewVocabulary} value={`${pendingSyncImport.preview.vocabularyCount}`} />
 								<SyncMetric label={copy.syncPreviewActive} value={pendingSyncImport.preview.activeSessionId} />
 								<SyncMetric label={copy.syncPreviewExportedAt} value={formatExportedAt(pendingSyncImport.preview.exportedAt)} />
 								<SyncMetric label={copy.syncPreviewSize} value={`${pendingSyncImport.linkLength}`} />
@@ -764,18 +876,42 @@ function ActionPanel({
 
 function feedbackClassName(tone?: FeedbackTone) {
 	if (tone === 'success') {
-		return 'border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300';
+		return 'border-emerald-500/28 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200';
 	}
 
 	if (tone === 'error') {
-		return 'border-red-500/25 bg-red-500/8 text-red-700 dark:text-red-300';
+		return 'border-rose-500/28 bg-rose-500/12 text-rose-900 dark:text-rose-200';
 	}
 
 	if (tone === 'info') {
-		return 'border-amber-400/25 bg-amber-400/8 text-amber-700 dark:text-amber-300';
+		return 'border-amber-400/28 bg-amber-400/12 text-amber-900 dark:text-amber-200';
 	}
 
-	return 'border-zinc-200/70 bg-white/80 text-zinc-500 dark:border-white/8 dark:bg-zinc-950/78 dark:text-zinc-400';
+	return 'border-zinc-200/70 bg-white/88 text-zinc-700 dark:border-white/8 dark:bg-zinc-950/82 dark:text-zinc-300';
+}
+
+function feedbackIconWrapClassName(tone: FeedbackTone) {
+	if (tone === 'success') {
+		return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300';
+	}
+
+	if (tone === 'error') {
+		return 'bg-rose-500/15 text-rose-600 dark:text-rose-300';
+	}
+
+	return 'bg-amber-500/18 text-amber-700 dark:text-amber-300';
+}
+
+function feedbackProgressClassName(tone: FeedbackTone) {
+	if (tone === 'success') {
+		return 'h-full bg-emerald-500/70';
+	}
+
+	if (tone === 'error') {
+		return 'h-full bg-rose-500/70';
+	}
+
+	return 'h-full bg-amber-500/70';
 }
 
 function formatImportSourceLabel(locale: 'zh' | 'en', source: ImportSnapshotResult['source']) {

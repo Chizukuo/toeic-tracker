@@ -170,7 +170,7 @@ describe('syncLink helpers', () => {
           note: 'mock',
         },
       ],
-    });
+    } as unknown as Parameters<typeof createSnapshot>[0]);
 
     const payload = encodeSnapshotToSyncPayload(snapshot);
     const decoded = decodeSnapshotFromSyncPayload(payload);
@@ -185,7 +185,7 @@ describe('syncLink helpers', () => {
       locale: 'zh',
       examDate: '2026-05-24',
       historicalScores: [],
-    });
+    } as unknown as Parameters<typeof createSnapshot>[0]);
 
     const hash = buildSyncHash(snapshot);
     const url = buildSyncUrl(snapshot, 'https://example.com/vault#stale');
@@ -199,6 +199,48 @@ describe('syncLink helpers', () => {
 
   it('rejects malformed sync payloads', () => {
     expect(() => decodeSnapshotFromSyncPayload('not-a-sync-payload')).toThrow('Invalid sync payload');
+  });
+
+  it('optionally includes vocabulary words in sync payloads', () => {
+    const sessions = createInitialSessions();
+    const snapshot = createSnapshot({
+      sessions,
+      activeSessionId: 'L1',
+      locale: 'zh',
+      examDate: '2026-05-24',
+      historicalScores: [],
+      sprintConfig: { listeningCount: 10, readingCount: 10 },
+      vocabularyEntries: [
+        {
+          id: 'v1',
+          text: 'abandon',
+          encounterCount: 2,
+          sessionIds: ['L1'],
+          tags: [],
+          createdAt: '2026-03-11T00:00:00.000Z',
+          updatedAt: '2026-03-11T00:00:00.000Z',
+        },
+        {
+          id: 'v2',
+          text: '  benchmark  ',
+          encounterCount: 1,
+          sessionIds: [],
+          tags: [],
+          createdAt: '2026-03-11T00:00:00.000Z',
+          updatedAt: '2026-03-11T00:00:00.000Z',
+        },
+      ],
+      targetScore: 850,
+      unlockedAchievements: [],
+    });
+
+    const payloadWithoutVocabulary = encodeSnapshotToSyncPayload(snapshot);
+    const payloadWithVocabulary = encodeSnapshotToSyncPayload(snapshot, { includeVocabulary: true });
+    const decodedWithoutVocabulary = decodeSnapshotFromSyncPayload(payloadWithoutVocabulary);
+    const decodedWithVocabulary = decodeSnapshotFromSyncPayload(payloadWithVocabulary);
+
+    expect(decodedWithoutVocabulary.data.vocabularyEntries).toBeUndefined();
+    expect(decodedWithVocabulary.data.vocabularyEntries?.map((entry) => entry.text)).toEqual(['abandon', 'benchmark']);
   });
 
   it('produces shorter payloads than the legacy full-json codec', () => {
@@ -285,7 +327,7 @@ describe('syncLink helpers', () => {
           note: 'timed retry',
         },
       ],
-    });
+    } as unknown as Parameters<typeof createSnapshot>[0]);
 
     const compactPayload = encodeSnapshotToSyncPayload(snapshot);
     const v1Payload = v1EncodeSnapshotToSyncPayload(snapshot);

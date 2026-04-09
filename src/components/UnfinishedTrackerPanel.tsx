@@ -207,7 +207,7 @@ export function UnfinishedTrackerPanel() {
 
           <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_360px]">
             <WidgetCard className="flex flex-col">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.06] pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/6 dark:border-white/6 pb-4">
                 <div>
                   <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                     {copy.unfinishedQueue}
@@ -216,7 +216,7 @@ export function UnfinishedTrackerPanel() {
                     {copy.unfinishedChartHint}
                   </div>
                 </div>
-                <div className="px-3 py-1 bg-white dark:bg-[#2C2C2E] rounded-full text-[10px] font-bold tracking-widest border border-black/[0.04] dark:border-white/[0.04] shadow-sm">
+                <div className="px-3 py-1 bg-white dark:bg-[#2C2C2E] rounded-full text-[10px] font-bold tracking-widest border border-black/4 dark:border-white/4 shadow-sm">
                   {copy.unfinished(totalUnfinished)}
                 </div>
               </div>
@@ -311,7 +311,7 @@ export function UnfinishedTrackerPanel() {
                         'flex w-full items-center justify-between gap-3 rounded-[20px] border p-4 text-left transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
                         session.active
                           ? 'border-amber-400/40 bg-amber-400/5 dark:bg-amber-400/10 shadow-sm'
-                          : 'border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
+                          : 'border-black/4 dark:border-white/4 bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
                       )}
                     >
                       <div className="min-w-0">
@@ -345,7 +345,7 @@ export function UnfinishedTrackerPanel() {
 
           <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
             <WidgetCard className="flex flex-col">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] dark:border-white/[0.06] pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/6 dark:border-white/6 pb-4">
                 <div>
                   <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                     {locale === 'zh' ? '超时画像' : 'Overtime Profile'}
@@ -356,7 +356,7 @@ export function UnfinishedTrackerPanel() {
                       : 'Speed loss and overtime performance.'}
                   </div>
                 </div>
-                <div className="px-3 py-1 bg-white dark:bg-[#2C2C2E] rounded-full text-[10px] font-bold tracking-widest border border-black/[0.04] dark:border-white/[0.04] shadow-sm">
+                <div className="px-3 py-1 bg-white dark:bg-[#2C2C2E] rounded-full text-[10px] font-bold tracking-widest border border-black/4 dark:border-white/4 shadow-sm">
                   {locale === 'zh' ? `${overtimeInsight.timedOutCount} 次超时` : `${overtimeInsight.timedOutCount} timeouts`}
                 </div>
               </div>
@@ -436,7 +436,7 @@ export function UnfinishedTrackerPanel() {
 function WidgetCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn(
-      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04]",
+      "bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 lg:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-none border border-black/4 dark:border-white/4",
       className
     )}>
       {children}
@@ -456,7 +456,7 @@ function InsightTile({
   onClick?: () => void;
 }) {
   return (
-    <div className="p-4 rounded-[20px] bg-white dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.04] shadow-sm">
+    <div className="p-4 rounded-[20px] bg-white dark:bg-[#1C1C1E] border border-black/4 dark:border-white/4 shadow-sm">
       <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">{title}</div>
       <div className="mt-2 text-[14px] leading-relaxed text-zinc-600 dark:text-zinc-300">{body}</div>
       {actionLabel && onClick ? (
@@ -539,4 +539,4 @@ function UnfinishedStat({
       <div className="mt-2 text-[12px] font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap overflow-hidden text-ellipsis">{helper}</div>
     </div>
   );
-}
+}

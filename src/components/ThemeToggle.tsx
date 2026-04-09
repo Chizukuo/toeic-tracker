@@ -61,7 +61,7 @@ export function ThemeToggle() {
   )
 
   return (
-    <div className="rounded-full border border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.02] p-1">
+    <div className="rounded-full border border-black/4 dark:border-white/4 bg-zinc-50/50 dark:bg-white/2 p-1">
       <button
         type="button"
         onClick={toggleTheme}

@@ -306,9 +306,9 @@ export function DashboardShell({
       }}
     >
       <AchievementToast />
-      <main className="relative min-h-screen overflow-x-hidden pt-24 px-4 pb-14 text-[var(--label-primary)] sm:px-6 lg:px-8">
+      <main className="relative min-h-screen overflow-x-hidden px-4 pb-14 pt-24 text-(--label-primary) sm:px-6 lg:px-8">
 
-        <header className="fixed top-4 left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-[var(--glass-border)] bg-[var(--glass-bg)] px-2 py-2 shadow-[var(--shadow-elevated)] backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
+        <header className="fixed top-4 left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-(--glass-border) bg-(--glass-bg) px-2 py-2 shadow-(--shadow-elevated) backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
            <Link href="/" aria-label={copy.appName} className="relative z-10 ml-2 flex shrink-0 items-center justify-center transition-transform hover:scale-105 active:scale-95">
              <BrandIconSvg className="size-7 opacity-90" />
           </Link>
@@ -331,7 +331,7 @@ export function DashboardShell({
                   {isActive && (
                     <motion.div
                       layoutId="dock-indicator"
-                      className="absolute inset-0 rounded-full bg-[var(--surface-grouped)] shadow-[var(--shadow-soft)]"
+                      className="absolute inset-0 rounded-full bg-(--surface-grouped) shadow-(--shadow-soft)"
                       transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
                     />
                   )}
@@ -352,7 +352,7 @@ export function DashboardShell({
                 aria-label={locale === 'zh' ? '切换导航菜单' : 'Toggle navigation menu'}
                 aria-expanded={isMobileMenuOpen}
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-                className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-[var(--separator)] bg-[var(--surface-elevated)] text-[var(--label-primary)] shadow-[var(--shadow-soft)] transition-colors"
+                className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-(--separator) bg-(--surface-elevated) text-(--label-primary) shadow-(--shadow-soft) transition-colors"
               >
                 <motion.span
                   key={isMobileMenuOpen ? 'close' : 'menu'}
@@ -383,7 +383,7 @@ export function DashboardShell({
               />
 
               <motion.nav
-                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] p-2.5 shadow-[var(--shadow-elevated)] backdrop-blur-xl md:hidden"
+                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[20px] border border-(--separator) bg-(--surface-elevated) p-2.5 shadow-(--shadow-elevated) backdrop-blur-xl md:hidden"
                 initial={{ opacity: 0, y: -16, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.97 }}
@@ -475,8 +475,8 @@ export function SectionShell({
   return (
     <section className="grid gap-6 mt-4">
       <div className="px-2">
-        <h2 className="text-[20px] font-semibold tracking-tight text-[var(--label-primary)]">{title}</h2>
-        <p className="mt-1 text-[14px] text-[var(--label-secondary)]">{description}</p>
+        <h2 className="text-[20px] font-semibold tracking-tight text-(--label-primary)">{title}</h2>
+        <p className="mt-1 text-[14px] text-(--label-secondary)">{description}</p>
       </div>
       <div>{children}</div>
     </section>
@@ -512,11 +512,11 @@ export function DeferredSection({ component: Component }: { component: Component
 
 export function DeferredPanelPlaceholder() {
   return (
-    <div className="overflow-hidden rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)]">
-      <div className="h-16 border-b border-[var(--separator)] px-6 py-5" />
+    <div className="overflow-hidden rounded-[20px] border border-(--separator) bg-(--surface-elevated)">
+      <div className="h-16 border-b border-(--separator) px-6 py-5" />
       <div className="grid gap-4 p-6">
-        <div className="h-24 animate-pulse rounded-[16px] bg-[var(--surface-grouped)]" />
-        <div className="h-56 animate-pulse rounded-[16px] bg-[var(--surface-grouped)]" />
+        <div className="h-24 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
+        <div className="h-56 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
       </div>
     </div>
   );
@@ -561,8 +561,8 @@ const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale
   }, [examDate, locale, now]);
 
   return (
-    <Card className="overflow-hidden rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]">
-      <CardHeader className="border-b border-[var(--separator)] px-6 py-5">
+    <Card className="overflow-hidden rounded-[20px] border border-(--separator) bg-(--surface-elevated) shadow-(--shadow-soft)">
+      <CardHeader className="border-b border-(--separator) px-6 py-5">
         <CardTitle className="font-mono text-[11px] font-medium uppercase tracking-[0.32em] text-amber-600 dark:text-amber-400">
           {copy.examCountdownTitle}
         </CardTitle>
@@ -571,11 +571,11 @@ const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 p-6">
-        <div className="rounded-[16px] border border-[var(--separator)] bg-[var(--surface-grouped)] p-4">
+        <div className="rounded-[16px] border border-(--separator) bg-(--surface-grouped) p-4">
           <label className="font-mono text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
             {copy.examCountdownLabel}
           </label>
-          <div className="mt-3 flex items-center gap-3 rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 transition-colors focus-within:border-amber-400/50 focus-within:ring-2 focus-within:ring-amber-400/20">
+          <div className="mt-3 flex items-center gap-3 rounded-full border border-(--separator) bg-(--surface-grouped) px-4 transition-colors focus-within:border-amber-400/50 focus-within:ring-2 focus-within:ring-amber-400/20">
             <CalendarDays className="size-4 text-zinc-400 dark:text-zinc-500" />
             <Input
               id="toeic-exam-date"
@@ -680,7 +680,7 @@ function ProgressLine({
         <span>{label}</span>
         <span className="text-zinc-900 dark:text-zinc-100">{value}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-black/[0.04] dark:bg-white/[0.04]">
+      <div className="h-1.5 overflow-hidden rounded-full bg-black/4 dark:bg-white/4">
         <motion.div 
           className={cn('h-full rounded-full', barClass)} 
           initial={{ width: 0 }}
@@ -694,7 +694,7 @@ function ProgressLine({
 
 function QuickInfoRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-full border border-[var(--separator)] bg-[var(--surface-elevated)] px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-full border border-(--separator) bg-(--surface-elevated) px-4 py-3">
       <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
       <div className={cn('text-[13px] font-bold', danger ? 'text-rose-500' : 'text-zinc-900 dark:text-zinc-100')}>
         {value}
@@ -748,7 +748,7 @@ function OverviewSignal({
   return (
     <motion.div 
       whileHover={{ y: -2 }}
-      className="group rounded-[20px] border border-[var(--separator)] bg-[var(--surface-elevated)] p-7 shadow-[var(--shadow-soft)] transition-shadow hover:shadow-[var(--shadow-medium)]"
+      className="group rounded-[20px] border border-(--separator) bg-(--surface-elevated) p-7 shadow-(--shadow-soft) transition-shadow hover:shadow-(--shadow-medium)"
     >
       <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
       <div className={cn('mt-4 text-[2.5rem] font-bold tracking-tight leading-none', accentCls)}>
@@ -776,7 +776,7 @@ function StatusBadge({ status, sessionStatus }: { status: string; sessionStatus:
 
 export function ProtocolRow({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-[16px] border border-[var(--separator)] bg-[var(--surface-grouped)] px-5 py-4">
+    <div className="rounded-[16px] border border-(--separator) bg-(--surface-grouped) px-5 py-4">
       <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">{title}</div>
       <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</p>
     </div>

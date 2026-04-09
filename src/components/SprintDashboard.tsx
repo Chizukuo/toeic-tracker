@@ -53,8 +53,8 @@ export function SprintDashboard() {
       variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
       initial="hidden" animate="show"
     >
-      <Card className="overflow-hidden rounded-[32px] border border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none">
-        <CardHeader className="px-6 py-6 border-b border-black/[0.04] dark:border-white/[0.04]">
+      <Card className="overflow-hidden rounded-[32px] border border-black/4 dark:border-white/4 bg-white dark:bg-[#1C1C1E] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <CardHeader className="px-6 py-6 border-b border-black/4 dark:border-white/4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative h-12 w-12 shrink-0">
@@ -120,7 +120,7 @@ export function SprintDashboard() {
                     baseCls,
                     isActive
                       ? 'z-10 bg-white dark:bg-[#2C2C2E] border-amber-400 shadow-[0_8px_32px_rgba(245,165,36,0.15)] ring-1 ring-amber-400/20'
-                      : 'border-black/[0.04] dark:border-white/[0.04] bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
+                      : 'border-black/4 dark:border-white/4 bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
                   )}
                   aria-pressed={isActive}
                 >
@@ -189,7 +189,7 @@ function StatusPill({
       ? 'border-amber-400/20 bg-amber-400/5 text-amber-600 dark:text-amber-400'
       : tone === 'green'
         ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
-        : 'border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 text-zinc-500';
+        : 'border-black/4 dark:border-white/4 bg-zinc-50/50 text-zinc-500';
 
   return (
     <div className={cn('flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest', cls)}>

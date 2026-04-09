@@ -183,6 +183,11 @@ type Copy = {
 	exportTitle: string;
 	exportBody: string;
 	exportAction: string;
+	exportVocabularyTitle: string;
+	exportVocabularyBody: string;
+	exportVocabularyAction: string;
+	exportVocabularyEmpty: string;
+	exportVocabularySuccess: (count: number) => string;
 	exportSuccess: string;
 	exportFailure: string;
 	importTitle: string;
@@ -208,6 +213,8 @@ type Copy = {
 	syncTitle: string;
 	syncBody: string;
 	syncAction: string;
+	syncIncludeVocabularyLabel: string;
+	syncIncludeVocabularyHint: string;
 	syncCopyAction: string;
 	syncQrAction: string;
 	syncCopiedAction: string;
@@ -223,6 +230,7 @@ type Copy = {
 	syncPreviewVersion: string;
 	syncPreviewSessions: string;
 	syncPreviewHistory: string;
+	syncPreviewVocabulary: string;
 	syncPreviewActive: string;
 	syncPreviewExportedAt: string;
 	syncPreviewSize: string;
@@ -393,6 +401,11 @@ const copy: Record<Locale, Copy> = {
 		exportTitle: '导出数据快照',
 		exportBody: '生成带版本信息的 .json 快照，包含任务进度、时间记录、历史成绩与考试日期，便于后续升级恢复。',
 		exportAction: '导出备份',
+		exportVocabularyTitle: '导出生词表',
+		exportVocabularyBody: '仅导出生词文本，每行一个单词，方便直接导入其他背词 App。',
+		exportVocabularyAction: '导出词表',
+		exportVocabularyEmpty: '当前没有可导出的生词。',
+		exportVocabularySuccess: (count) => `生词表导出成功，共 ${count} 个单词。`,
 		exportSuccess: '数据成功导出。',
 		exportFailure: '导出失败，请重试。',
 		importTitle: '导入数据快照',
@@ -418,6 +431,8 @@ const copy: Record<Locale, Copy> = {
 		syncTitle: '生成同步链接',
 		syncBody: '把当前数据压缩进链接 hash，适合复制到聊天工具、备忘录或扫码在另一台设备恢复。',
 		syncAction: '生成链接',
+		syncIncludeVocabularyLabel: '同步时包含生词表',
+		syncIncludeVocabularyHint: '开启后会把生词表压缩进同步链接（只包含单词文本）。关闭可缩短链接长度。',
 		syncCopyAction: '复制链接',
 		syncQrAction: '显示二维码',
 		syncCopiedAction: '已复制',
@@ -433,6 +448,7 @@ const copy: Record<Locale, Copy> = {
 		syncPreviewVersion: '快照版本',
 		syncPreviewSessions: 'Session 数',
 		syncPreviewHistory: '历史成绩',
+		syncPreviewVocabulary: '生词数量',
 		syncPreviewActive: '当前定位',
 		syncPreviewExportedAt: '导出时间',
 		syncPreviewSize: '链接长度',
@@ -601,6 +617,11 @@ const copy: Record<Locale, Copy> = {
 		exportTitle: 'Export Snapshot',
 		exportBody: 'Generate a versioned .json snapshot of progress, timer records, score history, and the exam date for safer future upgrades.',
 		exportAction: 'Export',
+		exportVocabularyTitle: 'Export Vocabulary List',
+		exportVocabularyBody: 'Export words only, one per line, so they can be imported into other vocabulary apps.',
+		exportVocabularyAction: 'Export words',
+		exportVocabularyEmpty: 'No vocabulary words available to export.',
+		exportVocabularySuccess: (count) => `Vocabulary list exported (${count} words).`,
 		exportSuccess: 'Data exported successfully.',
 		exportFailure: 'Export failed. Please try again.',
 		importTitle: 'Import Snapshot',
@@ -626,6 +647,8 @@ const copy: Record<Locale, Copy> = {
 		syncTitle: 'Create Sync Link',
 		syncBody: 'Compress the current snapshot into the URL hash so it can be copied into chat, notes, or opened from a QR code on another device.',
 		syncAction: 'Create link',
+		syncIncludeVocabularyLabel: 'Include vocabulary list in sync',
+		syncIncludeVocabularyHint: 'When enabled, vocabulary words are embedded in the sync link (words only). Disable for shorter links.',
 		syncCopyAction: 'Copy link',
 		syncQrAction: 'Show QR',
 		syncCopiedAction: 'Copied',
@@ -641,6 +664,7 @@ const copy: Record<Locale, Copy> = {
 		syncPreviewVersion: 'Snapshot version',
 		syncPreviewSessions: 'Sessions',
 		syncPreviewHistory: 'Score history',
+		syncPreviewVocabulary: 'Vocabulary',
 		syncPreviewActive: 'Active session',
 		syncPreviewExportedAt: 'Exported at',
 		syncPreviewSize: 'Link length',

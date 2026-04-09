@@ -338,7 +338,7 @@ export function ScoreEstimatorPanel() {
 
       {/* ── Hero: Score Display ── */}
       {!activeSummary || !activeSummary.available ? (
-        <motion.div variants={{ hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }} className="flex flex-col items-center justify-center py-10 text-center rounded-[24px] bg-white dark:bg-[#1C1C1E] shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-black/[0.04] dark:border-white/[0.04]">
+        <motion.div variants={{ hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }} className="flex flex-col items-center justify-center rounded-[24px] border border-black/4 bg-white py-10 text-center shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:border-white/4 dark:bg-[#1C1C1E]">
           <CircleGauge className="size-8 text-zinc-300 dark:text-zinc-600 mb-3" />
           <p className="max-w-xs text-[14px] font-medium text-zinc-500 dark:text-zinc-400 leading-relaxed">
             {locale === 'zh'
@@ -347,7 +347,7 @@ export function ScoreEstimatorPanel() {
           </p>
         </motion.div>
       ) : (
-        <motion.div variants={{ hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }} className="rounded-[24px] bg-white dark:bg-[#1C1C1E] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04] p-5 md:p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <motion.div variants={{ hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }} className="relative flex flex-col items-center justify-between gap-6 overflow-hidden rounded-[24px] border border-black/4 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] md:flex-row md:p-6 dark:border-white/4 dark:bg-[#1C1C1E] dark:shadow-none">
           <div className="relative z-10 flex flex-col items-center md:items-start text-center md:text-left shrink-0">
             <span className="text-[12px] font-semibold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase mb-1">
               {activeSummary.title}
@@ -357,7 +357,7 @@ export function ScoreEstimatorPanel() {
                 {activeSummary.score}
               </span>
               {mode === 'T' && (
-                <div className="flex flex-col gap-1 hidden md:flex">
+                <div className="hidden flex-col gap-1 md:flex">
                   <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
                     <Target className="size-3" />
                     {locale === 'zh' ? '目标分' : 'Target'}
@@ -367,7 +367,7 @@ export function ScoreEstimatorPanel() {
                     min="10" max="990" step="5"
                     value={targetScore}
                     onChange={(e) => setTargetScore(Number(e.target.value) || 850)}
-                    className="w-[72px] bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+                    className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
                   />
                 </div>
               )}
@@ -414,7 +414,7 @@ export function ScoreEstimatorPanel() {
           {mode === 'T' && activeSummary.breakdownCards.length > 1 && (
             <div className="md:col-span-2 grid sm:grid-cols-3 gap-4">
               {activeSummary.breakdownCards.map((item) => (
-                <div key={item.label} className="bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 shadow-sm border border-black/[0.04] dark:border-white/[0.04]">
+                <div key={item.label} className="bg-white dark:bg-[#1C1C1E] rounded-[24px] p-6 shadow-sm border border-black/4 dark:border-white/4">
                   <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-widest">{item.label}</div>
                   <div className="mt-2 text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{item.score}</div>
                   <div className="mt-3 flex gap-2 text-[12px] font-medium text-zinc-500">
@@ -427,7 +427,7 @@ export function ScoreEstimatorPanel() {
           )}
 
           {/* Diagnostic Insights */}
-          <div className={cn("bg-white dark:bg-[#1C1C1E] rounded-[28px] p-8 shadow-sm border border-black/[0.04] dark:border-white/[0.04]", mode !== 'T' ? 'md:col-span-1' : 'md:col-span-1')}>
+          <div className={cn("bg-white dark:bg-[#1C1C1E] rounded-[28px] p-8 shadow-sm border border-black/4 dark:border-white/4", mode !== 'T' ? 'md:col-span-1' : 'md:col-span-1')}>
             <div className="flex items-center gap-2 mb-5">
               <Sparkles className="size-5 text-amber-500" />
               <h3 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-50">{locale === 'zh' ? '诊断与建议' : 'Diagnosis'}</h3>
@@ -442,13 +442,13 @@ export function ScoreEstimatorPanel() {
           </div>
 
           {/* Error Distribution List */}
-          <div className={cn("bg-white dark:bg-[#1C1C1E] rounded-[28px] p-8 shadow-sm border border-black/[0.04] dark:border-white/[0.04]", mode !== 'T' ? 'md:col-span-1' : 'md:col-span-1')}>
+          <div className={cn("bg-white dark:bg-[#1C1C1E] rounded-[28px] p-8 shadow-sm border border-black/4 dark:border-white/4", mode !== 'T' ? 'md:col-span-1' : 'md:col-span-1')}>
             <h3 className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-50 mb-5">{locale === 'zh' ? '失分分布' : 'Loss Distribution'}</h3>
             <div className="flex flex-col rounded-[16px] bg-zinc-50/80 dark:bg-[#2C2C2E]/80 overflow-hidden">
               {activeSummary.partBreakdown.map((item, index) => (
                 <div key={item.label} className={cn(
                   "flex items-center gap-4 p-4",
-                  index !== activeSummary.partBreakdown.length - 1 && "border-b border-black/[0.04] dark:border-white/[0.04]"
+                  index !== activeSummary.partBreakdown.length - 1 && "border-b border-black/4 dark:border-white/4"
                 )}>
                   <div className="flex-1">
                     <div className="flex justify-between text-[14px] mb-2">
@@ -459,7 +459,7 @@ export function ScoreEstimatorPanel() {
                       <div className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full" style={{ width: `${Math.max(item.rate * 100, 3)}%` }} />
                     </div>
                   </div>
-                  <div className="text-right shrink-0 min-w-[32px]">
+                  <div className="text-right shrink-0 min-w-8">
                     <span className="text-[17px] font-bold text-zinc-900 dark:text-zinc-50">{item.mistakes}</span>
                   </div>
                 </div>
@@ -477,9 +477,9 @@ export function ScoreEstimatorPanel() {
       )}
 
       {/* ── Charts & History Section ── */}
-      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="bg-white dark:bg-[#1C1C1E] rounded-[32px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04] flex flex-col lg:flex-row overflow-hidden">
+      <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="bg-white dark:bg-[#1C1C1E] rounded-[32px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/4 dark:border-white/4 flex flex-col lg:flex-row overflow-hidden">
         {/* Trend Chart */}
-        <div className="flex-1 p-6 lg:p-10 flex flex-col border-b lg:border-b-0 lg:border-r border-black/[0.04] dark:border-white/[0.04]">
+        <div className="flex-1 p-6 lg:p-10 flex flex-col border-b lg:border-b-0 lg:border-r border-black/4 dark:border-white/4">
           <div className="mb-8">
             <h3 className="text-[20px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{locale === 'zh' ? '成绩走势' : 'Score Trend'}</h3>
             <p className="mt-1.5 text-[14px] text-zinc-500">
@@ -487,7 +487,7 @@ export function ScoreEstimatorPanel() {
             </p>
           </div>
           
-          <div className="flex-1 min-h-[320px]">
+          <div className="flex-1 min-h-80">
             {historicalTrend.length > 0 || (activeSummary && activeSummary.chart.length > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={historicalTrend.length > 0 ? historicalTrend : activeSummary?.chart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -562,17 +562,17 @@ export function ScoreEstimatorPanel() {
         </div>
 
         {/* History Data Vault */}
-        <div className="w-full lg:w-[380px] bg-zinc-50/50 dark:bg-zinc-900/20 p-6 lg:p-10 flex flex-col gap-8">
+        <div className="w-full lg:w-95 bg-zinc-50/50 dark:bg-zinc-900/20 p-6 lg:p-10 flex flex-col gap-8">
           <div>
             <h3 className="text-[16px] font-semibold text-zinc-900 dark:text-zinc-50 mb-5 flex items-center gap-2">
               <span className="flex size-6 items-center justify-center rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 text-[12px]">+</span>
               {locale === 'zh' ? '记录正式成绩' : 'Add Official Record'}
             </h3>
             
-            <div className="bg-white dark:bg-[#1C1C1E] rounded-[20px] overflow-hidden border border-black/[0.04] dark:border-white/[0.04] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="bg-white dark:bg-[#1C1C1E] rounded-[20px] overflow-hidden border border-black/4 dark:border-white/4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-black/5 dark:border-white/5">
                 <span className="text-[14px] font-medium text-zinc-500 dark:text-zinc-400">{locale === 'zh' ? '日期' : 'Date'}</span>
-                <input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-transparent text-right text-[14px] font-semibold text-zinc-900 dark:text-zinc-50 outline-none w-[130px] cursor-pointer" />
+                <input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-transparent text-right text-[14px] font-semibold text-zinc-900 dark:text-zinc-50 outline-none w-32.5 cursor-pointer" />
               </div>
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-black/5 dark:border-white/5">
                 <span className="text-[14px] font-medium text-zinc-500 dark:text-zinc-400">Listening</span>
@@ -606,9 +606,9 @@ export function ScoreEstimatorPanel() {
               <h3 className="text-[13px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
                 {locale === 'zh' ? '历史记录' : 'History Log'}
               </h3>
-              <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2 no-scrollbar">
+              <div className="space-y-3 max-h-70 overflow-y-auto pr-2 no-scrollbar">
                 {[...deferredHistoricalScores].reverse().map((item) => (
-                  <div key={item.id} className="flex items-center justify-between group bg-white dark:bg-[#1C1C1E] p-4 rounded-[16px] border border-black/[0.04] dark:border-white/[0.04] shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]">
+                  <div key={item.id} className="flex items-center justify-between group bg-white dark:bg-[#1C1C1E] p-4 rounded-[16px] border border-black/4 dark:border-white/4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]">
                     <div>
                       <div className="flex items-baseline gap-2.5">
                         <span className="text-[20px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{item.total}</span>

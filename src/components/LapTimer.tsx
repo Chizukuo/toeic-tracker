@@ -225,19 +225,19 @@ function ListeningFlow({
     <div className="space-y-6">
       {/* Mode badge */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 py-2">
+        <div className="flex items-center gap-2 rounded-full border border-(--separator) bg-(--surface-grouped) px-4 py-2">
           <div className={cn(
             'size-2 rounded-full',
             isActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300 dark:bg-zinc-600'
           )} />
-          <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--label-secondary)]">
+          <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-(--label-secondary)">
             {isActive
               ? (locale === 'zh' ? '跟着音频走' : 'Follow the audio')
               : (locale === 'zh' ? '听力模式' : 'Listening Mode')}
           </span>
         </div>
         {hasPrevious && (
-          <div className="text-xs text-[var(--label-tertiary)]">
+          <div className="text-xs text-(--label-tertiary)">
             {locale === 'zh' ? `上次 ${formatClock(previousTime)}` : `Last ${formatClock(previousTime)}`}
           </div>
         )}
@@ -250,11 +250,11 @@ function ListeningFlow({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
-          className="tabular-nums text-[4.5rem] font-bold tracking-tight leading-none text-[var(--label-primary)] sm:text-[6rem]"
+          className="tabular-nums text-[4.5rem] font-bold tracking-tight leading-none text-(--label-primary) sm:text-[6rem]"
         >
           {elapsedFormatted}
         </motion.div>
-        <p className="mt-4 text-sm text-[var(--label-tertiary)] text-center max-w-xs leading-relaxed">
+        <p className="mt-4 text-sm text-(--label-tertiary) text-center max-w-xs leading-relaxed">
           {locale === 'zh'
             ? '以音频为节奏，不需要严格计时。完成后点击下方按钮进入复盘。'
             : 'Let the audio set the pace. No strict timing needed. Tap below when done.'}
@@ -267,7 +267,7 @@ function ListeningFlow({
           type="button"
           onClick={handleStart}
           whileTap={{ scale: 0.97 }}
-          className="flex w-full items-center justify-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
+          className="flex w-full items-center justify-center gap-2.5 rounded-full bg-(--cheese-gold) px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
         >
           <Play className="size-4" />
           {locale === 'zh' ? '开始计时（可选）' : 'Start Stopwatch (optional)'}
@@ -305,7 +305,7 @@ function ListeningFlow({
           <button
             type="button"
             onClick={handleComplete}
-            className="text-xs text-[var(--label-tertiary)] underline-offset-2 hover:underline hover:text-[var(--label-secondary)] transition-colors"
+            className="text-xs text-(--label-tertiary) underline-offset-2 hover:underline hover:text-(--label-secondary) transition-colors"
           >
             {locale === 'zh' ? '跳过计时，直接进入复盘' : 'Skip stopwatch and go to review'}
           </button>
@@ -900,7 +900,7 @@ function ReadingTimer({
         {timerRunning && (
           <div className="absolute inset-0 pointer-events-none z-0 opacity-10 overflow-hidden rounded-[36px]">
              <div 
-               className={cn("h-full w-full bg-gradient-to-t transition-all duration-1000 ease-linear", overtimeMode ? "from-red-500 to-transparent" : warning ? "from-red-500 to-transparent" : "from-amber-400 to-transparent")}
+               className={cn("h-full w-full bg-linear-to-t transition-all duration-1000 ease-linear", overtimeMode ? "from-red-500 to-transparent" : warning ? "from-red-500 to-transparent" : "from-amber-400 to-transparent")}
                style={{ transform: `translateY(${100 - progressValue}%)` }}
              />
           </div>
@@ -1024,7 +1024,7 @@ function ReadingTimer({
           </DialogHeader>
 
           <div className="px-8 pb-8 pt-6">
-            <div className="mx-auto flex max-w-[200px] flex-col items-center">
+            <div className="mx-auto flex max-w-50 flex-col items-center">
                <Input
                  type="number"
                  min="0"

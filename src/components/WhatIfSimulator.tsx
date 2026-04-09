@@ -88,8 +88,8 @@ export function WhatIfSimulator({
   };
 
   return (
-    <div className="bg-white dark:bg-[#1C1C1E] rounded-[24px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/[0.04] dark:border-white/[0.04] overflow-hidden">
-      <div className="p-6 border-b border-black/[0.04] dark:border-white/[0.04] bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="bg-white dark:bg-[#1C1C1E] rounded-[24px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-none border border-black/4 dark:border-white/4 overflow-hidden">
+      <div className="p-6 border-b border-black/4 dark:border-white/4 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="size-5 text-amber-500" />

@@ -162,15 +162,15 @@ function VocabCard({
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
       className={cn(
-        'group relative overflow-hidden rounded-[16px] border bg-[var(--surface-elevated)] transition-shadow hover:shadow-[var(--shadow-medium)]',
+        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium)',
         isRepeatOffender
-          ? 'border-rose-500/20 bg-rose-500/[0.03] dark:border-rose-400/15 dark:bg-rose-400/[0.04]'
-          : 'border-[var(--separator)]'
+          ? 'border-rose-500/20 bg-rose-500/3 dark:border-rose-400/15 dark:bg-rose-400/4'
+          : 'border-(--separator)'
       )}
     >
       {/* Accent stripe for repeat offenders */}
       {isRepeatOffender && (
-        <div className="absolute inset-y-0 left-0 w-[3px] rounded-l-[16px] bg-gradient-to-b from-rose-400 to-rose-600" />
+        <div className="absolute inset-y-0 left-0 w-0.75 rounded-l-[16px] bg-linear-to-b from-rose-400 to-rose-600" />
       )}
 
       <div className="px-4 py-4 sm:px-5">
@@ -183,24 +183,24 @@ function VocabCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={locale === 'zh' ? '在剑桥词典中查看' : 'View in Cambridge Dictionary'}
-                className="group/link flex items-center gap-1.5 text-base font-bold text-[var(--label-primary)] hover:text-[var(--cheese-gold)] transition-colors"
+                className="group/link flex items-center gap-1.5 text-base font-bold text-(--label-primary) hover:text-(--cheese-gold) transition-colors"
               >
                 <span className="group-hover/link:underline decoration-2 underline-offset-4">{entry.text}</span>
-                <ExternalLink className="size-3.5 opacity-0 -ml-0.5 group-hover/link:opacity-100 transition-opacity text-[var(--cheese-gold)]" />
+                <ExternalLink className="size-3.5 opacity-0 -ml-0.5 group-hover/link:opacity-100 transition-opacity text-(--cheese-gold)" />
               </a>
               <button
                 type="button"
                 onClick={playAudio}
                 title={locale === 'zh' ? '播放读音' : 'Play pronunciation'}
-                className="flex size-6 items-center justify-center rounded-full bg-[var(--surface-grouped)] border border-[var(--separator)] text-[var(--label-tertiary)] hover:text-[var(--cheese-gold)] hover:border-[var(--cheese-gold)]/30 hover:bg-[var(--cheese-gold)]/10 transition-colors"
+                className="flex size-6 items-center justify-center rounded-full bg-(--surface-grouped) border border-(--separator) text-(--label-tertiary) hover:text-(--cheese-gold) hover:border-(--cheese-gold)/30 hover:bg-(--cheese-gold)/10 transition-colors"
               >
                 <Volume2 className="size-3.5" />
               </button>
               {entry.reading && (
-                <span className="text-xs text-[var(--label-tertiary)] font-mono">{entry.reading}</span>
+                <span className="text-xs text-(--label-tertiary) font-mono">{entry.reading}</span>
               )}
               {entry.partOfSpeech && (
-                <span className="rounded-full bg-[var(--surface-grouped)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--label-secondary)] border border-[var(--separator)]">
+                <span className="rounded-full bg-(--surface-grouped) px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-(--label-secondary) border border-(--separator)">
                   {entry.partOfSpeech}
                 </span>
               )}
@@ -218,7 +218,7 @@ function VocabCard({
 
             {/* Definition */}
             {entry.definition && (
-              <p className="mt-2 text-sm leading-relaxed text-[var(--label-primary)]">
+              <p className="mt-2 text-sm leading-relaxed text-(--label-primary)">
                 {entry.definition}
               </p>
             )}
@@ -227,18 +227,18 @@ function VocabCard({
             {(entry.enDefinition || entry.exampleSentence) && (
               <div className="mt-2.5 space-y-2">
                 {entry.enDefinition && entry.enDefinition !== entry.definition && (
-                  <div className="rounded-[10px] bg-[var(--surface-grouped)] px-3 py-2.5 border border-[var(--separator)]/50">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--label-tertiary)] mb-1">
+                  <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1">
                       {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
                     </div>
-                    <p className="text-sm leading-relaxed text-[var(--label-secondary)]">
+                    <p className="text-sm leading-relaxed text-(--label-secondary)">
                       {entry.enDefinition}
                     </p>
                   </div>
                 )}
                 {entry.exampleSentence && (
-                  <div className="rounded-[10px] bg-[var(--surface-grouped)] px-3 py-2.5 border border-[var(--separator)]/50 opacity-90">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--label-tertiary)] mb-1 flex items-center gap-1.5">
+                  <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50 opacity-90">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1 flex items-center gap-1.5">
                       {locale === 'zh' ? 'EXAMPLE' : 'EXAMPLE'}
                       <button
                         type="button"
@@ -251,13 +251,13 @@ function VocabCard({
                           utterance.lang = 'en-US';
                           window.speechSynthesis.speak(utterance);
                         }}
-                        className="text-[var(--label-tertiary)] hover:text-[var(--cheese-gold)] transition-colors"
+                        className="text-(--label-tertiary) hover:text-(--cheese-gold) transition-colors"
                         title={locale === 'zh' ? '朗读例句' : 'Read example'}
                       >
                         <Volume2 className="size-2.5" />
                       </button>
                     </div>
-                    <p className="text-sm italic leading-relaxed text-[var(--label-secondary)]">
+                    <p className="text-sm italic leading-relaxed text-(--label-secondary)">
                       {entry.exampleSentence}
                     </p>
                   </div>
@@ -270,7 +270,7 @@ function VocabCard({
               <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
-                className="mt-3 flex items-center gap-1 text-[11px] font-medium text-[var(--label-tertiary)] hover:text-[var(--label-secondary)] transition-colors"
+                className="mt-3 flex items-center gap-1 text-[11px] font-medium text-(--label-tertiary) hover:text-(--label-secondary) transition-colors"
               >
                 {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                 {expanded
@@ -313,7 +313,7 @@ function VocabCard({
                     {entry.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {entry.tags.map((tag) => (
-                          <span key={tag} className="rounded-full bg-[var(--cheese-gold-soft)] border border-[var(--cheese-gold)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--cheese-gold)]">
+                          <span key={tag} className="rounded-full bg-(--cheese-gold-soft) border border-(--cheese-gold)/20 px-2 py-0.5 text-[10px] font-semibold text-(--cheese-gold)">
                             #{tag}
                           </span>
                         ))}
@@ -331,7 +331,7 @@ function VocabCard({
               type="button"
               onClick={() => onRemove(entry.id)}
               aria-label={locale === 'zh' ? '删除' : 'Remove'}
-              className="flex size-8 items-center justify-center rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] text-[var(--label-tertiary)] hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+              className="flex size-8 items-center justify-center rounded-full border border-(--separator) bg-(--surface-grouped) text-(--label-tertiary) hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -493,11 +493,11 @@ function AddEntryForm({
             onChange={(e) => { setText(e.target.value); setJustAdded(false); }}
             onKeyDown={handleKeyDown}
             placeholder={locale === 'zh' ? '输入生词，回车添加，Shift+回车换行。支持逗号或换行批量导入…' : 'Type a word, Enter to add, Shift+Enter for newline…'}
-            className="w-full resize-none min-h-[44px] rounded-[22px] border border-[var(--separator)] bg-[var(--surface-elevated)] px-5 py-2.5 pr-10 text-sm leading-relaxed text-[var(--label-primary)] outline-none transition-all placeholder:text-[var(--label-tertiary)] focus:border-[var(--cheese-gold)]/50 focus:ring-2 focus:ring-[var(--cheese-gold)]/20 scrollbar-hide"
+            className="w-full resize-none min-h-[44px] rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-2.5 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide"
           />
           {isLooking && (
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-              <Loader2 className="size-4 animate-spin text-[var(--label-tertiary)]" />
+              <Loader2 className="size-4 animate-spin text-(--label-tertiary)" />
             </div>
           )}
         </div>
@@ -511,8 +511,8 @@ function AddEntryForm({
             justAdded
               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
               : text.trim()
-                ? 'border-[var(--cheese-gold)]/30 bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)] hover:bg-[var(--cheese-gold)]/20'
-                : 'border-[var(--separator)] bg-[var(--surface-grouped)] text-[var(--label-tertiary)] opacity-50'
+                ? 'border-(--cheese-gold)/30 bg-(--cheese-gold-soft) text-(--cheese-gold) hover:bg-(--cheese-gold)/20'
+                : 'border-(--separator) bg-(--surface-grouped) text-(--label-tertiary) opacity-50'
           )}
           aria-label={locale === 'zh' ? '添加' : 'Add'}
         >
@@ -538,17 +538,17 @@ function AddEntryForm({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.2 }}
-            className="rounded-[12px] border border-[var(--separator)] bg-[var(--surface-grouped)] px-4 py-3"
+            className="rounded-[12px] border border-(--separator) bg-(--surface-grouped) px-4 py-3"
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[var(--cheese-gold)]">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-(--cheese-gold)">
                 {locale === 'zh' ? '词典' : 'Dictionary'}
               </span>
               {lookupResult.reading && (
-                <span className="text-[11px] text-[var(--label-tertiary)] font-mono">{lookupResult.reading}</span>
+                <span className="text-[11px] text-(--label-tertiary) font-mono">{lookupResult.reading}</span>
               )}
               {lookupResult.partOfSpeech && (
-                <span className="rounded-full bg-[var(--surface-elevated)] border border-[var(--separator)] px-2 py-0.5 text-[10px] text-[var(--label-secondary)]">
+                <span className="rounded-full bg-(--surface-elevated) border border-(--separator) px-2 py-0.5 text-[10px] text-(--label-secondary)">
                   {lookupResult.partOfSpeech}
                 </span>
               )}
@@ -556,14 +556,14 @@ function AddEntryForm({
                 href={`https://www.merriam-webster.com/dictionary/${encodeURIComponent(text.trim())}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-auto flex items-center gap-1 text-[10px] text-[var(--label-tertiary)] hover:text-[var(--label-secondary)] transition-colors"
+                className="ml-auto flex items-center gap-1 text-[10px] text-(--label-tertiary) hover:text-(--label-secondary) transition-colors"
               >
                 M-W <ExternalLink className="size-2.5" />
               </a>
             </div>
-            <p className="text-sm leading-relaxed text-[var(--label-secondary)]">{lookupResult.definition}</p>
+            <p className="text-sm leading-relaxed text-(--label-secondary)">{lookupResult.definition}</p>
             {lookupResult.exampleSentence && (
-              <p className="mt-1.5 text-xs italic text-[var(--label-tertiary)] leading-relaxed">
+              <p className="mt-1.5 text-xs italic text-(--label-tertiary) leading-relaxed">
                 &ldquo;{lookupResult.exampleSentence}&rdquo;
               </p>
             )}
@@ -582,7 +582,7 @@ function AddEntryForm({
             <button
               type="button"
               onClick={() => setShowManual((v) => !v)}
-              className="text-xs text-[var(--label-tertiary)] hover:text-[var(--label-secondary)] transition-colors"
+              className="text-xs text-(--label-tertiary) hover:text-(--label-secondary) transition-colors"
             >
               {showManual
                 ? (locale === 'zh' ? '− 收起手动定义' : '− Hide manual definition')
@@ -598,7 +598,7 @@ function AddEntryForm({
                   value={manualDefinition}
                   onChange={(e) => setManualDefinition(e.target.value)}
                   placeholder={locale === 'zh' ? '填写释义或记忆提示…' : 'Add definition or memory hint…'}
-                  className="mt-2 w-full resize-none rounded-[12px] border border-[var(--separator)] bg-[var(--surface-elevated)] px-4 py-3 text-sm text-[var(--label-primary)] outline-none transition-all placeholder:text-[var(--label-tertiary)] focus:border-[var(--cheese-gold)]/50 focus:ring-2 focus:ring-[var(--cheese-gold)]/20"
+                  className="mt-2 w-full resize-none rounded-[12px] border border-(--separator) bg-(--surface-elevated) px-4 py-3 text-sm text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20"
                 />
               )}
             </AnimatePresence>
@@ -638,23 +638,23 @@ function FilterBar({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
       {/* Search */}
       <div className="relative flex-1">
-        <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--label-tertiary)]" />
+        <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-(--label-tertiary)" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={locale === 'zh' ? '搜索生词…' : 'Search vocabulary…'}
-          className="h-9 w-full rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] pl-9 pr-4 text-sm text-[var(--label-primary)] outline-none transition-all placeholder:text-[var(--label-tertiary)] focus:border-[var(--cheese-gold)]/50 focus:ring-2 focus:ring-[var(--cheese-gold)]/20"
+          className="h-9 w-full rounded-full border border-(--separator) bg-(--surface-grouped) pl-9 pr-4 text-sm text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20"
         />
         {searchQuery && (
           <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-            <X className="size-3.5 text-[var(--label-tertiary)]" />
+            <X className="size-3.5 text-(--label-tertiary)" />
           </button>
         )}
       </div>
 
       {/* Mode pills */}
-      <div className="flex gap-1 rounded-full border border-[var(--separator)] bg-[var(--surface-grouped)] p-1">
+      <div className="flex gap-1 rounded-full border border-(--separator) bg-(--surface-grouped) p-1">
         {filters.map(({ key, label }) => (
           <button
             key={key}
@@ -663,8 +663,8 @@ function FilterBar({
             className={cn(
               'rounded-full px-3 py-1 text-[11px] font-semibold transition-all',
               mode === key
-                ? 'bg-[var(--surface-elevated)] text-[var(--label-primary)] shadow-[var(--shadow-soft)]'
-                : 'text-[var(--label-secondary)] hover:text-[var(--label-primary)]'
+                ? 'bg-(--surface-elevated) text-(--label-primary) shadow-(--shadow-soft)'
+                : 'text-(--label-secondary) hover:text-(--label-primary)'
             )}
           >
             {label}
@@ -672,7 +672,7 @@ function FilterBar({
         ))}
       </div>
 
-      <div className="font-mono text-[11px] text-[var(--label-tertiary)] shrink-0">
+      <div className="font-mono text-[11px] text-(--label-tertiary) shrink-0">
         {totalCount}{locale === 'zh' ? ' 条' : ' entries'}
       </div>
     </div>
@@ -771,14 +771,14 @@ export function VocabularyPanel() {
       {/* Header */}
       <div className="cheese-card overflow-hidden">
         <div className="cheese-card-header flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-full bg-[var(--cheese-gold-soft)] border border-[var(--cheese-gold)]/20">
-            <BookOpen className="size-4 text-[var(--cheese-gold)]" />
+          <div className="flex size-9 items-center justify-center rounded-full bg-(--cheese-gold-soft) border border-(--cheese-gold)/20">
+            <BookOpen className="size-4 text-(--cheese-gold)" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-[var(--label-primary)]">
+            <h2 className="text-base font-semibold text-(--label-primary)">
               {locale === 'zh' ? '生词本' : 'Vocabulary Notebook'}
             </h2>
-            <p className="text-xs text-[var(--label-secondary)]">
+            <p className="text-xs text-(--label-secondary)">
               {locale === 'zh'
                 ? `${vocabularyEntries.length} 条记录，其中 ${repeatCount} 条重复栽跟头`
                 : `${vocabularyEntries.length} entries, ${repeatCount} repeat offenders`}
@@ -827,11 +827,11 @@ export function VocabularyPanel() {
               </div>
             ) : (
               <div className="cheese-empty flex flex-col items-center justify-center py-12 text-center">
-                <Search className="size-8 text-[var(--label-tertiary)] mb-3" />
-                <p className="text-sm font-medium text-[var(--label-secondary)]">
+                <Search className="size-8 text-(--label-tertiary) mb-3" />
+                <p className="text-sm font-medium text-(--label-secondary)">
                   {locale === 'zh' ? '没有匹配的记录' : 'No matching entries'}
                 </p>
-                <p className="mt-1 text-xs text-[var(--label-tertiary)]">
+                <p className="mt-1 text-xs text-(--label-tertiary)">
                   {locale === 'zh' ? '试试调整搜索词或过滤条件' : 'Try adjusting your search or filter'}
                 </p>
               </div>
@@ -845,14 +845,14 @@ export function VocabularyPanel() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', bounce: 0.3, delay: 0.1 }}
-              className="flex size-16 items-center justify-center rounded-full bg-[var(--cheese-gold-soft)] border border-[var(--cheese-gold)]/20 mb-4"
+              className="flex size-16 items-center justify-center rounded-full bg-(--cheese-gold-soft) border border-(--cheese-gold)/20 mb-4"
             >
-              <BookOpen className="size-7 text-[var(--cheese-gold)]" />
+              <BookOpen className="size-7 text-(--cheese-gold)" />
             </motion.div>
-            <h3 className="text-base font-semibold text-[var(--label-primary)]">
+            <h3 className="text-base font-semibold text-(--label-primary)">
               {locale === 'zh' ? '生词本是空的' : 'Vocabulary is empty'}
             </h3>
-            <p className="mt-2 max-w-xs text-sm leading-relaxed text-[var(--label-secondary)]">
+            <p className="mt-2 max-w-xs text-sm leading-relaxed text-(--label-secondary)">
               {locale === 'zh'
                 ? '在上方输入单词或短语开始记录。遇到相同词语时系统会自动计数，帮你识别反复出错的盲区。'
                 : 'Start typing above to add words or phrases. Re-adding the same word automatically tracks how often you encounter it.'}
@@ -866,10 +866,10 @@ export function VocabularyPanel() {
         <div className="cheese-card overflow-hidden border-rose-500/15 dark:border-rose-400/10">
           <div className="cheese-card-header flex items-center gap-2">
             <AlertTriangle className="size-4 text-rose-500 dark:text-rose-400" />
-            <span className="text-sm font-semibold text-[var(--label-primary)]">
+            <span className="text-sm font-semibold text-(--label-primary)">
               {locale === 'zh' ? '重点关注' : 'High Priority'}
             </span>
-            <p className="ml-auto text-xs text-[var(--label-tertiary)]">
+            <p className="ml-auto text-xs text-(--label-tertiary)">
               {locale === 'zh' ? '遇到 2 次及以上的词语' : 'Words encountered 2+ times'}
             </p>
           </div>
