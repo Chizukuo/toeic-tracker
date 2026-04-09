@@ -182,6 +182,8 @@ interface AppState {
   removeVocabularyEntry: (id: string) => void;
   updateVocabularyEntry: (id: string, patch: Partial<VocabularyEntry>) => void;
   bumpVocabularyEncounter: (text: string, sessionId?: string) => string | null;
+  recordVocabularyKnockdown: (id: string, sessionId?: string) => void;
+  recordVocabularyComeback: (id: string, sessionId?: string) => void;
 
   // Data management
   exportSnapshot: () => SprintSnapshot;
@@ -454,6 +456,41 @@ export const useStore = create<AppState>()(
         return existing.id;
       },
 
+      recordVocabularyKnockdown: (id, sessionId) =>
+        set((state) => ({
+          vocabularyEntries: state.vocabularyEntries.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  encounterCount: entry.encounterCount + 1,
+                  knockdownCount: (entry.knockdownCount ?? 0) + 1,
+                  lastKnockdownAt: new Date().toISOString(),
+                  sessionIds: sessionId && !entry.sessionIds.includes(sessionId)
+                    ? [...entry.sessionIds, sessionId]
+                    : entry.sessionIds,
+                  updatedAt: new Date().toISOString(),
+                }
+              : entry
+          ),
+        })),
+
+      recordVocabularyComeback: (id, sessionId) =>
+        set((state) => ({
+          vocabularyEntries: state.vocabularyEntries.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  comebackCount: (entry.comebackCount ?? 0) + 1,
+                  lastComebackAt: new Date().toISOString(),
+                  sessionIds: sessionId && !entry.sessionIds.includes(sessionId)
+                    ? [...entry.sessionIds, sessionId]
+                    : entry.sessionIds,
+                  updatedAt: new Date().toISOString(),
+                }
+              : entry
+          ),
+        })),
+
       // ── Data management ──────────────────────────────────────────────────────
 
       exportSnapshot: () => {
@@ -463,6 +500,10 @@ export const useStore = create<AppState>()(
       importSnapshot: (snapshot) => {
         createAutoBackup(get(), getPersistStorage() as Storage);
         const next = parseImportSnapshot(snapshot);
+        const importedAchievements =
+          next.result.source === 'snapshot'
+            ? next.unlockedAchievements
+            : get().unlockedAchievements;
         set({
           sessions: next.sessions,
           activeSessionId: next.activeSessionId,
@@ -471,7 +512,7 @@ export const useStore = create<AppState>()(
           historicalScores: next.historicalScores,
           sprintConfig: next.sprintConfig,
           vocabularyEntries: next.vocabularyEntries,
-          unlockedAchievements: next.result.source === 'snapshot' ? (next as any).unlockedAchievements || [] : get().unlockedAchievements,
+          unlockedAchievements: importedAchievements,
         });
         return next.result;
       },

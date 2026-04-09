@@ -69,6 +69,14 @@ function isLikelyEnglishText(text?: string) {
   return /[a-z]/i.test(normalized);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function getDaysSince(isoTime: string) {
+  const timestamp = Date.parse(isoTime);
+  if (Number.isNaN(timestamp)) return 0;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / DAY_MS));
+}
+
 type DictionaryCandidate = {
   definition: string;
   partOfSpeech: string;
@@ -246,20 +254,36 @@ async function lookupWord(text: string): Promise<LookupResult | null> {
 function VocabCard({
   entry,
   onRemove,
+  onKnockdown,
+  onComeback,
   locale,
   recallMode,
 }: {
   entry: VocabularyEntry;
   onRemove: (id: string) => void;
+  onKnockdown: (id: string) => void;
+  onComeback: (id: string) => void;
   locale: 'zh' | 'en';
   recallMode: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const isRepeatOffender = entry.encounterCount >= 2;
+  const knockdownCount = entry.knockdownCount ?? 0;
+  const comebackCount = entry.comebackCount ?? 0;
+  const unresolvedCount = Math.max(0, knockdownCount - comebackCount);
   const normalizedEnDefinition = normalizeDefinitionText(entry.enDefinition);
   const normalizedDefinition = normalizeDefinitionText(entry.definition);
   const shouldMaskDetails = recallMode && !revealed;
+
+  const handleCardKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!recallMode) return;
+    if (e.target !== e.currentTarget) return;
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      setRevealed((prev) => !prev);
+    }
+  }, [recallMode]);
 
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -282,8 +306,11 @@ function VocabCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+      tabIndex={recallMode ? 0 : -1}
+      onKeyDown={handleCardKeyDown}
       className={cn(
-        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium)',
+        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium) outline-none',
+        recallMode && 'focus-visible:ring-2 focus-visible:ring-(--cheese-gold)/35',
         isRepeatOffender
           ? 'border-rose-500/20 bg-rose-500/3 dark:border-rose-400/15 dark:bg-rose-400/4'
           : 'border-(--separator)'
@@ -295,10 +322,10 @@ function VocabCard({
       )}
 
       <div className="px-4 py-4 sm:px-5">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
+        <div className="relative">
+          <div className="min-w-0">
             {/* Header row */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pr-4">
               <a
                 href={`https://dictionary.cambridge.org/dictionary/english-chinese-simplified/${encodeURIComponent(entry.text.trim())}`}
                 target="_blank"
@@ -332,8 +359,19 @@ function VocabCard({
                   className="flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-400"
                 >
                   <AlertTriangle className="size-3" />
-                  {locale === 'zh' ? `重复栽跟头 ×${entry.encounterCount}` : `Repeat ×${entry.encounterCount}`}
+                  {locale === 'zh' ? `反复查阅 ×${entry.encounterCount}` : `Repeat ×${entry.encounterCount}`}
                 </motion.span>
+              )}
+              {knockdownCount > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:border-orange-400/20 dark:bg-orange-400/10 dark:text-orange-300">
+                  <AlertTriangle className="size-3" />
+                  {locale === 'zh' ? `练习出错 ×${knockdownCount}` : `Missed ×${knockdownCount}`}
+                  {unresolvedCount > 0 && (
+                    <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[9px]">
+                      {locale === 'zh' ? `待巩固 ${unresolvedCount}` : `${unresolvedCount} remaining`}
+                    </span>
+                  )}
+                </span>
               )}
             </div>
 
@@ -341,14 +379,14 @@ function VocabCard({
             {shouldMaskDetails ? (
               <div className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-2.5">
                 <p className="text-xs leading-relaxed text-(--label-secondary)">
-                  {locale === 'zh' ? '先在脑中回忆释义，再点击揭晓答案。' : 'Recall the meaning first, then reveal the answer.'}
+                  {locale === 'zh' ? '请先尝试回忆释义。' : 'Recall the meaning first.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => setRevealed(true)}
                   className="mt-2 rounded-full border border-(--cheese-gold)/30 bg-(--cheese-gold-soft) px-3 py-1 text-[11px] font-semibold text-(--cheese-gold) transition-colors hover:bg-(--cheese-gold)/20"
                 >
-                  {locale === 'zh' ? '揭晓释义' : 'Reveal'}
+                  {locale === 'zh' ? '揭晓 (空格/回车)' : 'Reveal (Space/Enter)'}
                 </button>
               </div>
             ) : (
@@ -357,6 +395,16 @@ function VocabCard({
                   <p className="mt-2 text-sm leading-relaxed text-(--label-primary)">
                     {normalizedDefinition}
                   </p>
+                )}
+
+                {recallMode && (
+                  <button
+                    type="button"
+                    onClick={() => setRevealed(false)}
+                    className="mt-2 rounded-full border border-(--separator) bg-(--surface-grouped) px-3 py-1 text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary)"
+                  >
+                    {locale === 'zh' ? '隐蔽释义' : 'Hide'}
+                  </button>
                 )}
 
                 {(normalizedEnDefinition || entry.exampleSentence) && (
@@ -462,13 +510,33 @@ function VocabCard({
             </AnimatePresence>
           </div>
 
-          {/* Actions */}
-          <div className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Floating Actions Pill */}
+          <div className="absolute right-0 top-0 flex translate-y-1 items-center gap-0.5 rounded-full border border-(--separator)/60 bg-(--surface-elevated)/85 p-1 shadow-sm backdrop-blur-md transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto pointer-events-none z-10 dark:bg-[#1a1a1a]/85">
+            <button
+              type="button"
+              onClick={() => onKnockdown(entry.id)}
+              aria-label={locale === 'zh' ? '记为练习出错' : 'Mark as incorrect'}
+              title={locale === 'zh' ? '记为练习出错' : 'Mark as incorrect'}
+              className="flex size-7 items-center justify-center rounded-full text-(--label-tertiary) transition-all duration-200 hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
+            >
+              <AlertTriangle className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onComeback(entry.id)}
+              aria-label={locale === 'zh' ? '记为成功掌握' : 'Mark as correct'}
+              title={locale === 'zh' ? '记为成功掌握' : 'Mark as correct'}
+              className="flex size-7 items-center justify-center rounded-full text-(--label-tertiary) transition-all duration-200 hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400"
+            >
+              <Check className="size-3.5" />
+            </button>
+            <div className="h-4 w-px bg-(--separator)/50 mx-0.5" />
             <button
               type="button"
               onClick={() => onRemove(entry.id)}
               aria-label={locale === 'zh' ? '删除' : 'Remove'}
-              className="flex size-8 items-center justify-center rounded-full border border-(--separator) bg-(--surface-grouped) text-(--label-tertiary) hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+              title={locale === 'zh' ? '删除' : 'Remove'}
+              className="flex size-7 items-center justify-center rounded-full text-(--label-tertiary) transition-all duration-200 hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400"
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -637,7 +705,7 @@ function AddEntryForm({
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder={locale === 'zh' ? '输入生词，回车添加，Shift+回车换行。支持逗号或换行批量导入…' : 'Type a word, Enter to add, Shift+Enter for newline…'}
+            placeholder={locale === 'zh' ? '输入生词并回车添加。支持 Shift+回车换行或逗号分隔批量录入…' : 'Type a word, Enter to add. Use commas or newlines for bulk entry…'}
             className="w-full resize-none min-h-11 rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-2.5 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide"
           />
           {isLooking && (
@@ -790,7 +858,7 @@ function FilterBar({
 }) {
   const filters: { key: FilterMode; label: string }[] = [
     { key: 'all', label: locale === 'zh' ? '全部' : 'All' },
-    { key: 'repeat', label: locale === 'zh' ? '重复栽跟头' : 'Repeats' },
+    { key: 'repeat', label: locale === 'zh' ? '反复查阅' : 'Repeats' },
     { key: 'recent', label: locale === 'zh' ? '最近添加' : 'Recent' },
   ];
 
@@ -859,6 +927,8 @@ export function VocabularyPanel() {
   const vocabularyEntries = useStore((state) => state.vocabularyEntries);
   const removeVocabularyEntry = useStore((state) => state.removeVocabularyEntry);
   const updateVocabularyEntry = useStore((state) => state.updateVocabularyEntry);
+  const recordVocabularyKnockdown = useStore((state) => state.recordVocabularyKnockdown);
+  const recordVocabularyComeback = useStore((state) => state.recordVocabularyComeback);
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
 
@@ -946,6 +1016,49 @@ export function VocabularyPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recallMode, setRecallMode] = useState(false);
 
+  const handleRecordKnockdown = useCallback((id: string) => {
+    recordVocabularyKnockdown(id, activeSessionId);
+  }, [recordVocabularyKnockdown, activeSessionId]);
+
+  const handleRecordComeback = useCallback((id: string) => {
+    recordVocabularyComeback(id, activeSessionId);
+  }, [recordVocabularyComeback, activeSessionId]);
+
+  const reviewQueue = useMemo(() => {
+    return vocabularyEntries
+      .map((entry) => {
+        const knockdownCount = entry.knockdownCount ?? 0;
+        const comebackCount = entry.comebackCount ?? 0;
+        const unresolvedCount = Math.max(0, knockdownCount - comebackCount);
+        const daysSinceKnockdown = entry.lastKnockdownAt ? getDaysSince(entry.lastKnockdownAt) : null;
+        const freshnessBoost = daysSinceKnockdown === null ? 0 : Math.max(0, 5 - Math.min(daysSinceKnockdown, 5));
+        const encounterSignal = Math.max(0, entry.encounterCount - 1);
+        const priority = unresolvedCount * 10 + knockdownCount * 3 + freshnessBoost + encounterSignal;
+
+        return {
+          entry,
+          priority,
+          unresolvedCount,
+          knockdownCount,
+          comebackCount,
+          daysSinceKnockdown,
+        };
+      })
+      .filter((item) => item.priority > 0)
+      .sort((a, b) =>
+        b.priority - a.priority ||
+        b.unresolvedCount - a.unresolvedCount ||
+        (a.daysSinceKnockdown ?? Number.MAX_SAFE_INTEGER) - (b.daysSinceKnockdown ?? Number.MAX_SAFE_INTEGER)
+      )
+      .slice(0, 8);
+  }, [vocabularyEntries]);
+
+  const focusReviewWord = useCallback((word: string) => {
+    setFilterMode('all');
+    setSearchQuery(word);
+    setRecallMode(true);
+  }, []);
+
   const filtered = useMemo(() => {
     let list = [...vocabularyEntries];
 
@@ -994,7 +1107,7 @@ export function VocabularyPanel() {
             </h2>
             <p className="text-xs text-(--label-secondary)">
               {locale === 'zh'
-                ? `${vocabularyEntries.length} 条记录，其中 ${repeatCount} 条重复栽跟头`
+                ? `${vocabularyEntries.length} 条记录，其中 ${repeatCount} 个重点突破词汇`
                 : `${vocabularyEntries.length} entries, ${repeatCount} repeat offenders`}
             </p>
           </div>
@@ -1011,6 +1124,52 @@ export function VocabularyPanel() {
         </div>
       </div>
 
+      {reviewQueue.length > 0 && (
+        <div className="cheese-card overflow-hidden border-(--cheese-gold)/20">
+          <div className="cheese-card-header flex items-center gap-2">
+            <Check className="size-4 text-(--cheese-gold)" />
+            <span className="text-sm font-semibold text-(--label-primary)">
+              {locale === 'zh' ? '待攻克列表' : 'Target Breakthrough'}
+            </span>
+            <p className="ml-auto text-xs text-(--label-tertiary)">
+              {locale === 'zh' ? '按近期练习出错频率排序' : 'Prioritizing recent misses'}
+            </p>
+          </div>
+          <div className="p-4 sm:p-5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {reviewQueue.map(({ entry, daysSinceKnockdown, knockdownCount, comebackCount, unresolvedCount }) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => focusReviewWord(entry.text)}
+                  className="flex items-center gap-2 rounded-[12px] border border-(--separator) bg-(--surface-grouped) px-3 py-2 text-left transition-colors hover:border-(--cheese-gold)/35 hover:bg-(--surface-elevated)"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--label-primary)">{entry.text}</span>
+                  <span className="rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                    {locale === 'zh' ? `错 ${knockdownCount}` : `Miss ${knockdownCount}`}
+                  </span>
+                  <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    {locale === 'zh' ? `对 ${comebackCount}` : `Hit ${comebackCount}`}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-(--label-tertiary)">
+                    {unresolvedCount > 0
+                      ? (locale === 'zh' ? `待巩固 ${unresolvedCount}` : `${unresolvedCount} to master`)
+                      : (locale === 'zh' ? '已掌握' : 'Mastered')}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-(--label-tertiary)">
+                    {daysSinceKnockdown === null
+                      ? (locale === 'zh' ? '-' : '-')
+                      : daysSinceKnockdown === 0
+                        ? (locale === 'zh' ? '今天出错' : 'Missed today')
+                        : (locale === 'zh' ? `${daysSinceKnockdown} 天前` : `${daysSinceKnockdown}d ago`)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter + list */}
       {vocabularyEntries.length > 0 ? (
         <div className="cheese-card overflow-hidden">
@@ -1025,6 +1184,11 @@ export function VocabularyPanel() {
               recallMode={recallMode}
               setRecallMode={setRecallMode}
             />
+            {recallMode && (
+              <p className="mt-2 text-xs text-(--label-tertiary)">
+                {locale === 'zh' ? '提示：通过 Tab 切换卡片，按空格或回车快速隐示释义。' : 'Tip: use Tab to switch cards, press Space or Enter to toggle definitions.'}
+              </p>
+            )}
           </div>
 
           <div className="p-4 sm:p-5">
@@ -1036,6 +1200,8 @@ export function VocabularyPanel() {
                       key={entry.id}
                       entry={entry}
                       onRemove={removeVocabularyEntry}
+                      onKnockdown={handleRecordKnockdown}
+                      onComeback={handleRecordComeback}
                       locale={locale}
                       recallMode={recallMode}
                     />
@@ -1067,12 +1233,12 @@ export function VocabularyPanel() {
               <BookOpen className="size-7 text-(--cheese-gold)" />
             </motion.div>
             <h3 className="text-base font-semibold text-(--label-primary)">
-              {locale === 'zh' ? '生词本是空的' : 'Vocabulary is empty'}
+              {locale === 'zh' ? '暂无词汇记录' : 'Vocabulary is empty'}
             </h3>
             <p className="mt-2 max-w-xs text-sm leading-relaxed text-(--label-secondary)">
               {locale === 'zh'
-                ? '在上方输入单词或短语开始记录。遇到相同词语时系统会自动计数，帮你识别反复出错的盲区。'
-                : 'Start typing above to add words or phrases. Re-adding the same word automatically tracks how often you encounter it.'}
+                ? '在上方输入需要记录的单词或短语。多次添加同一个词时，系统会自动累加计数，帮你定位薄弱环节。'
+                : 'Start typing above to add words or phrases. Re-adding the same word tracks how often you encounter it, helping you identify weak spots.'}
             </p>
           </div>
         </div>
