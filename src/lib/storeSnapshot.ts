@@ -455,20 +455,28 @@ export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[]
   if (!Array.isArray(incoming)) return [];
   return incoming
     .filter((item): item is Partial<VocabularyEntry> => typeof item === 'object' && item !== null)
-    .map((item, idx) => ({
-      id: typeof item.id === 'string' && item.id ? item.id : `vocab-${idx}-${Date.now()}`,
-      text: typeof item.text === 'string' && item.text.trim() ? item.text.trim() : '',
-      reading: typeof item.reading === 'string' ? item.reading : undefined,
-      definition: typeof item.definition === 'string' ? item.definition : undefined,
-      enDefinition: typeof item.enDefinition === 'string' ? item.enDefinition : undefined,
-      partOfSpeech: typeof item.partOfSpeech === 'string' ? item.partOfSpeech : undefined,
-      exampleSentence: typeof item.exampleSentence === 'string' ? item.exampleSentence : undefined,
-      sessionIds: Array.isArray(item.sessionIds) ? item.sessionIds.filter((s): s is string => typeof s === 'string') : [],
-      encounterCount: typeof item.encounterCount === 'number' && item.encounterCount >= 1 ? item.encounterCount : 1,
-      tags: Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === 'string') : [],
-      createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
-      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
-    }))
+    .map((item, idx) => {
+      const definition = typeof item.definition === 'string' && item.definition.trim() ? item.definition.trim() : undefined;
+      const rawEnDefinition = typeof item.enDefinition === 'string' ? item.enDefinition.trim() : '';
+      const enDefinition = rawEnDefinition && !['-', '--', '—', 'n/a', 'na'].includes(rawEnDefinition.toLowerCase())
+        ? rawEnDefinition
+        : undefined;
+
+      return {
+        id: typeof item.id === 'string' && item.id ? item.id : `vocab-${idx}-${Date.now()}`,
+        text: typeof item.text === 'string' && item.text.trim() ? item.text.trim() : '',
+        reading: typeof item.reading === 'string' ? item.reading : undefined,
+        definition,
+        enDefinition,
+        partOfSpeech: typeof item.partOfSpeech === 'string' ? item.partOfSpeech : undefined,
+        exampleSentence: typeof item.exampleSentence === 'string' ? item.exampleSentence : undefined,
+        sessionIds: Array.isArray(item.sessionIds) ? item.sessionIds.filter((s): s is string => typeof s === 'string') : [],
+        encounterCount: typeof item.encounterCount === 'number' && item.encounterCount >= 1 ? item.encounterCount : 1,
+        tags: Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === 'string') : [],
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+        updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
+      };
+    })
     .filter((e) => e.text.length > 0);
 }
 
