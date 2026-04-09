@@ -877,6 +877,31 @@ function SummaryTile({ label, value, helper }: { label: string; value: string; h
 function feedbackClassName(tone?: string) { return tone === 'success' ? 'border-emerald-500/28 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200' : tone === 'error' ? 'border-rose-500/28 bg-rose-500/12 text-rose-900 dark:text-rose-200' : tone === 'info' ? 'border-amber-400/28 bg-amber-400/12 text-amber-900 dark:text-amber-200' : 'border-zinc-200/70 bg-white/88 text-zinc-700 dark:border-white/8 dark:bg-zinc-950/82 dark:text-zinc-300'; }
 function feedbackIconWrapClassName(tone: string) { return tone === 'success' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : tone === 'error' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300' : 'bg-amber-500/18 text-amber-700 dark:text-amber-300'; }
 function feedbackProgressClassName(tone: string) { return tone === 'success' ? 'h-full bg-emerald-500/70' : tone === 'error' ? 'h-full bg-rose-500/70' : 'h-full bg-amber-500/70'; }
+function formatImportFeedback(locale: 'zh' | 'en', message: string, result: { source: string; migrated: boolean; futureVersion: boolean; }) {
+	const sourceLabel = formatImportSourceLabel(locale, result.source);
+
+	if (locale === 'zh') {
+		if (result.futureVersion) {
+			return `${message} 来源：${sourceLabel}，检测到较新版本，已按兼容模式导入。`;
+		}
+
+		if (result.migrated) {
+			return `${message} 已从${sourceLabel}兼容导入。`;
+		}
+
+		return `${message} 来源：${sourceLabel}。`;
+	}
+
+	if (result.futureVersion) {
+		return `${message} Source: ${sourceLabel}. A newer version was detected and imported in compatibility mode.`;
+	}
+
+	if (result.migrated) {
+		return `${message} Imported from ${sourceLabel} in compatibility mode.`;
+	}
+
+	return `${message} Source: ${sourceLabel}.`;
+}
 function formatImportSourceLabel(locale: 'zh' | 'en', source: string) { return source === 'snapshot' ? (locale === 'zh' ? '标准快照' : 'snapshot') : source === 'persisted-state' ? (locale === 'zh' ? '持久化状态' : 'persisted state') : source === 'legacy-records' ? (locale === 'zh' ? '旧版记录' : 'legacy records') : locale === 'zh' ? '兼容状态' : 'state payload'; }
 function formatImportedVersion(locale: 'zh' | 'en', version: string | number) { return version === 'legacy' ? (locale === 'zh' ? '旧版格式' : 'legacy format') : `v${version}`; }
 function formatExportedAt(value: string) { return value.replace('T', ' ').replace('.000Z', ' UTC'); }
