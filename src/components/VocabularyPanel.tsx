@@ -533,6 +533,24 @@ function VocabCard({
             <div className="h-4 w-px bg-(--separator)/50 mx-0.5" />
             <button
               type="button"
+              onClick={() => onKnockdown(entry.id)}
+              aria-label={locale === 'zh' ? '记为练习出错' : 'Mark as incorrect'}
+              title={locale === 'zh' ? '记为练习出错' : 'Mark as incorrect'}
+              className="flex size-8 items-center justify-center rounded-full border border-orange-500/30 bg-orange-500/8 text-orange-600 transition-colors hover:bg-orange-500/15 dark:text-orange-400"
+            >
+              <AlertTriangle className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onComeback(entry.id)}
+              aria-label={locale === 'zh' ? '记为成功掌握' : 'Mark as correct'}
+              title={locale === 'zh' ? '记为成功掌握' : 'Mark as correct'}
+              className="flex size-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/8 text-emerald-600 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400"
+            >
+              <Check className="size-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={() => onRemove(entry.id)}
               aria-label={locale === 'zh' ? '删除' : 'Remove'}
               title={locale === 'zh' ? '删除' : 'Remove'}
