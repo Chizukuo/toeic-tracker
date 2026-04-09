@@ -168,15 +168,19 @@ function setCache(word: string, result: LookupResult) {
   }
 }
 
-async function lookupWord(text: string): Promise<LookupResult | null> {
+async function lookupWord(text: string, forceZhRetry = false): Promise<LookupResult | null> {
   const normalized = text.trim().toLowerCase();
   const isPhrase = normalized.split(/\s+/).length > 2;
   if (isPhrase) return null;
 
   // Check cache first
   const cache = getCache();
-  if (cache[normalized]) {
-    return cache[normalized];
+  const cached = cache[normalized];
+  if (cached) {
+    const looksLikeFailedZh = cached.definition && cached.definition === cached.enDefinition && isLikelyEnglishText(cached.definition);
+    if (!(forceZhRetry && looksLikeFailedZh)) {
+      return cached;
+    }
   }
 
   try {
@@ -276,13 +280,18 @@ function VocabCard({
   const normalizedDefinition = normalizeDefinitionText(entry.definition);
   const shouldMaskDetails = recallMode && !revealed;
 
+  const toggleReveal = useCallback((e?: React.MouseEvent | React.KeyboardEvent | React.TouchEvent) => {
+    if (e && (e.target as HTMLElement).closest?.('button, a')) return;
+    setRevealed((prev) => !prev);
+  }, []);
+
   const handleCardKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!recallMode) return;
     if (e.target !== e.currentTarget) return;
     
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
-      setRevealed((prev) => !prev);
+      toggleReveal();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       const next = e.currentTarget.nextElementSibling as HTMLElement;
@@ -301,7 +310,7 @@ function VocabCard({
       e.preventDefault();
       onRemove(entry.id);
     }
-  }, [recallMode, revealed, entry.id, onKnockdown, onComeback, onRemove]);
+  }, [recallMode, revealed, entry.id, onKnockdown, onComeback, onRemove, toggleReveal]);
 
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -395,11 +404,14 @@ function VocabCard({
 
             {/* Definition and active-recall reveal */}
             {shouldMaskDetails ? (
-              <div className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-2.5 space-y-2">
+              <div 
+                onClick={toggleReveal}
+                className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-3 space-y-2 cursor-pointer active:scale-[0.98] transition-transform select-none"
+              >
                 <p className="text-xs leading-relaxed text-(--label-secondary)">
-                  {locale === 'zh' ? '请先尝试回忆释义。' : 'Recall the meaning first.'}
+                  {locale === 'zh' ? '请尝试回忆释义，点击或敲击空格揭晓。' : 'Recall the meaning first. Tap or press Space to reveal.'}
                 </p>
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-(--label-tertiary)">
+                <div className="hidden sm:flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-(--label-tertiary)">
                   <span className="rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">Space / Enter</span>
                   <span>{locale === 'zh' ? '揭晓' : 'Reveal'}</span>
                   <span className="ml-1 rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">↑ / ↓</span>
@@ -415,18 +427,32 @@ function VocabCard({
                 )}
 
                 {recallMode && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-medium text-(--label-tertiary)">
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5 text-[10px] font-medium text-(--label-tertiary)">
                     <button
                       type="button"
                       onClick={() => setRevealed(false)}
-                      className="rounded-full border border-(--separator) bg-(--surface-grouped) px-3 py-1 text-[10px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary)"
+                      className="rounded-full border border-(--separator) bg-(--surface-grouped) px-4 py-1.5 sm:px-3 sm:py-1 text-[10px] sm:text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary) active:scale-95"
                     >
                       {locale === 'zh' ? '隐蔽释义' : 'Hide'}
                     </button>
-                    <span className="ml-auto rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">1</span>
-                    <span>{locale === 'zh' ? '记为出错' : 'Miss'}</span>
-                    <span className="ml-1 rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">2</span>
-                    <span>{locale === 'zh' ? '记为掌握' : 'Hit'}</span>
+                    <div className="flex items-center gap-2 sm:ml-auto w-full sm:w-auto">
+                      <button
+                        onClick={() => onKnockdown(entry.id)}
+                        className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-2 sm:px-3 sm:py-1 text-orange-600 transition-colors hover:bg-orange-500/20 active:scale-95 dark:text-orange-400"
+                      >
+                        <span className="hidden sm:inline rounded border border-orange-500/30 px-1 py-0.5 text-[9px]">1</span>
+                        <AlertTriangle className="size-3 sm:hidden" />
+                        <span className="text-[11px] sm:text-[10px]">{locale === 'zh' ? '记为出错' : 'Miss'}</span>
+                      </button>
+                      <button
+                        onClick={() => onComeback(entry.id)}
+                        className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 sm:px-3 sm:py-1 text-emerald-600 transition-colors hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400"
+                      >
+                        <span className="hidden sm:inline rounded border border-emerald-500/30 px-1 py-0.5 text-[9px]">2</span>
+                        <Check className="size-3 sm:hidden" />
+                        <span className="text-[11px] sm:text-[10px]">{locale === 'zh' ? '记为掌握' : 'Hit'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -533,8 +559,36 @@ function VocabCard({
             </AnimatePresence>
           </div>
 
-          {/* Floating Actions Pill */}
-          <div className="absolute right-0 top-0 flex translate-y-1 items-center gap-0.5 rounded-full border border-(--separator)/60 bg-(--surface-elevated)/85 p-1 shadow-sm backdrop-blur-md transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto pointer-events-none z-10 dark:bg-[#1a1a1a]/85">
+          {/* Mobile Specific Action Row (hidden on desktop) */}
+          <div className="mt-4 flex sm:hidden items-center gap-2 border-t border-(--separator)/40 pt-3">
+            <button
+              type="button"
+              onClick={() => onKnockdown(entry.id)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] bg-orange-500/10 px-3 py-2.5 text-xs font-semibold text-orange-600 active:scale-95 dark:text-orange-400"
+            >
+              <AlertTriangle className="size-3.5" />
+              {locale === 'zh' ? '出错' : 'Miss'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onComeback(entry.id)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-600 active:scale-95 dark:text-emerald-400"
+            >
+              <Check className="size-3.5" />
+              {locale === 'zh' ? '掌握' : 'Hit'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onRemove(entry.id)}
+              className="flex items-center justify-center rounded-[10px] bg-rose-500/10 p-2.5 text-rose-600 active:scale-95 shrink-0 dark:text-rose-400"
+              aria-label={locale === 'zh' ? '删除' : 'Remove'}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+
+          {/* Desktop Floating Actions Pill (hidden on mobile) */}
+          <div className="absolute right-0 top-0 hidden sm:flex translate-y-1 items-center gap-0.5 rounded-full border border-(--separator)/60 bg-(--surface-elevated)/85 p-1 shadow-sm backdrop-blur-md transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto pointer-events-none z-10 dark:bg-[#1a1a1a]/85">
             <button
               type="button"
               onClick={() => onKnockdown(entry.id)}
@@ -961,7 +1015,8 @@ export function VocabularyPanel() {
       const enDefinition = normalizeDefinitionText(e.enDefinition);
       const definition = normalizeDefinitionText(e.definition);
       const definitionLooksUnsafe = containsViolentHint(enDefinition) && (!definition || definition === enDefinition);
-      return !definition || !enDefinition || definitionLooksUnsafe;
+      const failedZh = locale === 'zh' && definition && definition === enDefinition && isLikelyEnglishText(definition);
+      return !definition || !enDefinition || definitionLooksUnsafe || failedZh;
     });
     if (missing.length === 0) return;
 
@@ -1018,7 +1073,8 @@ export function VocabularyPanel() {
     // 2. Otherwise, pick the first one and do a network fetch with throttle (Slow path)
     const entry = missing[0];
     const timer = window.setTimeout(async () => {
-      const res = await lookupWord(entry.text);
+      const failedZh = locale === 'zh' && entry.definition === entry.enDefinition && isLikelyEnglishText(entry.definition);
+      const res = await lookupWord(entry.text, failedZh);
       if (res) {
         const patch = buildMigrationPatch(entry, res);
         if (Object.keys(patch).length > 0) {
