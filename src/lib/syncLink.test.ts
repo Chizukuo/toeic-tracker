@@ -201,7 +201,7 @@ describe('syncLink helpers', () => {
     expect(() => decodeSnapshotFromSyncPayload('not-a-sync-payload')).toThrow('Invalid sync payload');
   });
 
-  it('optionally includes vocabulary words in sync payloads', () => {
+  it('optionally includes lightweight vocabulary metadata in sync payloads', () => {
     const sessions = createInitialSessions();
     const snapshot = createSnapshot({
       sessions,
@@ -214,9 +214,13 @@ describe('syncLink helpers', () => {
         {
           id: 'v1',
           text: 'abandon',
+          definition: '放弃',
+          enDefinition: 'to leave behind',
+          partOfSpeech: 'verb',
+          exampleSentence: 'He abandoned the plan.',
           encounterCount: 2,
           sessionIds: ['L1'],
-          tags: [],
+          tags: ['mock'],
           createdAt: '2026-03-11T00:00:00.000Z',
           updatedAt: '2026-03-11T00:00:00.000Z',
         },
@@ -240,7 +244,26 @@ describe('syncLink helpers', () => {
     const decodedWithVocabulary = decodeSnapshotFromSyncPayload(payloadWithVocabulary);
 
     expect(decodedWithoutVocabulary.data.vocabularyEntries).toBeUndefined();
-    expect(decodedWithVocabulary.data.vocabularyEntries?.map((entry) => entry.text)).toEqual(['abandon', 'benchmark']);
+    expect(decodedWithVocabulary.data.vocabularyEntries).toEqual([
+      {
+        id: 'v1',
+        text: 'abandon',
+        encounterCount: 2,
+        sessionIds: ['L1'],
+        tags: ['mock'],
+        createdAt: '2026-03-11T00:00:00.000Z',
+        updatedAt: '2026-03-11T00:00:00.000Z',
+      },
+      {
+        id: 'v2',
+        text: 'benchmark',
+        encounterCount: 1,
+        sessionIds: [],
+        tags: [],
+        createdAt: '2026-03-11T00:00:00.000Z',
+        updatedAt: '2026-03-11T00:00:00.000Z',
+      },
+    ]);
   });
 
   it('produces shorter payloads than the legacy full-json codec', () => {

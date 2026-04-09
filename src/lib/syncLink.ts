@@ -13,6 +13,7 @@ import {
   READING_LAP_SEGMENTS,
   READING_PARTS,
   READING_TAGS,
+  type VocabularyEntry,
   createInitialSessions,
 } from '@/lib/toeic';
 
@@ -20,7 +21,9 @@ export const SYNC_HASH_PREFIX = 'sync=v1.';
 export const MAX_SYNC_URL_LENGTH = 3200;
 
 const LEGACY_SYNC_COMPACT_FORMAT_VERSION = 1;
-const SYNC_COMPACT_FORMAT_VERSION = 2;
+const SYNC_COMPACT_FORMAT_VERSION = 4;
+const PREVIOUS_SYNC_COMPACT_FORMAT_VERSION = 3;
+const OLDER_SYNC_COMPACT_FORMAT_VERSION = 2;
 const SESSION_DEFAULTS = createInitialSessions();
 const SESSION_INDEX = new Map(SESSION_DEFAULTS.map((session, index) => [session.id, index]));
 const STATUS_CODES = ['not-started', 'in-progress', 'debugged'] as const;
@@ -57,6 +60,29 @@ type CompactTimerSummary = [number, number, number, string, number?, number?];
 type CompactTimerRuntime = [string, number, number, ...(string | number | number[])[]];
 type CompactSessionDelta = [number, number, ...(number | number[] | CompactTimerSummary | CompactTimerRuntime | string)[]];
 type CompactHistoricalScore = [string, number, number, number, number, string, string?];
+type LegacyCompactVocabularyEntry = [
+  string,
+  string,
+  number,
+  string,
+  string,
+  string?,
+  string?,
+  string?,
+  string?,
+  string?,
+  string[]?,
+  string[]?
+];
+type CompactVocabularyEntry = [
+  string,
+  string,
+  number,
+  string,
+  string,
+  string[]?,
+  string[]?
+];
 
 type LegacyCompactSyncSnapshot = {
   f: typeof LEGACY_SYNC_COMPACT_FORMAT_VERSION;
@@ -74,9 +100,9 @@ type LegacyCompactSyncSnapshot = {
 };
 
 type CompactSyncSnapshot = [
-  typeof SYNC_COMPACT_FORMAT_VERSION,
+  number,
   string,
-  [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], string[]?],
+  [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], (string[] | CompactVocabularyEntry[] | LegacyCompactVocabularyEntry[])?],
   [number, string, number, number, number]?
 ];
 
@@ -215,7 +241,15 @@ function isLegacyCompactSyncSnapshot(value: unknown): value is LegacyCompactSync
 }
 
 function isCompactSyncSnapshot(value: unknown): value is CompactSyncSnapshot {
-  return Array.isArray(value) && value[0] === SYNC_COMPACT_FORMAT_VERSION && Array.isArray(value[2]);
+  if (!Array.isArray(value) || !Array.isArray(value[2])) {
+    return false;
+  }
+
+  return (
+    value[0] === OLDER_SYNC_COMPACT_FORMAT_VERSION ||
+    value[0] === PREVIOUS_SYNC_COMPACT_FORMAT_VERSION ||
+    value[0] === SYNC_COMPACT_FORMAT_VERSION
+  );
 }
 
 function encodeNumberPairs<T extends string>(
@@ -711,6 +745,74 @@ function extractVocabularyWords(snapshot: SprintSnapshot) {
   return [...words].sort((left, right) => left.localeCompare(right));
 }
 
+function encodeVocabularyEntries(snapshot: SprintSnapshot): CompactVocabularyEntry[] {
+  const entries = snapshot.data.vocabularyEntries ?? [];
+
+  return entries.flatMap((entry, index) => {
+    const text = entry.text.trim();
+
+    if (!text) {
+      return [];
+    }
+
+    return [[
+      entry.id || `sync-vocab-${index}-${Date.now()}`,
+      text,
+      typeof entry.encounterCount === 'number' && entry.encounterCount >= 1
+        ? Math.floor(entry.encounterCount)
+        : 1,
+      encodeInstant(entry.createdAt, snapshot.exportedAt) || '',
+      encodeInstant(entry.updatedAt, snapshot.exportedAt) || '',
+      Array.isArray(entry.sessionIds) && entry.sessionIds.length > 0
+        ? entry.sessionIds.filter((sessionId): sessionId is string => typeof sessionId === 'string')
+        : undefined,
+      Array.isArray(entry.tags) && entry.tags.length > 0
+        ? entry.tags.filter((tag): tag is string => typeof tag === 'string')
+        : undefined,
+    ] satisfies CompactVocabularyEntry];
+  });
+}
+
+function decodeVocabularyEntries(entries: Array<CompactVocabularyEntry | LegacyCompactVocabularyEntry>, anchor: string): VocabularyEntry[] {
+  const now = new Date().toISOString();
+
+  return entries
+    .map((entry, index) => {
+      const text = typeof entry[1] === 'string' ? entry[1].trim() : '';
+      const sessionIds = Array.isArray(entry[5])
+        ? entry[5].filter((sessionId): sessionId is string => typeof sessionId === 'string')
+        : Array.isArray(entry[10])
+          ? entry[10].filter((sessionId): sessionId is string => typeof sessionId === 'string')
+          : [];
+      const tags = Array.isArray(entry[6])
+        ? entry[6].filter((tag): tag is string => typeof tag === 'string')
+        : Array.isArray(entry[11])
+          ? entry[11].filter((tag): tag is string => typeof tag === 'string')
+          : [];
+      const legacyReading = typeof entry[5] === 'string' && entry[5].trim() ? entry[5].trim() : undefined;
+      const legacyDefinition = typeof entry[6] === 'string' && entry[6].trim() ? entry[6].trim() : undefined;
+      const legacyEnDefinition = typeof entry[7] === 'string' && entry[7].trim() ? entry[7].trim() : undefined;
+      const legacyPartOfSpeech = typeof entry[8] === 'string' && entry[8].trim() ? entry[8].trim() : undefined;
+      const legacyExampleSentence = typeof entry[9] === 'string' && entry[9].trim() ? entry[9].trim() : undefined;
+
+      return {
+        id: typeof entry[0] === 'string' && entry[0] ? entry[0] : `sync-vocab-${index}-${Date.now()}`,
+        text,
+        encounterCount: typeof entry[2] === 'number' && entry[2] >= 1 ? Math.floor(entry[2]) : 1,
+        createdAt: decodeInstant(entry[3], anchor) ?? now,
+        updatedAt: decodeInstant(entry[4], anchor) ?? now,
+        reading: legacyReading,
+        definition: legacyDefinition,
+        enDefinition: legacyEnDefinition,
+        partOfSpeech: legacyPartOfSpeech,
+        exampleSentence: legacyExampleSentence,
+        sessionIds,
+        tags,
+      } satisfies VocabularyEntry;
+    })
+    .filter((entry) => entry.text.length > 0);
+}
+
 function createVocabularyEntriesFromWords(words: string[]) {
   const now = new Date().toISOString();
 
@@ -772,8 +874,8 @@ function getMetadataOverride(snapshot: SprintSnapshot) {
 function compactSnapshot(snapshot: SprintSnapshot, options?: SyncPayloadOptions): CompactSyncSnapshot {
   const localeCode = LOCALE_CODES.indexOf(snapshot.data.locale) as LocaleCode;
   const activeSessionIndex = SESSION_INDEX.get(snapshot.data.activeSessionId) ?? 0;
-  const vocabularyWords = options?.includeVocabulary ? extractVocabularyWords(snapshot) : undefined;
-  const compactData: [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], string[]?] = [
+  const compactVocabularyEntries = options?.includeVocabulary ? encodeVocabularyEntries(snapshot) : undefined;
+  const compactData: [CompactSessionDelta[], number, LocaleCode, string, CompactHistoricalScore[], (string[] | CompactVocabularyEntry[])?] = [
     encodeSessions(snapshot),
     activeSessionIndex,
     localeCode >= 0 ? localeCode : 0,
@@ -781,8 +883,8 @@ function compactSnapshot(snapshot: SprintSnapshot, options?: SyncPayloadOptions)
     encodeHistoricalScores(snapshot.data.historicalScores, snapshot.data.examDate, snapshot.exportedAt),
   ];
 
-  if (vocabularyWords && vocabularyWords.length > 0) {
-    compactData[5] = vocabularyWords;
+  if (compactVocabularyEntries && compactVocabularyEntries.length > 0) {
+    compactData[5] = compactVocabularyEntries;
   }
 
   const base: CompactSyncSnapshot = [
@@ -805,8 +907,12 @@ function expandCompactSnapshot(compact: CompactSyncSnapshot): SprintSnapshot {
   const metadata = compact[3];
   const locale = LOCALE_CODES[data[2]] ?? 'zh';
   const examDate = decodeDate(data[3]);
-  const vocabularyWords = Array.isArray(data[5])
-    ? data[5].filter((word): word is string => typeof word === 'string' && word.trim().length > 0)
+  const vocabularyPayload = data[5];
+  const vocabularyWords = Array.isArray(vocabularyPayload) && typeof vocabularyPayload[0] === 'string'
+    ? vocabularyPayload.filter((word): word is string => typeof word === 'string' && word.trim().length > 0)
+    : [];
+  const vocabularyEntries = Array.isArray(vocabularyPayload) && Array.isArray(vocabularyPayload[0])
+    ? decodeVocabularyEntries(vocabularyPayload as Array<CompactVocabularyEntry | LegacyCompactVocabularyEntry>, exportedAt)
     : [];
 
   return {
@@ -825,7 +931,9 @@ function expandCompactSnapshot(compact: CompactSyncSnapshot): SprintSnapshot {
       locale,
       examDate,
       historicalScores: decodeHistoricalScores(data[4], examDate, exportedAt),
-      ...(vocabularyWords.length > 0
+      ...(vocabularyEntries.length > 0
+        ? { vocabularyEntries }
+        : vocabularyWords.length > 0
         ? { vocabularyEntries: createVocabularyEntriesFromWords(vocabularyWords) }
         : {}),
     },

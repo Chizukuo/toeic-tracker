@@ -460,6 +460,7 @@ export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[]
       text: typeof item.text === 'string' && item.text.trim() ? item.text.trim() : '',
       reading: typeof item.reading === 'string' ? item.reading : undefined,
       definition: typeof item.definition === 'string' ? item.definition : undefined,
+      enDefinition: typeof item.enDefinition === 'string' ? item.enDefinition : undefined,
       partOfSpeech: typeof item.partOfSpeech === 'string' ? item.partOfSpeech : undefined,
       exampleSentence: typeof item.exampleSentence === 'string' ? item.exampleSentence : undefined,
       sessionIds: Array.isArray(item.sessionIds) ? item.sessionIds.filter((s): s is string => typeof s === 'string') : [],

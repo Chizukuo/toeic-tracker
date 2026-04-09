@@ -688,25 +688,46 @@ export function VocabularyPanel() {
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
 
-  // Background migration for legacy entries missing 'enDefinition'
+  // Background migration for legacy entries missing definitions
   useEffect(() => {
-    const missing = vocabularyEntries.filter(e => !e.enDefinition);
+    const missing = vocabularyEntries.filter((e) => e.enDefinition === undefined || !e.definition?.trim());
     if (missing.length === 0) return;
+
+    const buildMigrationPatch = (entry: VocabularyEntry, res?: LookupResult) => {
+      const fallbackEnDefinition = (res?.enDefinition || entry.definition || '-').trim() || '-';
+      const patch: Partial<VocabularyEntry> = {};
+
+      if (!entry.definition && res?.definition) {
+        patch.definition = res.definition;
+      }
+      if (entry.enDefinition !== fallbackEnDefinition) {
+        patch.enDefinition = fallbackEnDefinition;
+      }
+      if (!entry.reading && res?.reading) {
+        patch.reading = res.reading;
+      }
+      if (!entry.partOfSpeech && res?.partOfSpeech) {
+        patch.partOfSpeech = res.partOfSpeech;
+      }
+      if (!entry.exampleSentence && res?.exampleSentence) {
+        patch.exampleSentence = res.exampleSentence;
+      }
+
+      return patch;
+    };
 
     // 1. First, try to fix all missing items that are ALREADY in the cache (Fast path)
     const cache = getCache();
-    const canFixInstantly = missing.filter(e => cache[e.text.toLowerCase()]);
+    const canFixInstantly = missing.filter((e) => cache[e.text.toLowerCase()]);
     
     if (canFixInstantly.length > 0) {
       // Process a batch of up to 10 instantly to avoid over-triggering renders
-      canFixInstantly.slice(0, 10).forEach(entry => {
+      canFixInstantly.slice(0, 10).forEach((entry) => {
         const res = cache[entry.text.toLowerCase()];
-        updateVocabularyEntry(entry.id, { 
-          enDefinition: res.enDefinition || entry.definition || '',
-          reading: entry.reading || res.reading,
-          partOfSpeech: entry.partOfSpeech || res.partOfSpeech,
-          exampleSentence: entry.exampleSentence || res.exampleSentence,
-        });
+        const patch = buildMigrationPatch(entry, res);
+        if (Object.keys(patch).length > 0) {
+          updateVocabularyEntry(entry.id, patch);
+        }
       });
       return; // The store update will trigger the next run of this effect
     }
@@ -716,15 +737,15 @@ export function VocabularyPanel() {
     const timer = window.setTimeout(async () => {
       const res = await lookupWord(entry.text);
       if (res) {
-        updateVocabularyEntry(entry.id, { 
-          enDefinition: res.enDefinition || entry.definition || '',
-          reading: entry.reading || res.reading,
-          partOfSpeech: entry.partOfSpeech || res.partOfSpeech,
-          exampleSentence: entry.exampleSentence || res.exampleSentence,
-        });
+        const patch = buildMigrationPatch(entry, res);
+        if (Object.keys(patch).length > 0) {
+          updateVocabularyEntry(entry.id, patch);
+        }
       } else {
-        // Mark to prevent infinite retry
-        updateVocabularyEntry(entry.id, { enDefinition: entry.definition || '-' });
+        const patch = buildMigrationPatch(entry);
+        if (Object.keys(patch).length > 0) {
+          updateVocabularyEntry(entry.id, patch);
+        }
       }
     }, 1200);
 
