@@ -24,7 +24,7 @@ function VaultPageContent() {
     <SectionShell
       index="01"
       title={copy.dataVaultTitle}
-      description={locale === 'zh' ? '备份、恢复或重置本地数据。' : 'Backup, restore, or reset local data.'}
+      description={copy.dataVaultDescription}
     >
       <DataVaultPanel />
     </SectionShell>
