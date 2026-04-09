@@ -172,7 +172,7 @@ function PracticeFlow() {
 
           {step === 'result' && (
             <div className="space-y-6">
-              <div className="cheese-card overflow-hidden p-8 sm:p-10 text-center">
+              <div className="relative cheese-card overflow-hidden p-8 sm:p-10 text-center">
                 {/* Gradient accent bar */}
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500" />
 
