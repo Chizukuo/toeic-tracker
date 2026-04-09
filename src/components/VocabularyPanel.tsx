@@ -279,11 +279,29 @@ function VocabCard({
   const handleCardKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!recallMode) return;
     if (e.target !== e.currentTarget) return;
+    
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       setRevealed((prev) => !prev);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = e.currentTarget.nextElementSibling as HTMLElement;
+      if (next?.focus) next.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = e.currentTarget.previousElementSibling as HTMLElement;
+      if (prev?.focus) prev.focus();
+    } else if (revealed && e.key === '1') {
+      e.preventDefault();
+      onKnockdown(entry.id);
+    } else if (revealed && e.key === '2') {
+      e.preventDefault();
+      onComeback(entry.id);
+    } else if (revealed && (e.key === 'Delete' || e.key === 'Backspace')) {
+      e.preventDefault();
+      onRemove(entry.id);
     }
-  }, [recallMode]);
+  }, [recallMode, revealed, entry.id, onKnockdown, onComeback, onRemove]);
 
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -377,17 +395,16 @@ function VocabCard({
 
             {/* Definition and active-recall reveal */}
             {shouldMaskDetails ? (
-              <div className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-2.5">
+              <div className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-2.5 space-y-2">
                 <p className="text-xs leading-relaxed text-(--label-secondary)">
                   {locale === 'zh' ? '请先尝试回忆释义。' : 'Recall the meaning first.'}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setRevealed(true)}
-                  className="mt-2 rounded-full border border-(--cheese-gold)/30 bg-(--cheese-gold-soft) px-3 py-1 text-[11px] font-semibold text-(--cheese-gold) transition-colors hover:bg-(--cheese-gold)/20"
-                >
-                  {locale === 'zh' ? '揭晓 (空格/回车)' : 'Reveal (Space/Enter)'}
-                </button>
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-(--label-tertiary)">
+                  <span className="rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">Space / Enter</span>
+                  <span>{locale === 'zh' ? '揭晓' : 'Reveal'}</span>
+                  <span className="ml-1 rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">↑ / ↓</span>
+                  <span>{locale === 'zh' ? '切换' : 'Switch'}</span>
+                </div>
               </div>
             ) : (
               <>
@@ -398,13 +415,19 @@ function VocabCard({
                 )}
 
                 {recallMode && (
-                  <button
-                    type="button"
-                    onClick={() => setRevealed(false)}
-                    className="mt-2 rounded-full border border-(--separator) bg-(--surface-grouped) px-3 py-1 text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary)"
-                  >
-                    {locale === 'zh' ? '隐蔽释义' : 'Hide'}
-                  </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-medium text-(--label-tertiary)">
+                    <button
+                      type="button"
+                      onClick={() => setRevealed(false)}
+                      className="rounded-full border border-(--separator) bg-(--surface-grouped) px-3 py-1 text-[10px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary)"
+                    >
+                      {locale === 'zh' ? '隐蔽释义' : 'Hide'}
+                    </button>
+                    <span className="ml-auto rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">1</span>
+                    <span>{locale === 'zh' ? '记为出错' : 'Miss'}</span>
+                    <span className="ml-1 rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">2</span>
+                    <span>{locale === 'zh' ? '记为掌握' : 'Hit'}</span>
+                  </div>
                 )}
 
                 {(normalizedEnDefinition || entry.exampleSentence) && (
@@ -1186,7 +1209,7 @@ export function VocabularyPanel() {
             />
             {recallMode && (
               <p className="mt-2 text-xs text-(--label-tertiary)">
-                {locale === 'zh' ? '提示：通过 Tab 切换卡片，按空格或回车快速隐示释义。' : 'Tip: use Tab to switch cards, press Space or Enter to toggle definitions.'}
+                {locale === 'zh' ? '提示：聚焦词卡后，通过 ↑ / ↓ 键切换，按 Space 开启，按 1 或 2 快速记录掌握情况。' : 'Tip: Use ↑ or ↓ to switch cards, press Space to reveal, and press 1 or 2 to record performance.'}
               </p>
             )}
           </div>
