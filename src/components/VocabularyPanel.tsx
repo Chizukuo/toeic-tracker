@@ -69,6 +69,14 @@ function isLikelyEnglishText(text?: string) {
   return /[a-z]/i.test(normalized);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function getDaysSince(isoTime: string) {
+  const timestamp = Date.parse(isoTime);
+  if (Number.isNaN(timestamp)) return 0;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / DAY_MS));
+}
+
 type DictionaryCandidate = {
   definition: string;
   partOfSpeech: string;
@@ -261,6 +269,15 @@ function VocabCard({
   const normalizedDefinition = normalizeDefinitionText(entry.definition);
   const shouldMaskDetails = recallMode && !revealed;
 
+  const handleCardKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!recallMode) return;
+    if (e.target !== e.currentTarget) return;
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      setRevealed((prev) => !prev);
+    }
+  }, [recallMode]);
+
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -282,8 +299,11 @@ function VocabCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+      tabIndex={recallMode ? 0 : -1}
+      onKeyDown={handleCardKeyDown}
       className={cn(
-        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium)',
+        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium) outline-none',
+        recallMode && 'focus-visible:ring-2 focus-visible:ring-(--cheese-gold)/35',
         isRepeatOffender
           ? 'border-rose-500/20 bg-rose-500/3 dark:border-rose-400/15 dark:bg-rose-400/4'
           : 'border-(--separator)'
@@ -348,7 +368,7 @@ function VocabCard({
                   onClick={() => setRevealed(true)}
                   className="mt-2 rounded-full border border-(--cheese-gold)/30 bg-(--cheese-gold-soft) px-3 py-1 text-[11px] font-semibold text-(--cheese-gold) transition-colors hover:bg-(--cheese-gold)/20"
                 >
-                  {locale === 'zh' ? '揭晓释义' : 'Reveal'}
+                  {locale === 'zh' ? '揭晓释义（空格/回车）' : 'Reveal (Space/Enter)'}
                 </button>
               </div>
             ) : (
@@ -357,6 +377,16 @@ function VocabCard({
                   <p className="mt-2 text-sm leading-relaxed text-(--label-primary)">
                     {normalizedDefinition}
                   </p>
+                )}
+
+                {recallMode && (
+                  <button
+                    type="button"
+                    onClick={() => setRevealed(false)}
+                    className="mt-2 rounded-full border border-(--separator) bg-(--surface-grouped) px-3 py-1 text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary)"
+                  >
+                    {locale === 'zh' ? '重新遮住' : 'Hide Again'}
+                  </button>
                 )}
 
                 {(normalizedEnDefinition || entry.exampleSentence) && (
@@ -946,6 +976,26 @@ export function VocabularyPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recallMode, setRecallMode] = useState(false);
 
+  const reviewQueue = useMemo(() => {
+    return vocabularyEntries
+      .map((entry) => {
+        const daysSince = getDaysSince(entry.updatedAt);
+        const repeatBoost = Math.max(0, entry.encounterCount - 1) * 3;
+        const staleBoost = Math.min(daysSince, 14);
+        const priority = repeatBoost + staleBoost + (daysSince >= 3 ? 2 : 0);
+        return { entry, daysSince, priority };
+      })
+      .filter((item) => item.priority > 0)
+      .sort((a, b) => b.priority - a.priority || b.entry.encounterCount - a.entry.encounterCount || b.daysSince - a.daysSince)
+      .slice(0, 8);
+  }, [vocabularyEntries]);
+
+  const focusReviewWord = useCallback((word: string) => {
+    setFilterMode('all');
+    setSearchQuery(word);
+    setRecallMode(true);
+  }, []);
+
   const filtered = useMemo(() => {
     let list = [...vocabularyEntries];
 
@@ -1011,6 +1061,42 @@ export function VocabularyPanel() {
         </div>
       </div>
 
+      {reviewQueue.length > 0 && (
+        <div className="cheese-card overflow-hidden border-(--cheese-gold)/20">
+          <div className="cheese-card-header flex items-center gap-2">
+            <Check className="size-4 text-(--cheese-gold)" />
+            <span className="text-sm font-semibold text-(--label-primary)">
+              {locale === 'zh' ? '今日复习队列' : 'Today Review Queue'}
+            </span>
+            <p className="ml-auto text-xs text-(--label-tertiary)">
+              {locale === 'zh' ? '按遗忘风险排序' : 'Sorted by forgetting risk'}
+            </p>
+          </div>
+          <div className="p-4 sm:p-5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {reviewQueue.map(({ entry, daysSince }) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => focusReviewWord(entry.text)}
+                  className="flex items-center gap-2 rounded-[12px] border border-(--separator) bg-(--surface-grouped) px-3 py-2 text-left transition-colors hover:border-(--cheese-gold)/35 hover:bg-(--surface-elevated)"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--label-primary)">{entry.text}</span>
+                  <span className="rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                    ×{entry.encounterCount}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-(--label-tertiary)">
+                    {daysSince === 0
+                      ? (locale === 'zh' ? '今天' : 'today')
+                      : (locale === 'zh' ? `${daysSince} 天` : `${daysSince}d`)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter + list */}
       {vocabularyEntries.length > 0 ? (
         <div className="cheese-card overflow-hidden">
@@ -1025,6 +1111,11 @@ export function VocabularyPanel() {
               recallMode={recallMode}
               setRecallMode={setRecallMode}
             />
+            {recallMode && (
+              <p className="mt-2 text-xs text-(--label-tertiary)">
+                {locale === 'zh' ? '提示：聚焦任意词卡后按空格或回车，可快速揭晓或重新遮住释义。' : 'Tip: focus a card, then press Space or Enter to reveal or hide again.'}
+              </p>
+            )}
           </div>
 
           <div className="p-4 sm:p-5">
