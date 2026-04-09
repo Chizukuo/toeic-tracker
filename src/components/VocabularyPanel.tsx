@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, BookOpen, Check, ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Search, Trash2, Volume2, X } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import type { VocabularyEntry } from '@/lib/toeic';
-import { getCopy } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface LookupResult {
@@ -248,14 +247,19 @@ function VocabCard({
   entry,
   onRemove,
   locale,
+  recallMode,
 }: {
   entry: VocabularyEntry;
   onRemove: (id: string) => void;
   locale: 'zh' | 'en';
+  recallMode: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const isRepeatOffender = entry.encounterCount >= 2;
   const normalizedEnDefinition = normalizeDefinitionText(entry.enDefinition);
+  const normalizedDefinition = normalizeDefinitionText(entry.definition);
+  const shouldMaskDetails = recallMode && !revealed;
 
   const playAudio = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -333,53 +337,69 @@ function VocabCard({
               )}
             </div>
 
-            {/* Definition */}
-            {entry.definition && (
-              <p className="mt-2 text-sm leading-relaxed text-(--label-primary)">
-                {entry.definition}
-              </p>
-            )}
-
-            {/* Always visible English definition and example */}
-            {(normalizedEnDefinition || entry.exampleSentence) && (
-              <div className="mt-2.5 space-y-2">
-                {normalizedEnDefinition && normalizedEnDefinition !== entry.definition && (
-                  <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1">
-                      {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
-                    </div>
-                    <p className="text-sm leading-relaxed text-(--label-secondary)">
-                      {normalizedEnDefinition}
-                    </p>
-                  </div>
-                )}
-                {entry.exampleSentence && (
-                  <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50 opacity-90">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1 flex items-center gap-1.5">
-                      {locale === 'zh' ? 'EXAMPLE' : 'EXAMPLE'}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-                          window.speechSynthesis.cancel();
-                          const utterance = new SpeechSynthesisUtterance(entry.exampleSentence!);
-                          utterance.lang = 'en-US';
-                          window.speechSynthesis.speak(utterance);
-                        }}
-                        className="text-(--label-tertiary) hover:text-(--cheese-gold) transition-colors"
-                        title={locale === 'zh' ? '朗读例句' : 'Read example'}
-                      >
-                        <Volume2 className="size-2.5" />
-                      </button>
-                    </div>
-                    <p className="text-sm italic leading-relaxed text-(--label-secondary)">
-                      {entry.exampleSentence}
-                    </p>
-                  </div>
-                )}
+            {/* Definition and active-recall reveal */}
+            {shouldMaskDetails ? (
+              <div className="mt-2.5 rounded-[10px] border border-(--separator)/70 bg-(--surface-grouped) px-3 py-2.5">
+                <p className="text-xs leading-relaxed text-(--label-secondary)">
+                  {locale === 'zh' ? '先在脑中回忆释义，再点击揭晓答案。' : 'Recall the meaning first, then reveal the answer.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setRevealed(true)}
+                  className="mt-2 rounded-full border border-(--cheese-gold)/30 bg-(--cheese-gold-soft) px-3 py-1 text-[11px] font-semibold text-(--cheese-gold) transition-colors hover:bg-(--cheese-gold)/20"
+                >
+                  {locale === 'zh' ? '揭晓释义' : 'Reveal'}
+                </button>
               </div>
+            ) : (
+              <>
+                {normalizedDefinition && (
+                  <p className="mt-2 text-sm leading-relaxed text-(--label-primary)">
+                    {normalizedDefinition}
+                  </p>
+                )}
+
+                {(normalizedEnDefinition || entry.exampleSentence) && (
+                  <div className="mt-2.5 space-y-2">
+                    {normalizedEnDefinition && normalizedEnDefinition !== normalizedDefinition && (
+                      <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1">
+                          {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
+                        </div>
+                        <p className="text-sm leading-relaxed text-(--label-secondary)">
+                          {normalizedEnDefinition}
+                        </p>
+                      </div>
+                    )}
+                    {entry.exampleSentence && (
+                      <div className="rounded-[10px] bg-(--surface-grouped) px-3 py-2.5 border border-(--separator)/50 opacity-90">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-1 flex items-center gap-1.5">
+                          {locale === 'zh' ? 'EXAMPLE' : 'EXAMPLE'}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+                              window.speechSynthesis.cancel();
+                              const utterance = new SpeechSynthesisUtterance(entry.exampleSentence!);
+                              utterance.lang = 'en-US';
+                              window.speechSynthesis.speak(utterance);
+                            }}
+                            className="text-(--label-tertiary) hover:text-(--cheese-gold) transition-colors"
+                            title={locale === 'zh' ? '朗读例句' : 'Read example'}
+                          >
+                            <Volume2 className="size-2.5" />
+                          </button>
+                        </div>
+                        <p className="text-sm italic leading-relaxed text-(--label-secondary)">
+                          {entry.exampleSentence}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Expandable metadata (Tags & Sessions) */}
@@ -472,6 +492,7 @@ function AddEntryForm({
   const bumpVocabularyEncounter = useStore((state) => state.bumpVocabularyEncounter);
   const [text, setText] = useState('');
   const [manualDefinition, setManualDefinition] = useState('');
+  const [manualExampleSentence, setManualExampleSentence] = useState('');
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   const [isLooking, startLookup] = useTransition();
   const [justAdded, setJustAdded] = useState(false);
@@ -480,10 +501,7 @@ function AddEntryForm({
 
   // Auto-lookup on text change (debounced)
   useEffect(() => {
-    if (!text.trim() || text.trim().length < 2) {
-      setLookupResult(null);
-      return;
-    }
+    if (!text.trim() || text.trim().length < 2) return;
     const t = window.setTimeout(() => {
       startLookup(async () => {
         const result = await lookupWord(text);
@@ -544,6 +562,7 @@ function AddEntryForm({
       });
       setText('');
       setManualDefinition('');
+      setManualExampleSentence('');
       setLookupResult(null);
       setShowManual(false);
       setJustAdded(true);
@@ -557,6 +576,7 @@ function AddEntryForm({
     if (bumpedId) {
       setText('');
       setLookupResult(null);
+      setManualExampleSentence('');
       setShowManual(false);
       setJustAdded(true);
       window.setTimeout(() => setJustAdded(false), 1200);
@@ -572,7 +592,7 @@ function AddEntryForm({
       enDefinition: result?.enDefinition,
       partOfSpeech: result?.partOfSpeech,
       reading: result?.reading,
-      exampleSentence: result?.exampleSentence,
+      exampleSentence: manualExampleSentence || result?.exampleSentence,
       sessionIds: [activeSessionId],
       encounterCount: 1,
       tags: [],
@@ -580,12 +600,13 @@ function AddEntryForm({
 
     setText('');
     setManualDefinition('');
+    setManualExampleSentence('');
     setLookupResult(null);
     setShowManual(false);
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
     inputRef.current?.focus();
-  }, [text, lookupResult, manualDefinition, processInput, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
+  }, [text, lookupResult, manualDefinition, manualExampleSentence, processInput, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
@@ -607,10 +628,17 @@ function AddEntryForm({
             ref={inputRef}
             rows={text.includes('\\n') ? Math.min(text.split('\\n').length, 5) : 1}
             value={text}
-            onChange={(e) => { setText(e.target.value); setJustAdded(false); }}
+            onChange={(e) => {
+              const nextText = e.target.value;
+              setText(nextText);
+              setJustAdded(false);
+              if (!nextText.trim() || nextText.trim().length < 2) {
+                setLookupResult(null);
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder={locale === 'zh' ? '输入生词，回车添加，Shift+回车换行。支持逗号或换行批量导入…' : 'Type a word, Enter to add, Shift+Enter for newline…'}
-            className="w-full resize-none min-h-[44px] rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-2.5 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide"
+            className="w-full resize-none min-h-11 rounded-[22px] border border-(--separator) bg-(--surface-elevated) px-5 py-2.5 pr-10 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20 scrollbar-hide"
           />
           {isLooking && (
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -707,16 +735,27 @@ function AddEntryForm({
             </button>
             <AnimatePresence>
               {showManual && (
-                <motion.textarea
+                <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  rows={2}
-                  value={manualDefinition}
-                  onChange={(e) => setManualDefinition(e.target.value)}
-                  placeholder={locale === 'zh' ? '填写释义或记忆提示…' : 'Add definition or memory hint…'}
-                  className="mt-2 w-full resize-none rounded-[12px] border border-(--separator) bg-(--surface-elevated) px-4 py-3 text-sm text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20"
-                />
+                  className="mt-2 space-y-2"
+                >
+                  <textarea
+                    rows={2}
+                    value={manualDefinition}
+                    onChange={(e) => setManualDefinition(e.target.value)}
+                    placeholder={locale === 'zh' ? '填写释义或记忆提示…' : 'Add definition or memory hint…'}
+                    className="w-full resize-none rounded-[12px] border border-(--separator) bg-(--surface-elevated) px-4 py-3 text-sm text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20"
+                  />
+                  <textarea
+                    rows={2}
+                    value={manualExampleSentence}
+                    onChange={(e) => setManualExampleSentence(e.target.value)}
+                    placeholder={locale === 'zh' ? '可选：粘贴你遇到这个词的原句语境…' : 'Optional: paste the original sentence context…'}
+                    className="w-full resize-none rounded-[12px] border border-(--separator) bg-(--surface-elevated) px-4 py-3 text-sm text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) focus:border-(--cheese-gold)/50 focus:ring-2 focus:ring-(--cheese-gold)/20"
+                  />
+                </motion.div>
               )}
             </AnimatePresence>
           </motion.div>
@@ -737,6 +776,8 @@ function FilterBar({
   setSearchQuery,
   totalCount,
   locale,
+  recallMode,
+  setRecallMode,
 }: {
   mode: FilterMode;
   setMode: (mode: FilterMode) => void;
@@ -744,6 +785,8 @@ function FilterBar({
   setSearchQuery: (q: string) => void;
   totalCount: number;
   locale: 'zh' | 'en';
+  recallMode: boolean;
+  setRecallMode: (enabled: boolean) => void;
 }) {
   const filters: { key: FilterMode; label: string }[] = [
     { key: 'all', label: locale === 'zh' ? '全部' : 'All' },
@@ -789,8 +832,22 @@ function FilterBar({
         ))}
       </div>
 
-      <div className="font-mono text-[11px] text-(--label-tertiary) shrink-0">
-        {totalCount}{locale === 'zh' ? ' 条' : ' entries'}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setRecallMode(!recallMode)}
+          className={cn(
+            'rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors',
+            recallMode
+              ? 'border-(--cheese-gold)/30 bg-(--cheese-gold-soft) text-(--cheese-gold)'
+              : 'border-(--separator) bg-(--surface-grouped) text-(--label-secondary) hover:text-(--label-primary)'
+          )}
+        >
+          {locale === 'zh' ? '主动回忆' : 'Recall'}
+        </button>
+        <div className="font-mono text-[11px] text-(--label-tertiary)">
+          {totalCount}{locale === 'zh' ? ' 条' : ' entries'}
+        </div>
       </div>
     </div>
   );
@@ -887,6 +944,7 @@ export function VocabularyPanel() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [recallMode, setRecallMode] = useState(false);
 
   const filtered = useMemo(() => {
     let list = [...vocabularyEntries];
@@ -911,6 +969,8 @@ export function VocabularyPanel() {
         (e) =>
           e.text.toLowerCase().includes(q) ||
           e.definition?.toLowerCase().includes(q) ||
+          e.enDefinition?.toLowerCase().includes(q) ||
+          e.exampleSentence?.toLowerCase().includes(q) ||
           e.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
@@ -962,6 +1022,8 @@ export function VocabularyPanel() {
               setSearchQuery={setSearchQuery}
               totalCount={filtered.length}
               locale={locale}
+              recallMode={recallMode}
+              setRecallMode={setRecallMode}
             />
           </div>
 
@@ -975,6 +1037,7 @@ export function VocabularyPanel() {
                       entry={entry}
                       onRemove={removeVocabularyEntry}
                       locale={locale}
+                      recallMode={recallMode}
                     />
                   ))}
                 </AnimatePresence>
