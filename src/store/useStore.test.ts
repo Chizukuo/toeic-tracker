@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createInitialSessions } from '@/lib/toeic';
+import { SNAPSHOT_APP, SNAPSHOT_VERSION, STORAGE_VERSION } from '@/lib/storeSnapshot';
 import { useStore } from '@/store/useStore';
 
 describe('useStore snapshot compatibility', () => {
@@ -32,12 +33,12 @@ describe('useStore snapshot compatibility', () => {
 
     const snapshot = useStore.getState().exportSnapshot();
 
-    expect(snapshot.app).toBe('Cheese-TOEIC-Tracker');
-    expect(snapshot.version).toBe(2);
+    expect(snapshot.app).toBe(SNAPSHOT_APP);
+    expect(snapshot.version).toBe(SNAPSHOT_VERSION);
     expect(snapshot.meta).toMatchObject({
       schema: 'cheese-toeic-snapshot',
-      snapshotVersion: 2,
-      exportedFromStorageVersion: 6,
+      snapshotVersion: SNAPSHOT_VERSION,
+      exportedFromStorageVersion: STORAGE_VERSION,
       minimumReaderVersion: 1,
     });
     expect(snapshot.data.locale).toBe('en');
@@ -66,12 +67,12 @@ describe('useStore snapshot compatibility', () => {
     l2.mistakes = { 'Part 3': 7 };
 
     const result = useStore.getState().importSnapshot({
-      app: 'Cheese-TOEIC-Tracker',
-      version: 2,
+      app: SNAPSHOT_APP,
+      version: SNAPSHOT_VERSION,
       meta: {
         schema: 'cheese-toeic-snapshot',
-        snapshotVersion: 2,
-        exportedFromStorageVersion: 6,
+        snapshotVersion: SNAPSHOT_VERSION,
+        exportedFromStorageVersion: STORAGE_VERSION,
         minimumReaderVersion: 1,
       },
       exportedAt: '2026-03-11T00:00:00.000Z',
@@ -98,7 +99,7 @@ describe('useStore snapshot compatibility', () => {
 
     expect(result).toEqual({
       source: 'snapshot',
-      importedVersion: 2,
+      importedVersion: SNAPSHOT_VERSION,
       migrated: false,
       futureVersion: false,
     });

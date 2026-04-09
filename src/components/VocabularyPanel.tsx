@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, BookOpen, Check, ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Search, Trash2, Volume2, X } from 'lucide-react';
 import { useStore } from '@/store/useStore';
@@ -427,32 +427,20 @@ function VocabCard({
                 )}
 
                 {recallMode && (
-                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5 text-[10px] font-medium text-(--label-tertiary)">
+                  <div className="mt-4 flex items-center justify-between text-[10px] font-medium text-(--label-tertiary)">
+                    <div className="hidden sm:flex flex-wrap items-center gap-1.5">
+                      <span className="rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">1</span>
+                      <span>{locale === 'zh' ? '记为出错' : 'Miss'}</span>
+                      <span className="ml-1 rounded border border-(--separator) bg-(--surface-elevated) px-1.5 py-0.5">2</span>
+                      <span>{locale === 'zh' ? '记为掌握' : 'Hit'}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setRevealed(false)}
-                      className="rounded-full border border-(--separator) bg-(--surface-grouped) px-4 py-1.5 sm:px-3 sm:py-1 text-[10px] sm:text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary) active:scale-95"
+                      className="w-full sm:w-auto rounded-full border border-(--separator) bg-(--surface-grouped) px-4 py-2 sm:px-3 sm:py-1.5 text-xs sm:text-[11px] font-medium text-(--label-secondary) transition-colors hover:text-(--label-primary) active:scale-95"
                     >
                       {locale === 'zh' ? '隐蔽释义' : 'Hide'}
                     </button>
-                    <div className="flex items-center gap-2 sm:ml-auto w-full sm:w-auto">
-                      <button
-                        onClick={() => onKnockdown(entry.id)}
-                        className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-2 sm:px-3 sm:py-1 text-orange-600 transition-colors hover:bg-orange-500/20 active:scale-95 dark:text-orange-400"
-                      >
-                        <span className="hidden sm:inline rounded border border-orange-500/30 px-1 py-0.5 text-[9px]">1</span>
-                        <AlertTriangle className="size-3 sm:hidden" />
-                        <span className="text-[11px] sm:text-[10px]">{locale === 'zh' ? '记为出错' : 'Miss'}</span>
-                      </button>
-                      <button
-                        onClick={() => onComeback(entry.id)}
-                        className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 sm:px-3 sm:py-1 text-emerald-600 transition-colors hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-400"
-                      >
-                        <span className="hidden sm:inline rounded border border-emerald-500/30 px-1 py-0.5 text-[9px]">2</span>
-                        <Check className="size-3 sm:hidden" />
-                        <span className="text-[11px] sm:text-[10px]">{locale === 'zh' ? '记为掌握' : 'Hit'}</span>
-                      </button>
-                    </div>
                   </div>
                 )}
 
@@ -1009,8 +997,11 @@ export function VocabularyPanel() {
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  );
 
   // Background migration for legacy entries missing definitions
   useEffect(() => {
@@ -1092,7 +1083,7 @@ export function VocabularyPanel() {
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [vocabularyEntries, updateVocabularyEntry]);
+  }, [vocabularyEntries, updateVocabularyEntry, locale]);
 
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
