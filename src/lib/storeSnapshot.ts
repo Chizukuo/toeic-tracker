@@ -7,7 +7,6 @@ import {
   SPRINT_DEFAULT_CONFIG,
   createInitialSessions,
   mergeSessionWithDefaults,
-  buildSprintBlueprints,
 } from '@/lib/toeic';
 import type { Locale as AppLocale } from '@/lib/i18n';
 
@@ -461,6 +460,18 @@ export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[]
       const enDefinition = rawEnDefinition && !['-', '--', '—', 'n/a', 'na'].includes(rawEnDefinition.toLowerCase())
         ? rawEnDefinition
         : undefined;
+      const knockdownCount = typeof item.knockdownCount === 'number' && item.knockdownCount > 0
+        ? Math.floor(item.knockdownCount)
+        : undefined;
+      const comebackCount = typeof item.comebackCount === 'number' && item.comebackCount > 0
+        ? Math.floor(item.comebackCount)
+        : undefined;
+      const lastKnockdownAt = typeof item.lastKnockdownAt === 'string' && item.lastKnockdownAt
+        ? item.lastKnockdownAt
+        : undefined;
+      const lastComebackAt = typeof item.lastComebackAt === 'string' && item.lastComebackAt
+        ? item.lastComebackAt
+        : undefined;
 
       return {
         id: typeof item.id === 'string' && item.id ? item.id : `vocab-${idx}-${Date.now()}`,
@@ -470,6 +481,10 @@ export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[]
         enDefinition,
         partOfSpeech: typeof item.partOfSpeech === 'string' ? item.partOfSpeech : undefined,
         exampleSentence: typeof item.exampleSentence === 'string' ? item.exampleSentence : undefined,
+        ...(knockdownCount ? { knockdownCount } : {}),
+        ...(comebackCount ? { comebackCount } : {}),
+        ...(lastKnockdownAt ? { lastKnockdownAt } : {}),
+        ...(lastComebackAt ? { lastComebackAt } : {}),
         sessionIds: Array.isArray(item.sessionIds) ? item.sessionIds.filter((s): s is string => typeof s === 'string') : [],
         encounterCount: typeof item.encounterCount === 'number' && item.encounterCount >= 1 ? item.encounterCount : 1,
         tags: Array.isArray(item.tags) ? item.tags.filter((t): t is string => typeof t === 'string') : [],

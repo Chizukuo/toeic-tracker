@@ -8,6 +8,10 @@ export type VocabularyEntry = {
 	enDefinition?: string;
 	partOfSpeech?: string;
 	exampleSentence?: string;
+	knockdownCount?: number;
+	comebackCount?: number;
+	lastKnockdownAt?: string;
+	lastComebackAt?: string;
 	sessionIds: string[];
 	encounterCount: number;
 	tags: string[];

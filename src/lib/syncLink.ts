@@ -81,7 +81,11 @@ type CompactVocabularyEntry = [
   string,
   string,
   string[]?,
-  string[]?
+  string[]?,
+  number?,
+  number?,
+  string?,
+  string?
 ];
 
 type LegacyCompactSyncSnapshot = {
@@ -755,7 +759,7 @@ function encodeVocabularyEntries(snapshot: SprintSnapshot): CompactVocabularyEnt
       return [];
     }
 
-    return [[
+    const compactEntry: CompactVocabularyEntry = [
       entry.id || `sync-vocab-${index}-${Date.now()}`,
       text,
       typeof entry.encounterCount === 'number' && entry.encounterCount >= 1
@@ -763,13 +767,35 @@ function encodeVocabularyEntries(snapshot: SprintSnapshot): CompactVocabularyEnt
         : 1,
       encodeInstant(entry.createdAt, snapshot.exportedAt) || '',
       encodeInstant(entry.updatedAt, snapshot.exportedAt) || '',
-      Array.isArray(entry.sessionIds) && entry.sessionIds.length > 0
-        ? entry.sessionIds.filter((sessionId): sessionId is string => typeof sessionId === 'string')
-        : undefined,
-      Array.isArray(entry.tags) && entry.tags.length > 0
-        ? entry.tags.filter((tag): tag is string => typeof tag === 'string')
-        : undefined,
-    ] satisfies CompactVocabularyEntry];
+    ];
+
+    if (Array.isArray(entry.sessionIds) && entry.sessionIds.length > 0) {
+      compactEntry[5] = entry.sessionIds.filter((sessionId): sessionId is string => typeof sessionId === 'string');
+    }
+
+    if (Array.isArray(entry.tags) && entry.tags.length > 0) {
+      compactEntry[6] = entry.tags.filter((tag): tag is string => typeof tag === 'string');
+    }
+
+    if (typeof entry.knockdownCount === 'number' && entry.knockdownCount > 0) {
+      compactEntry[7] = Math.floor(entry.knockdownCount);
+    }
+
+    if (typeof entry.comebackCount === 'number' && entry.comebackCount > 0) {
+      compactEntry[8] = Math.floor(entry.comebackCount);
+    }
+
+    const lastKnockdownAt = encodeInstant(entry.lastKnockdownAt, snapshot.exportedAt);
+    if (lastKnockdownAt) {
+      compactEntry[9] = lastKnockdownAt;
+    }
+
+    const lastComebackAt = encodeInstant(entry.lastComebackAt, snapshot.exportedAt);
+    if (lastComebackAt) {
+      compactEntry[10] = lastComebackAt;
+    }
+
+    return [compactEntry];
   });
 }
 
@@ -779,6 +805,13 @@ function decodeVocabularyEntries(entries: Array<CompactVocabularyEntry | LegacyC
   return entries
     .map((entry, index) => {
       const text = typeof entry[1] === 'string' ? entry[1].trim() : '';
+      const isLegacyEntry =
+        typeof entry[5] === 'string' ||
+        typeof entry[6] === 'string' ||
+        typeof entry[7] === 'string' ||
+        typeof entry[8] === 'string' ||
+        Array.isArray(entry[10]) ||
+        Array.isArray(entry[11]);
       const sessionIds = Array.isArray(entry[5])
         ? entry[5].filter((sessionId): sessionId is string => typeof sessionId === 'string')
         : Array.isArray(entry[10])
@@ -789,11 +822,24 @@ function decodeVocabularyEntries(entries: Array<CompactVocabularyEntry | LegacyC
         : Array.isArray(entry[11])
           ? entry[11].filter((tag): tag is string => typeof tag === 'string')
           : [];
-      const legacyReading = typeof entry[5] === 'string' && entry[5].trim() ? entry[5].trim() : undefined;
-      const legacyDefinition = typeof entry[6] === 'string' && entry[6].trim() ? entry[6].trim() : undefined;
-      const legacyEnDefinition = typeof entry[7] === 'string' && entry[7].trim() ? entry[7].trim() : undefined;
-      const legacyPartOfSpeech = typeof entry[8] === 'string' && entry[8].trim() ? entry[8].trim() : undefined;
-      const legacyExampleSentence = typeof entry[9] === 'string' && entry[9].trim() ? entry[9].trim() : undefined;
+      const legacyReading =
+        isLegacyEntry && typeof entry[5] === 'string' && entry[5].trim() ? entry[5].trim() : undefined;
+      const legacyDefinition =
+        isLegacyEntry && typeof entry[6] === 'string' && entry[6].trim() ? entry[6].trim() : undefined;
+      const legacyEnDefinition =
+        isLegacyEntry && typeof entry[7] === 'string' && entry[7].trim() ? entry[7].trim() : undefined;
+      const legacyPartOfSpeech =
+        isLegacyEntry && typeof entry[8] === 'string' && entry[8].trim() ? entry[8].trim() : undefined;
+      const legacyExampleSentence =
+        isLegacyEntry && typeof entry[9] === 'string' && entry[9].trim() ? entry[9].trim() : undefined;
+      const knockdownCount = !isLegacyEntry && typeof entry[7] === 'number' && entry[7] > 0 ? Math.floor(entry[7]) : undefined;
+      const comebackCount = !isLegacyEntry && typeof entry[8] === 'number' && entry[8] > 0 ? Math.floor(entry[8]) : undefined;
+      const lastKnockdownAt = !isLegacyEntry && typeof entry[9] === 'string'
+        ? decodeInstant(entry[9], anchor) ?? entry[9]
+        : undefined;
+      const lastComebackAt = !isLegacyEntry && typeof entry[10] === 'string'
+        ? decodeInstant(entry[10], anchor) ?? entry[10]
+        : undefined;
 
       return {
         id: typeof entry[0] === 'string' && entry[0] ? entry[0] : `sync-vocab-${index}-${Date.now()}`,
@@ -801,11 +847,15 @@ function decodeVocabularyEntries(entries: Array<CompactVocabularyEntry | LegacyC
         encounterCount: typeof entry[2] === 'number' && entry[2] >= 1 ? Math.floor(entry[2]) : 1,
         createdAt: decodeInstant(entry[3], anchor) ?? now,
         updatedAt: decodeInstant(entry[4], anchor) ?? now,
-        reading: legacyReading,
-        definition: legacyDefinition,
-        enDefinition: legacyEnDefinition,
-        partOfSpeech: legacyPartOfSpeech,
-        exampleSentence: legacyExampleSentence,
+        ...(legacyReading ? { reading: legacyReading } : {}),
+        ...(legacyDefinition ? { definition: legacyDefinition } : {}),
+        ...(legacyEnDefinition ? { enDefinition: legacyEnDefinition } : {}),
+        ...(legacyPartOfSpeech ? { partOfSpeech: legacyPartOfSpeech } : {}),
+        ...(legacyExampleSentence ? { exampleSentence: legacyExampleSentence } : {}),
+        ...(knockdownCount ? { knockdownCount } : {}),
+        ...(comebackCount ? { comebackCount } : {}),
+        ...(lastKnockdownAt ? { lastKnockdownAt } : {}),
+        ...(lastComebackAt ? { lastComebackAt } : {}),
         sessionIds,
         tags,
       } satisfies VocabularyEntry;

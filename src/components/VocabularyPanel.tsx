@@ -254,17 +254,24 @@ async function lookupWord(text: string): Promise<LookupResult | null> {
 function VocabCard({
   entry,
   onRemove,
+  onKnockdown,
+  onComeback,
   locale,
   recallMode,
 }: {
   entry: VocabularyEntry;
   onRemove: (id: string) => void;
+  onKnockdown: (id: string) => void;
+  onComeback: (id: string) => void;
   locale: 'zh' | 'en';
   recallMode: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const isRepeatOffender = entry.encounterCount >= 2;
+  const knockdownCount = entry.knockdownCount ?? 0;
+  const comebackCount = entry.comebackCount ?? 0;
+  const unresolvedCount = Math.max(0, knockdownCount - comebackCount);
   const normalizedEnDefinition = normalizeDefinitionText(entry.enDefinition);
   const normalizedDefinition = normalizeDefinitionText(entry.definition);
   const shouldMaskDetails = recallMode && !revealed;
@@ -354,6 +361,17 @@ function VocabCard({
                   <AlertTriangle className="size-3" />
                   {locale === 'zh' ? `重复栽跟头 ×${entry.encounterCount}` : `Repeat ×${entry.encounterCount}`}
                 </motion.span>
+              )}
+              {knockdownCount > 0 && (
+                <span className="flex items-center gap-1 rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:border-orange-400/20 dark:bg-orange-400/10 dark:text-orange-300">
+                  <AlertTriangle className="size-3" />
+                  {locale === 'zh' ? `实战倒下 ×${knockdownCount}` : `Knockdown ×${knockdownCount}`}
+                  {unresolvedCount > 0 && (
+                    <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[9px]">
+                      {locale === 'zh' ? `待扳回 ${unresolvedCount}` : `${unresolvedCount} unresolved`}
+                    </span>
+                  )}
+                </span>
               )}
             </div>
 
@@ -494,6 +512,24 @@ function VocabCard({
 
           {/* Actions */}
           <div className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={() => onKnockdown(entry.id)}
+              aria-label={locale === 'zh' ? '记录被打倒一次' : 'Record knockdown'}
+              title={locale === 'zh' ? '记录被打倒一次' : 'Record knockdown'}
+              className="flex size-8 items-center justify-center rounded-full border border-orange-500/30 bg-orange-500/8 text-orange-600 transition-colors hover:bg-orange-500/15 dark:text-orange-400"
+            >
+              <AlertTriangle className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onComeback(entry.id)}
+              aria-label={locale === 'zh' ? '记录扳回一城' : 'Record comeback'}
+              title={locale === 'zh' ? '记录扳回一城' : 'Record comeback'}
+              className="flex size-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/8 text-emerald-600 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400"
+            >
+              <Check className="size-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => onRemove(entry.id)}
@@ -889,6 +925,8 @@ export function VocabularyPanel() {
   const vocabularyEntries = useStore((state) => state.vocabularyEntries);
   const removeVocabularyEntry = useStore((state) => state.removeVocabularyEntry);
   const updateVocabularyEntry = useStore((state) => state.updateVocabularyEntry);
+  const recordVocabularyKnockdown = useStore((state) => state.recordVocabularyKnockdown);
+  const recordVocabularyComeback = useStore((state) => state.recordVocabularyComeback);
   const activeSessionId = useStore((state) => state.activeSessionId);
   const locale = useStore((state) => state.locale);
 
@@ -976,17 +1014,40 @@ export function VocabularyPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recallMode, setRecallMode] = useState(false);
 
+  const handleRecordKnockdown = useCallback((id: string) => {
+    recordVocabularyKnockdown(id, activeSessionId);
+  }, [recordVocabularyKnockdown, activeSessionId]);
+
+  const handleRecordComeback = useCallback((id: string) => {
+    recordVocabularyComeback(id, activeSessionId);
+  }, [recordVocabularyComeback, activeSessionId]);
+
   const reviewQueue = useMemo(() => {
     return vocabularyEntries
       .map((entry) => {
-        const daysSince = getDaysSince(entry.updatedAt);
-        const repeatBoost = Math.max(0, entry.encounterCount - 1) * 3;
-        const staleBoost = Math.min(daysSince, 14);
-        const priority = repeatBoost + staleBoost + (daysSince >= 3 ? 2 : 0);
-        return { entry, daysSince, priority };
+        const knockdownCount = entry.knockdownCount ?? 0;
+        const comebackCount = entry.comebackCount ?? 0;
+        const unresolvedCount = Math.max(0, knockdownCount - comebackCount);
+        const daysSinceKnockdown = entry.lastKnockdownAt ? getDaysSince(entry.lastKnockdownAt) : null;
+        const freshnessBoost = daysSinceKnockdown === null ? 0 : Math.max(0, 5 - Math.min(daysSinceKnockdown, 5));
+        const encounterSignal = Math.max(0, entry.encounterCount - 1);
+        const priority = unresolvedCount * 10 + knockdownCount * 3 + freshnessBoost + encounterSignal;
+
+        return {
+          entry,
+          priority,
+          unresolvedCount,
+          knockdownCount,
+          comebackCount,
+          daysSinceKnockdown,
+        };
       })
       .filter((item) => item.priority > 0)
-      .sort((a, b) => b.priority - a.priority || b.entry.encounterCount - a.entry.encounterCount || b.daysSince - a.daysSince)
+      .sort((a, b) =>
+        b.priority - a.priority ||
+        b.unresolvedCount - a.unresolvedCount ||
+        (a.daysSinceKnockdown ?? Number.MAX_SAFE_INTEGER) - (b.daysSinceKnockdown ?? Number.MAX_SAFE_INTEGER)
+      )
       .slice(0, 8);
   }, [vocabularyEntries]);
 
@@ -1066,15 +1127,15 @@ export function VocabularyPanel() {
           <div className="cheese-card-header flex items-center gap-2">
             <Check className="size-4 text-(--cheese-gold)" />
             <span className="text-sm font-semibold text-(--label-primary)">
-              {locale === 'zh' ? '今日复习队列' : 'Today Review Queue'}
+              {locale === 'zh' ? '实战再战清单' : 'Fight-Back Queue'}
             </span>
             <p className="ml-auto text-xs text-(--label-tertiary)">
-              {locale === 'zh' ? '按遗忘风险排序' : 'Sorted by forgetting risk'}
+              {locale === 'zh' ? '按被打倒信号排序' : 'Sorted by knockdown signals'}
             </p>
           </div>
           <div className="p-4 sm:p-5">
             <div className="grid gap-2 sm:grid-cols-2">
-              {reviewQueue.map(({ entry, daysSince }) => (
+              {reviewQueue.map(({ entry, daysSinceKnockdown, knockdownCount, comebackCount, unresolvedCount }) => (
                 <button
                   key={entry.id}
                   type="button"
@@ -1083,12 +1144,22 @@ export function VocabularyPanel() {
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--label-primary)">{entry.text}</span>
                   <span className="rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                    ×{entry.encounterCount}
+                    {locale === 'zh' ? `倒下 ${knockdownCount}` : `K ${knockdownCount}`}
+                  </span>
+                  <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    {locale === 'zh' ? `扳回 ${comebackCount}` : `C ${comebackCount}`}
                   </span>
                   <span className="shrink-0 text-[10px] text-(--label-tertiary)">
-                    {daysSince === 0
-                      ? (locale === 'zh' ? '今天' : 'today')
-                      : (locale === 'zh' ? `${daysSince} 天` : `${daysSince}d`)}
+                    {unresolvedCount > 0
+                      ? (locale === 'zh' ? `待解 ${unresolvedCount}` : `${unresolvedCount} open`)
+                      : (locale === 'zh' ? '已扳回' : 'stabilized')}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-(--label-tertiary)">
+                    {daysSinceKnockdown === null
+                      ? (locale === 'zh' ? '未记录' : 'no fail log')
+                      : daysSinceKnockdown === 0
+                        ? (locale === 'zh' ? '今天倒下' : 'failed today')
+                        : (locale === 'zh' ? `${daysSinceKnockdown} 天前` : `${daysSinceKnockdown}d ago`)}
                   </span>
                 </button>
               ))}
@@ -1127,6 +1198,8 @@ export function VocabularyPanel() {
                       key={entry.id}
                       entry={entry}
                       onRemove={removeVocabularyEntry}
+                      onKnockdown={handleRecordKnockdown}
+                      onComeback={handleRecordComeback}
                       locale={locale}
                       recallMode={recallMode}
                     />
