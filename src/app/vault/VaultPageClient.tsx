@@ -18,7 +18,7 @@ export default function VaultPageClient() {
 }
 
 function VaultPageContent() {
-  const { locale, copy } = useDashboardContext();
+  const { copy } = useDashboardContext();
 
   return (
     <SectionShell

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { ACHIEVEMENTS } from '@/lib/achievements';
@@ -9,31 +9,29 @@ export function AchievementToast() {
   const justUnlocked = useStore((state) => state.justUnlocked);
   const dismissAchievement = useStore((state) => state.dismissAchievement);
   const locale = useStore((state) => state.locale);
-  
-  const [activeToast, setActiveToast] = useState<typeof ACHIEVEMENTS[0] | null>(null);
+
+  const activeToast = useMemo(() => {
+    const nextId = justUnlocked[0];
+    if (!nextId) return null;
+    return ACHIEVEMENTS.find((item) => item.id === nextId) ?? null;
+  }, [justUnlocked]);
 
   useEffect(() => {
-    if (justUnlocked.length > 0 && !activeToast) {
-      const nextId = justUnlocked[0];
-      const detail = ACHIEVEMENTS.find(a => a.id === nextId);
-      if (detail) {
-        setActiveToast(detail);
-      } else {
-        // cleanup invalid ids
-        dismissAchievement(nextId);
-      }
+    if (justUnlocked.length === 0) {
+      return;
     }
-  }, [justUnlocked, activeToast, dismissAchievement]);
 
-  useEffect(() => {
-    if (activeToast) {
-      const timer = setTimeout(() => {
-        dismissAchievement(activeToast.id);
-        setActiveToast(null);
-      }, 5000); // show for 5 seconds
-      return () => clearTimeout(timer);
+    if (!activeToast) {
+      dismissAchievement(justUnlocked[0]);
+      return;
     }
-  }, [activeToast, dismissAchievement]);
+
+    const timer = window.setTimeout(() => {
+      dismissAchievement(activeToast.id);
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeToast, dismissAchievement, justUnlocked]);
 
   return (
     <AnimatePresence>

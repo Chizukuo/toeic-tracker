@@ -1,10 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { RefreshCcw, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getCopy, translatePart } from '@/lib/i18n';
+import { translatePart } from '@/lib/i18n';
 import {
   LISTENING_PARTS,
   READING_PARTS,

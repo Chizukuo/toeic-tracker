@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useTransition } from 'react';
-import { Loader2, Plus, X, ExternalLink, Check } from 'lucide-react';
+import { Loader2, Plus, ExternalLink, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
@@ -36,23 +36,12 @@ export function AddEntryForm({
   }, [text]);
 
   const processInput = useCallback((input: string) => {
-    // Advanced parsing: supports commas, newlines, and space-separation with quotes.
-    // E.g., leaning back, strolling along, "seminar cartridges" stacked
-    let tokens: string[] = [];
+    // Treat a single line as one phrase. Bulk mode only uses commas/newlines.
     if (input.includes('\n') || input.includes(',')) {
-      tokens = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-    } else {
-      // Space-separated but respects quotes for phrases
-      const matches = input.match(/[^\s"']+|"([^"]*)"|'([^']*)'/g);
-      if (matches) {
-        tokens = matches.map(m => {
-          if (m.startsWith('"') && m.endsWith('"')) return m.slice(1, -1);
-          if (m.startsWith("'") && m.endsWith("'")) return m.slice(1, -1);
-          return m;
-        });
-      }
+      return input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
     }
-    return tokens;
+    const normalized = input.trim();
+    return normalized ? [normalized] : [];
   }, []);
 
   const handleAdd = useCallback(() => {
@@ -158,8 +147,8 @@ export function AddEntryForm({
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder={locale === 'zh' ? '输入单词或短语，支持换行 / 逗号批量录入...' : 'Type a word or phrase, Enter to add...'}
-            className="w-full resize-none min-h-[44px] bg-transparent px-5 py-3 pr-12 text-sm leading-relaxed text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) scrollbar-hide flex items-center"
+            placeholder={locale === 'zh' ? '输入单词或短语...' : 'Type a word or phrase...'}
+            className="w-full resize-none min-h-11 bg-transparent px-5 py-3 pr-12 text-sm leading-6 text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) scrollbar-hide"
           />
           {isLooking && (
             <div className="absolute right-4 top-3.5">

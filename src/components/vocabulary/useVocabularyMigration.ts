@@ -7,23 +7,21 @@ export function useVocabularyMigration(
   updateVocabularyEntry: (id: string, updates: Partial<VocabularyEntry>) => void,
   locale: 'zh' | 'en'
 ) {
-  const [isMigrating, setIsMigrating] = useState(false);
   const [forceQueue, setForceQueue] = useState<string[]>([]);
 
   // Automatically process the queue one by one
   useEffect(() => {
     if (forceQueue.length === 0) {
-      setIsMigrating(false);
       return;
     }
-
-    setIsMigrating(true);
     const id = forceQueue[0];
     const entry = vocabularyEntries.find(e => e.id === id);
 
     if (!entry) {
-      setForceQueue(q => q.slice(1));
-      return;
+      const cleanupId = window.setTimeout(() => {
+        setForceQueue(q => q.slice(1));
+      }, 0);
+      return () => window.clearTimeout(cleanupId);
     }
 
     const timer = window.setTimeout(async () => {
@@ -129,5 +127,10 @@ export function useVocabularyMigration(
     return () => window.clearTimeout(timer);
   }, [performMigration, forceQueue.length]);
 
-  return { performMigration, isMigrating, forceQueueCount: forceQueue.length, forceQueue };
+  return {
+    performMigration,
+    isMigrating: forceQueue.length > 0,
+    forceQueueCount: forceQueue.length,
+    forceQueue,
+  };
 }

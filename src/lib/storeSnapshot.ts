@@ -121,6 +121,11 @@ export type ParsedImportSnapshot = {
   result: ImportSnapshotResult;
 };
 
+type ImportContext = {
+  activeSessionId: string;
+  vocabularyEntries: VocabularyEntry[];
+};
+
 const noopStorage = {
   getItem: () => null,
   setItem: () => undefined,
@@ -289,12 +294,38 @@ export function parseImportSnapshot(
     unlockedAchievements: string[];
   }
 ) {
+  const recoverVocabularyProvenance = (
+    importedEntries: VocabularyEntry[],
+    context?: ImportContext
+  ): VocabularyEntry[] => {
+    if (!context) {
+      return importedEntries;
+    }
+
+    const existingByText = new Map(
+      context.vocabularyEntries.map((entry) => [entry.text.trim().toLowerCase(), entry])
+    );
+
+    return importedEntries.map((entry) => {
+      if (entry.sessionIds.length > 0) {
+        return entry;
+      }
+
+      const matched = existingByText.get(entry.text.trim().toLowerCase());
+      if (matched && matched.sessionIds.length > 0) {
+        return { ...entry, sessionIds: [...matched.sessionIds] };
+      }
+
+      return { ...entry, sessionIds: [context.activeSessionId] };
+    });
+  };
+
   // If it's a direct array of vocabulary entries
   if (Array.isArray(snapshot)) {
     const isVocabList = snapshot.length > 0 && snapshot.every((item) => isObjectRecord(item) && typeof item.text === 'string');
     if (isVocabList && currentState) {
       // Merge vocabularies: prefer imported
-      const importedVocab = normalizeVocabularyEntries(snapshot);
+      const importedVocab = recoverVocabularyProvenance(normalizeVocabularyEntries(snapshot), currentState);
       const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
       for (const entry of importedVocab) {
         mergedMap.set(entry.text.toLowerCase(), entry);
@@ -314,7 +345,7 @@ export function parseImportSnapshot(
 
   // If it's a standalone object wrapper for vocabularies (e.g. { vocabularyEntries: [...] })
   if (isObjectRecord(snapshot) && Array.isArray(snapshot.vocabularyEntries) && snapshot.vocabularyEntries.length > 0 && !('sessions' in snapshot) && !('data' in snapshot) && !('state' in snapshot) && currentState) {
-    const importedVocab = normalizeVocabularyEntries(snapshot.vocabularyEntries);
+    const importedVocab = recoverVocabularyProvenance(normalizeVocabularyEntries(snapshot.vocabularyEntries), currentState);
     const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
     for (const entry of importedVocab) {
       mergedMap.set(entry.text.toLowerCase(), entry);
@@ -391,7 +422,10 @@ export function parseImportSnapshot(
     examDate: normalizeExamDate(source.examDate),
     historicalScores: normalizeHistoricalScores(source.historicalScores),
     sprintConfig: normalizeSprintConfig(source.sprintConfig),
-    vocabularyEntries: normalizeVocabularyEntries(source.vocabularyEntries),
+    vocabularyEntries: recoverVocabularyProvenance(
+      normalizeVocabularyEntries(source.vocabularyEntries),
+      currentState
+    ),
     unlockedAchievements: normalizeUnlockedAchievements(source.unlockedAchievements),
     result: {
       source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',

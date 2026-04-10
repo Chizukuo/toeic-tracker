@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, AlertTriangle, Loader2, RefreshCw, Check, Search } from 'lucide-react';
 import { useStore } from '@/store/useStore';
-import type { VocabularyEntry } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 
 
@@ -34,7 +33,7 @@ export function VocabularyPanel() {
     () => false
   );
 
-  const { performMigration, isMigrating, forceQueueCount, forceQueue } = useVocabularyMigration(
+  const { performMigration, forceQueueCount, forceQueue } = useVocabularyMigration(
     vocabularyEntries,
     updateVocabularyEntry,
     locale

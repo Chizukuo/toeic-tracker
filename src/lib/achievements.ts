@@ -1,4 +1,4 @@
-import { type SessionRecord, getIncorrectAnswers } from '@/lib/toeic';
+import { type SessionRecord, type VocabularyEntry, getIncorrectAnswers } from '@/lib/toeic';
 import { type HistoricalScoreRecord } from '@/lib/storeSnapshot';
 
 export type Achievement = {
@@ -13,6 +13,7 @@ export type AchievementCheckState = {
   sessions: SessionRecord[];
   historicalScores: HistoricalScoreRecord[];
   unlockedAchievements: string[];
+  vocabularyEntries?: VocabularyEntry[];
 };
 
 export const ACHIEVEMENTS: Achievement[] = [
@@ -69,10 +70,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     icon: '📝',
     title: { zh: '生词本', en: 'Word Smith' },
     desc: { zh: '这不仅是考试，更是英语实力。', en: 'Not just for the test, but for the language.' },
-    // Condition uses length of vocabularyEntries passed into check payload if needed, but since it's not in the base check state right now,
-    // we can either add vocabularyEntries to AchievementCheckState or skip it.
-    // We'll update AchievementCheckState to support this.
-    condition: (state) => (state as any).vocabularyEntries?.length > 0,
+    condition: (state) => (state.vocabularyEntries?.length ?? 0) > 0,
   },
 ];
 
@@ -113,9 +111,7 @@ function hasStreak(state: AchievementCheckState, targetDays: number): boolean {
   return maxStreak >= targetDays;
 }
 
-export function evaluateAchievements(
-  state: AchievementCheckState & { vocabularyEntries?: any[] }
-): string[] {
+export function evaluateAchievements(state: AchievementCheckState): string[] {
   return ACHIEVEMENTS.filter(
     (a) => !state.unlockedAchievements.includes(a.id) && a.condition(state)
   ).map((a) => a.id);

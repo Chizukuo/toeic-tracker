@@ -1,16 +1,12 @@
 'use client';
 
-import { Languages } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
-import { getCopy } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
 export function LocaleToggle() {
   const locale = useStore((state) => state.locale);
   const setLocale = useStore((state) => state.setLocale);
-  const copy = getCopy(locale);
 
   return (
     <div className="inline-flex items-center gap-1 rounded-full border border-black/4 bg-zinc-50/50 p-1 dark:border-white/4 dark:bg-white/2">

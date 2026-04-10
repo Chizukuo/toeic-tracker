@@ -29,9 +29,9 @@ export function FilterBar({
   ];
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between">
+    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {/* Search */}
-      <div className="relative flex-1 max-w-sm">
+      <div className="relative w-full flex-1 min-w-0">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--label-tertiary)" />
         <input
           type="text"
@@ -47,7 +47,7 @@ export function FilterBar({
         )}
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
         {/* Mode pills */}
         <div className="flex gap-0.5 rounded-[10px] bg-(--surface-grouped) p-0.5">
           {filters.map(({ key, label }) => (

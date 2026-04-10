@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, Flag, Hourglass, Play, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Flag, Play, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { getCopy, translatePart } from '@/lib/i18n';
 import {
   READING_LAP_SEGMENTS,
@@ -22,7 +20,6 @@ import {
   formatMinutes,
   getTargetDurationMs,
   hasResolvedUnfinished,
-  sumReadingLapTimes,
   type ReadingLapKey,
   type SessionRecord,
 } from '@/lib/toeic';
@@ -144,7 +141,6 @@ function ListeningFlow({
 }) {
   const patchSession = useStore((state) => state.patchSession);
   const locale = useStore((state) => state.locale);
-  const copy = getCopy(locale);
 
   // Elapsed stopwatch (informational only, no pressure)
   const [elapsedMs, setElapsedMs] = useState(() => {
@@ -349,7 +345,6 @@ function ReadingTimer({
   const isListening = session.type === 'L';
   const totalDurationMs = getTargetDurationMs(session.type);
   const initialState = getInitialTimerState(session, totalDurationMs);
-  const lastReadingTotal = sumReadingLapTimes(session);
 
   const [timeLeft, setTimeLeft] = useState(initialState.timeLeft);
   const [isRunning, setIsRunning] = useState(initialState.isRunning);
@@ -361,7 +356,6 @@ function ReadingTimer({
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(initialState.showTimeoutDialog);
   const [lapUndo, setLapUndo] = useState<LapUndoState | null>(null);
-  const [awaitingFinalConfirm, setAwaitingFinalConfirm] = useState(false);
 
   const startedAtRef = useRef<number | null>(initialState.startedAtMs);
   const lapStartedAtRef = useRef<number | null>(initialState.lapStartedAtMs);
@@ -378,13 +372,6 @@ function ReadingTimer({
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
-  const lastAttemptText = session.timerSummary
-    ? `${formatMinutes(session.timerSummary.totalElapsedMs)} / ${copy.unfinished(session.timerSummary.unfinishedQuestions)}`
-    : isListening
-      ? copy.noListeningAttempt
-      : lastReadingTotal > 0
-        ? copy.savedReadingTime(formatMinutes(lastReadingTotal))
-        : copy.noReadingAttempt;
 
   function persistRuntime(next: Partial<NonNullable<SessionRecord['timerRuntime']>>) {
     patchSession(session.id, {
@@ -412,7 +399,6 @@ function ReadingTimer({
     setIsOvertime(false);
     setShowTimeoutDialog(false);
     setLapUndo(null);
-    setAwaitingFinalConfirm(false);
   }
 
   function commitStrictAttempt(options: PendingSubmit & {
@@ -561,7 +547,6 @@ function ReadingTimer({
     setOvertimeElapsedMs(0);
     setUnfinishedQuestions('');
     setLapUndo(null);
-    setAwaitingFinalConfirm(false);
 
     patchSession(session.id, {
       status: 'in-progress',
@@ -596,8 +581,6 @@ function ReadingTimer({
       ...readingLapTimes,
       [currentSegment.key]: lapElapsed,
     };
-
-    setAwaitingFinalConfirm(false);
 
     setReadingLapTimes(nextLapTimes);
 
@@ -647,7 +630,6 @@ function ReadingTimer({
     setCurrentLapIndex(lapUndo.previousLapIndex);
     lapStartedAtRef.current = lapUndo.previousLapStartedAtMs;
     setLapUndo(null);
-    setAwaitingFinalConfirm(false);
 
     patchSession(session.id, {
       status: 'in-progress',
@@ -663,10 +645,6 @@ function ReadingTimer({
     });
   };
 
-  const cancelFinalLapConfirm = () => {
-    setAwaitingFinalConfirm(false);
-  };
-
   const submitForced = () => {
     if (isListening) {
       commitStrictAttempt({ forcedSubmit: true, timedOut: false, unfinishedCount: 0 });
@@ -676,7 +654,6 @@ function ReadingTimer({
     const nextPending = { forcedSubmit: true, timedOut: false } satisfies PendingSubmit;
     setIsRunning(false);
     setLapUndo(null);
-    setAwaitingFinalConfirm(false);
     setPendingSubmit(nextPending);
     persistRuntime({ pendingSubmit: nextPending, timeLeftMs: timeLeft });
   };
@@ -731,7 +708,6 @@ function ReadingTimer({
     setIsOvertime(true);
     setIsRunning(true);
     setLapUndo(null);
-    setAwaitingFinalConfirm(false);
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
     setTimeLeft(0);

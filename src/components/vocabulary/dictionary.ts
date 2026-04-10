@@ -1,5 +1,3 @@
-import { VocabularyEntry } from '@/lib/toeic';
-
 export interface LookupResult {
   definition: string;
   enDefinition?: string;

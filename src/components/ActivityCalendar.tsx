@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import { Flame } from 'lucide-react';
@@ -24,45 +24,43 @@ export function ActivityCalendar() {
   const [hoverData, setHoverData] = useState<{ dateStr: string; count: number } | null>(null);
 
   // Generate the last 84 days (12 weeks * 7 days)
-  const heatmapData = useMemo(() => {
-    const countsByDate = new Map<string, number>();
+  const countsByDate = new Map<string, number>();
 
-    for (const session of sessions) {
-      if (session.status === 'debugged' && session.timerSummary?.completedAt) {
-        const dateStr = session.timerSummary.completedAt.split('T')[0];
-        countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
-      }
-    }
-
-    for (const score of historicalScores) {
-      const dateStr = score.date;
+  for (const session of sessions) {
+    if (session.status === 'debugged' && session.timerSummary?.completedAt) {
+      const dateStr = session.timerSummary.completedAt.split('T')[0];
       countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
     }
+  }
 
-    const today = new Date();
-    // Use local timezone to map the days, to match exactly what the user sees as 'today'
-    const days = 84; 
-    
-    const results = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-      const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-      const count = countsByDate.get(dateStr) ?? 0;
-      results.push({
-        dateStr,
-        count,
-        level: Math.min(count, 4), // Cap at level 4 for colors
-      });
-    }
+  for (const score of historicalScores) {
+    const dateStr = score.date;
+    countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
+  }
 
-    // group by week (7 days each)
-    const weeks = [];
-    for (let i = 0; i < results.length; i += 7) {
-      weeks.push(results.slice(i, i + 7));
-    }
+  const today = new Date();
+  // Use local timezone to map the days, to match exactly what the user sees as 'today'
+  const days = 84;
 
-    return { weeks, maxStreak: calculateStreak(countsByDate) };
-  }, [sessions, historicalScores]);
+  const results = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    const count = countsByDate.get(dateStr) ?? 0;
+    results.push({
+      dateStr,
+      count,
+      level: Math.min(count, 4), // Cap at level 4 for colors
+    });
+  }
+
+  // group by week (7 days each)
+  const weeks = [];
+  for (let i = 0; i < results.length; i += 7) {
+    weeks.push(results.slice(i, i + 7));
+  }
+
+  const heatmapData = { weeks, maxStreak: calculateStreak(countsByDate) };
 
   // Streak calculation
   function calculateStreak(countsByDate: Map<string, number>) {
@@ -76,14 +74,14 @@ export function ActivityCalendar() {
     let streak = 0;
     let checkDate = countsByDate.has(todayStr) ? today : yesterday;
     
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    let hasActiveDay = true;
+    while (hasActiveDay) {
       const checkStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
       if (countsByDate.has(checkStr)) {
         streak++;
         checkDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - 1);
       } else {
-        break;
+        hasActiveDay = false;
       }
     }
     return streak;

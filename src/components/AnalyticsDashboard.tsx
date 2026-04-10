@@ -20,7 +20,7 @@ import {
   YAxis,
   Bar,
 } from 'recharts';
-import { Sparkles, TrendingDown, TrendingUp, Minus, AlertCircle } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, AlertCircle } from 'lucide-react';
 
 import {
   getAnalyticsDataConfidence,
@@ -434,7 +434,7 @@ export function AnalyticsDashboard() {
         
         {reasonData.length > 0 ? (
           <div className="flex flex-col gap-4 mt-2 max-w-3xl">
-            {reasonData.map((item, index) => {
+            {reasonData.map((item) => {
               const maxCount = reasonData[0]?.count || 1;
               const percentage = Math.max((item.count / maxCount) * 100, 2);
               return (

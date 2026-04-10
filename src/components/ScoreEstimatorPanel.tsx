@@ -114,7 +114,6 @@ export function ScoreEstimatorPanel() {
 
   const [mode, setMode] = useState<ScoreMode>('T');
   const [selectedPair, setSelectedPair] = useState('1');
-  const [chartView, setChartView] = useState<'estimated' | 'official'>('estimated');
   const [historyDate, setHistoryDate] = useState('');
   const [historyListening, setHistoryListening] = useState('350');
   const [historyReading, setHistoryReading] = useState('330');

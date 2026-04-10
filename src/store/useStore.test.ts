@@ -265,4 +265,52 @@ describe('useStore snapshot compatibility', () => {
     expect(afterNoOp).toBe(patched);
     expect(afterNoOp?.updatedAt).toBe(firstUpdatedAt);
   });
+
+  it('recovers vocabulary session provenance from existing entries when AI import lacks sessionIds', () => {
+    const state = useStore.getState();
+
+    state.addVocabularyEntry({
+      text: 'take off',
+      definition: 'to leave the ground',
+      sessionIds: ['R3'],
+      encounterCount: 2,
+      tags: [],
+    });
+
+    const result = state.importSnapshot([
+      {
+        text: 'take off',
+        definition: 'to remove clothing',
+      },
+    ]);
+
+    const imported = useStore
+      .getState()
+      .vocabularyEntries
+      .find((entry) => entry.text.toLowerCase() === 'take off');
+
+    expect(result.source).toBe('vocabulary-list');
+    expect(imported).toBeDefined();
+    expect(imported?.sessionIds).toEqual(['R3']);
+  });
+
+  it('falls back to active session provenance when AI import has no matching vocabulary', () => {
+    const state = useStore.getState();
+    state.selectSession('R6');
+
+    state.importSnapshot([
+      {
+        text: 'call it a day',
+        definition: 'to stop working on something',
+      },
+    ]);
+
+    const imported = useStore
+      .getState()
+      .vocabularyEntries
+      .find((entry) => entry.text.toLowerCase() === 'call it a day');
+
+    expect(imported).toBeDefined();
+    expect(imported?.sessionIds).toEqual(['R6']);
+  });
 });

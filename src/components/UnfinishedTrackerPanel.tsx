@@ -507,36 +507,3 @@ function TrackerStat({
     </div>
   );
 }
-
-function UnfinishedStat({
-  label,
-  value,
-  helper,
-  icon,
-  tone = 'amber',
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  icon: React.ReactNode;
-  tone?: 'amber' | 'slate' | 'coral' | 'cyan';
-}) {
-  const toneClass =
-    tone === 'amber' ? 'border-amber-500/10 bg-amber-500/5 text-amber-600' :
-    tone === 'coral' ? 'border-rose-500/10 bg-rose-500/5 text-rose-600' :
-    tone === 'cyan' ? 'border-cyan-500/10 bg-cyan-500/5 text-cyan-600' :
-    'border-zinc-500/10 bg-zinc-500/5 text-zinc-500';
-
-  return (
-    <div className={cn('rounded-[24px] border p-5 shadow-sm transition-all', toneClass)}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">{label}</div>
-        <div className="text-zinc-400">{icon}</div>
-      </div>
-      <div className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-        {value}
-      </div>
-      <div className="mt-2 text-[12px] font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap overflow-hidden text-ellipsis">{helper}</div>
-    </div>
-  );
-}

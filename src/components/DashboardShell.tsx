@@ -4,17 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import type { ComponentType, ReactNode } from 'react';
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BarChart2, BookOpen, CalendarDays, CheckCircle, Clock, Database, Home, Menu, Target, Trophy, X } from 'lucide-react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { BarChart2, BookOpen, Clock, Database, Home, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { LocaleToggle } from '@/components/LocaleToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AchievementToast } from '@/components/AchievementToast';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { BrandIconSvg } from '@/lib/brandIcon';
-import { formatHotspot, formatSessionTitle, formatWorstPart, getCopy, translateStatus, type Locale } from '@/lib/i18n';
+import { formatHotspot, formatWorstPart, getCopy, translateStatus, type Locale } from '@/lib/i18n';
 import { getIncorrectAnswers, type SessionRecord } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -71,15 +69,10 @@ export function DashboardShell({
   const sessions = useStore((state) => state.sessions);
   const ensureInitialized = useStore((state) => state.ensureInitialized);
   const activeSessionId = useStore((state) => state.activeSessionId);
-  const selectSession = useStore((state) => state.selectSession);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     ensureInitialized();
@@ -140,55 +133,6 @@ export function DashboardShell({
 
   const activeSession = homeMetrics.activeSession;
   const timedOutFlag = Boolean(activeSession.timerSummary?.timedOut);
-  const unresolvedBacklog =
-    activeSession.type === 'R' &&
-    (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0 &&
-    !activeSession.timerSummary?.resolvedUnfinished;
-  const isTimingActive = Boolean(activeSession.timerRuntime?.startedAt) && !activeSession.timerSummary;
-  const isOvertimeActive = Boolean(activeSession.timerRuntime?.isOvertime);
-
-  const nextSession = sessions.find((session) => session.status !== 'debugged' && session.id !== activeSession.id);
-
-  const primaryTask = isOvertimeActive
-    ? {
-        stage: locale === 'zh' ? '补录中' : 'Overtime',
-        title: locale === 'zh' ? '继续加时补录，完成后再保存复盘' : 'Continue overtime resolution, then save review',
-        helper: locale === 'zh' ? '严格分已锁定，当前只影响潜力分。' : 'Strict score is locked. Current work only affects potential score.',
-        href: '/practice',
-        cta: locale === 'zh' ? '继续补录' : 'Resume Overtime',
-      }
-    : isTimingActive
-      ? {
-          stage: locale === 'zh' ? '计时中' : 'Timing',
-          title: locale === 'zh' ? '当前计时进行中，优先完成本套操作' : 'The active timer is running, finish this set first',
-          helper: locale === 'zh' ? '结束后会自动进入复盘录入。' : 'You will move directly into review input after the run.',
-          href: '/practice',
-          cta: locale === 'zh' ? '返回计时页' : 'Back To Timer',
-        }
-      : unresolvedBacklog || (activeSession.timerSummary && activeSession.status !== 'debugged')
-        ? {
-            stage: locale === 'zh' ? '待复盘' : 'Review',
-            title: locale === 'zh' ? '本套已完成计时，下一步是录入错题并完成复盘' : 'Timing is done. Log mistakes and complete review next',
-            helper: locale === 'zh' ? '未录入前，趋势和估分可信度会下降。' : 'Trends and estimates remain less reliable until review is saved.',
-            href: '/practice',
-            cta: locale === 'zh' ? '去录入复盘' : 'Open Review',
-          }
-        : activeSession.status === 'debugged' && nextSession
-          ? {
-              stage: locale === 'zh' ? '下一套' : 'Next Set',
-              title: locale === 'zh' ? `当前已完成，建议切换到 ${nextSession.label}` : `Current set is done. Move to ${nextSession.label}`,
-              helper: locale === 'zh' ? '保持连续节奏，比频繁切页更重要。' : 'Maintaining momentum matters more than bouncing across pages.',
-              href: '/practice',
-              cta: locale === 'zh' ? `切换到 ${nextSession.label}` : `Switch To ${nextSession.label}`,
-              targetSessionId: nextSession.id,
-            }
-          : {
-              stage: locale === 'zh' ? '准备开始' : 'Ready',
-              title: locale === 'zh' ? '当前套题可直接开始严格计时' : 'The current set is ready for strict timing',
-              helper: locale === 'zh' ? '先开始，再在结束后统一处理复盘。' : 'Start first, then complete review in one pass after finishing.',
-              href: '/practice',
-              cta: locale === 'zh' ? '开始本套计时' : 'Start Timer',
-            };
 
   const focusSignals = [
     {
@@ -268,30 +212,6 @@ export function DashboardShell({
     { href: '/vault', label: locale === 'zh' ? '数据' : 'Data', icon: Database },
   ];
 
-  const currentNavIndex = navigationItems.findIndex((item) => item.href === pathname);
-  const previousNavItem = currentNavIndex > 0 ? navigationItems[currentNavIndex - 1] : undefined;
-  const nextNavItem = currentNavIndex >= 0 && currentNavIndex < navigationItems.length - 1 ? navigationItems[currentNavIndex + 1] : undefined;
-
-  const compactSignals = [
-    {
-      label: locale === 'zh' ? '当前 Session' : 'Current Session',
-      value: activeSession.label,
-      helper: formatSessionTitle(locale, activeSession),
-    },
-    {
-      label: locale === 'zh' ? '总进度' : 'Progress',
-      value: `${homeMetrics.completionPct}%`,
-      helper: locale === 'zh'
-        ? `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} 已复盘`
-        : `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions} reviewed`,
-    },
-    {
-      label: copy.worstPart,
-      value: formatWorstPart(locale, sessions),
-      helper: locale === 'zh' ? '当前最需要补强的模块' : 'Current weakest module',
-    },
-  ];
-
   return (
     <DashboardContext.Provider
       value={{
@@ -306,7 +226,10 @@ export function DashboardShell({
       }}
     >
       <AchievementToast />
-      <main className="relative min-h-screen overflow-x-hidden px-4 pb-14 pt-24 text-(--label-primary) sm:px-6 lg:px-8">
+      <main
+        data-layout-variant={variant}
+        className="relative min-h-screen overflow-x-hidden px-4 pb-14 pt-24 text-(--label-primary) sm:px-6 lg:px-8"
+      >
 
         <header className="fixed top-4 left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-(--glass-border) bg-(--glass-bg) px-2 py-2 shadow-(--shadow-elevated) backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
            <Link href="/" aria-label={copy.appName} className="relative z-10 ml-2 flex shrink-0 items-center justify-center transition-transform hover:scale-105 active:scale-95">
@@ -318,7 +241,6 @@ export function DashboardShell({
           <nav className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
             {navigationItems.map((item) => {
               const isActive = pathname === item.href;
-              const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
@@ -473,7 +395,7 @@ export function SectionShell({
   children: ReactNode;
 }) {
   return (
-    <section className="grid gap-6 mt-4">
+    <section data-section-index={index} className="grid gap-6 mt-4">
       <div className="px-2">
         <h2 className="text-[20px] font-semibold tracking-tight text-(--label-primary)">{title}</h2>
         <p className="mt-1 text-[14px] text-(--label-secondary)">{description}</p>
@@ -518,258 +440,6 @@ export function DeferredPanelPlaceholder() {
         <div className="h-24 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
         <div className="h-56 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
       </div>
-    </div>
-  );
-}
-
-const ExamCountdownPanel = memo(function ExamCountdownPanel({ locale }: { locale: Locale }) {
-  const examDate = useStore((state) => state.examDate);
-  const setExamDate = useStore((state) => state.setExamDate);
-  const copy = getCopy(locale);
-  const [now, setNow] = useState<number | null>(null);
-
-  useEffect(() => {
-    const kickoff = window.setTimeout(() => setNow(Date.now()), 0);
-    const timer = window.setInterval(() => setNow(Date.now()), 60000);
-
-    return () => {
-      window.clearTimeout(kickoff);
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  const countdown = useMemo(() => {
-    if (!now) {
-      return null;
-    }
-
-    const target = new Date(`${examDate}T09:00:00`);
-    const diff = target.getTime() - now;
-    const safeDiff = Math.max(diff, 0);
-
-    return {
-      isReady: diff <= 0,
-      days: Math.floor(safeDiff / (24 * 60 * 60 * 1000)),
-      hours: Math.floor(safeDiff / (60 * 60 * 1000)),
-      formattedDate: new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        weekday: 'short',
-      }).format(target),
-    };
-  }, [examDate, locale, now]);
-
-  return (
-    <Card className="overflow-hidden rounded-[20px] border border-(--separator) bg-(--surface-elevated) shadow-(--shadow-soft)">
-      <CardHeader className="border-b border-(--separator) px-6 py-5">
-        <CardTitle className="font-mono text-[11px] font-medium uppercase tracking-[0.32em] text-amber-600 dark:text-amber-400">
-          {copy.examCountdownTitle}
-        </CardTitle>
-        <CardDescription className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-          {copy.examCountdownDescription}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 p-6">
-        <div className="rounded-[16px] border border-(--separator) bg-(--surface-grouped) p-4">
-          <label className="font-mono text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400" htmlFor="toeic-exam-date">
-            {copy.examCountdownLabel}
-          </label>
-          <div className="mt-3 flex items-center gap-3 rounded-full border border-(--separator) bg-(--surface-grouped) px-4 transition-colors focus-within:border-amber-400/50 focus-within:ring-2 focus-within:ring-amber-400/20">
-            <CalendarDays className="size-4 text-zinc-400 dark:text-zinc-500" />
-            <Input
-              id="toeic-exam-date"
-              type="date"
-              value={examDate}
-              onChange={(event) => setExamDate(event.target.value)}
-              className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 font-medium"
-            />
-          </div>
-          <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 pl-1">
-            {countdown?.formattedDate ?? examDate}
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <CountdownCard
-            label={copy.examCountdownDays}
-            value={countdown?.isReady ? '0' : `${countdown?.days ?? '--'}`}
-            helper={countdown?.isReady ? copy.examCountdownReady : locale === 'zh' ? '按天安排训练' : 'Plan by day'}
-            tone="amber"
-          />
-          <CountdownCard
-            label={copy.examCountdownHours}
-            value={countdown?.isReady ? '0' : `${countdown?.hours ?? '--'}`}
-            helper={locale === 'zh' ? '折算为总训练时数' : 'Total training hours left'}
-            tone="cyan"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
-});
-
-function MiniBadge({ label }: { label: string }) {
-  return (
-    <span className="cheese-pill">
-      {label}
-    </span>
-  );
-}
-
-function InlineStat({
-  label,
-  value,
-  helper,
-  variant = 'feature',
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  variant?: 'feature' | 'compact';
-}) {
-  return (
-    <div
-      className={cn(
-        'cheese-stat',
-        variant === 'feature' ? 'p-6 xl:min-h-47' : 'p-4'
-      )}
-    >
-      <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
-      <div
-        className={cn(
-          'font-semibold tracking-tight text-zinc-900 dark:text-zinc-50',
-          variant === 'feature' ? 'mt-4 text-[2rem] leading-none sm:text-[2.4rem]' : 'mt-2 text-xl leading-tight'
-        )}
-      >
-        {value}
-      </div>
-      <div
-        className={cn(
-          'text-zinc-500 dark:text-zinc-400',
-          variant === 'feature' ? 'mt-4 max-w-88 text-sm leading-6' : 'mt-2 text-xs leading-5'
-        )}
-      >
-        {helper}
-      </div>
-    </div>
-  );
-}
-
-function ProgressLine({
-  label,
-  value,
-  max,
-  tone,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  tone: 'amber' | 'slate' | 'coral';
-}) {
-  const barClass =
-    tone === 'amber'
-      ? 'bg-amber-500'
-      : tone === 'coral'
-        ? 'bg-rose-500'
-        : 'bg-zinc-400 dark:bg-zinc-500';
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-        <span>{label}</span>
-        <span className="text-zinc-900 dark:text-zinc-100">{value}</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-black/4 dark:bg-white/4">
-        <motion.div 
-          className={cn('h-full rounded-full', barClass)} 
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.min((value / max) * 100, 100)}%` }}
-          transition={{ duration: 1, ease: "easeOut" }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function QuickInfoRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-full border border-(--separator) bg-(--surface-elevated) px-4 py-3">
-      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
-      <div className={cn('text-[13px] font-bold', danger ? 'text-rose-500' : 'text-zinc-900 dark:text-zinc-100')}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function CountdownCard({
-  label,
-  value,
-  helper,
-  tone,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  tone: 'amber' | 'cyan';
-}) {
-  const cls =
-    tone === 'amber'
-      ? 'border-amber-500/10 bg-amber-500/5'
-      : 'border-cyan-500/10 bg-cyan-500/5';
-
-  return (
-    <div className={cn('rounded-[16px] border p-6 transition-transform hover:scale-[1.02] active:scale-[0.97]', cls)}>
-      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
-      <div className="mt-3 text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{value}</div>
-      <div className="mt-2 text-[12px] text-zinc-500 leading-snug">{helper}</div>
-    </div>
-  );
-}
-
-function OverviewSignal({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: 'amber' | 'slate' | 'coral' | 'cyan';
-}) {
-  const accentCls =
-    tone === 'amber' ? 'text-amber-500' :
-    tone === 'coral' ? 'text-rose-500' :
-    tone === 'cyan' ? 'text-cyan-500' :
-    'text-zinc-600 dark:text-zinc-400';
-
-  return (
-    <motion.div 
-      whileHover={{ y: -2 }}
-      className="group rounded-[20px] border border-(--separator) bg-(--surface-elevated) p-7 shadow-(--shadow-soft) transition-shadow hover:shadow-(--shadow-medium)"
-    >
-      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</div>
-      <div className={cn('mt-4 text-[2.5rem] font-bold tracking-tight leading-none', accentCls)}>
-        {value}
-      </div>
-      <div className="mt-3 text-[13px] leading-relaxed text-zinc-500">{detail}</div>
-    </motion.div>
-  );
-}
-
-function StatusBadge({ status, sessionStatus }: { status: string; sessionStatus: string }) {
-  const cls =
-    sessionStatus === 'debugged'
-      ? 'border-emerald-500/10 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
-      : sessionStatus === 'in-progress'
-        ? 'border-amber-500/10 bg-amber-500/5 text-amber-600 dark:text-amber-400'
-        : 'border-zinc-500/10 bg-zinc-500/5 text-zinc-500';
-
-  return (
-    <div className={cn('rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-widest shadow-sm', cls)}>
-      {status}
     </div>
   );
 }

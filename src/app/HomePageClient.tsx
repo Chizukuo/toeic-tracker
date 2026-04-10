@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -9,7 +9,7 @@ import { DashboardShell, useDashboardContext } from '@/components/DashboardShell
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { WeeklyReport } from '@/components/WeeklyReport';
 import { getNextStepRecommendation } from '@/lib/nextStep';
-import { estimateToeicCombinedScore } from '@/lib/toeic';
+import { estimateToeicCombinedScore, type MistakeKey } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -30,6 +30,12 @@ function MissionControl() {
   const examDate = useStore((state) => state.examDate);
   const historicalScoreCount = useStore((state) => state.historicalScores.length);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const nextStep = useMemo(
     () =>
@@ -49,9 +55,9 @@ function MissionControl() {
 
   const daysUntilExam = useMemo(() => {
     const target = new Date(`${examDate}T09:00:00`);
-    const diff = target.getTime() - Date.now();
+    const diff = target.getTime() - nowTs;
     return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
-  }, [examDate]);
+  }, [examDate, nowTs]);
 
   const scoreEstimate = useMemo(() => {
     const latestL = [...sessions].reverse().find((s) => s.type === 'L' && s.status !== 'not-started');
@@ -64,10 +70,12 @@ function MissionControl() {
   const weakestPart = useMemo(() => {
     const completed = sessions.filter((s) => s.status !== 'not-started');
     if (completed.length === 0) return null;
-    let worst: string | null = null;
+    let worst: MistakeKey | null = null;
     let worstRate = -1;
     for (const s of completed) {
-      const parts = s.type === 'L' ? ['Part 1', 'Part 2', 'Part 3', 'Part 4'] : ['Part 5', 'Part 6', 'Part 7 Single', 'Part 7 Multiple'];
+      const parts: MistakeKey[] = s.type === 'L'
+        ? ['Part 1', 'Part 2', 'Part 3', 'Part 4']
+        : ['Part 5', 'Part 6', 'Part 7 Single', 'Part 7 Multiple'];
       for (const p of parts) {
         const mistakes = (s.mistakes as Record<string, number>)[p] ?? 0;
         const total = ({ 'Part 1': 6, 'Part 2': 25, 'Part 3': 39, 'Part 4': 30, 'Part 5': 30, 'Part 6': 16, 'Part 7 Single': 29, 'Part 7 Multiple': 25 } as Record<string, number>)[p] ?? 1;
@@ -246,7 +254,7 @@ function MissionControl() {
                 </span>
               </div>
               <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
-                {weakestPart ? translatePart(locale, weakestPart as any) : '—'}
+                {weakestPart ? translatePart(locale, weakestPart) : '—'}
               </div>
               <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
                 {weakestPart
