@@ -8,5 +8,5 @@ export const size = {
 export const contentType = "image/png";
 
 export default function AppleIcon() {
-  return createIconImageResponse(size, "TOEIC Deck apple icon");
+  return createIconImageResponse(size);
 }

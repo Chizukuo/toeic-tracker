@@ -222,7 +222,7 @@ export function DataVaultPanel() {
 	const handleExport = () => {
 		try {
 			const snapshot = exportSnapshot();
-			const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+			const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json;charset=utf-8' });
 			const date = snapshot.exportedAt.slice(0, 10);
 
 			triggerFileDownload(blob, `cheese-toeic-tracker-v${snapshot.version}-${date}.json`);

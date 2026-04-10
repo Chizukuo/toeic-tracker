@@ -211,7 +211,7 @@ export function VocabCard({
             {shouldMaskDetails ? (
               <button
                 type="button"
-                onClick={toggleReveal}
+                onClick={() => setRevealed(true)}
                 className="mt-3 group/reveal relative flex w-full items-center justify-center overflow-hidden rounded-[12px] border border-dashed border-(--separator) bg-(--surface-grouped) py-4 transition-all hover:bg-(--surface-elevated) active:scale-[0.98]"
               >
                 <div className="absolute inset-0 bg-linear-to-b from-transparent to-(--surface-grouped)/50 backdrop-blur-[2px]" />
