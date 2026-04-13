@@ -46,15 +46,14 @@ function normalizeSiteUrl(value: string | undefined, fallback: string) {
 
 const configuredSiteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL, DEFAULT_SITE_URL);
 const isCloudflarePages = process.env.CF_PAGES === "1";
-const cloudflareBranch = process.env.CF_PAGES_BRANCH?.toLowerCase();
-const cloudflareProductionBranch = process.env.CF_PAGES_PRODUCTION_BRANCH?.toLowerCase();
+const deploymentSiteUrl = normalizeSiteUrl(process.env.CF_PAGES_URL, configuredSiteUrl);
+const deploymentHost = new URL(deploymentSiteUrl).host;
 const explicitSeoDeployment = process.env.NEXT_PUBLIC_SEO_DEPLOYMENT?.toLowerCase();
-
-const isNonProductionBranch = Boolean(
+const deploymentHostSegments = deploymentHost.split(".");
+const isLikelyPreviewPagesHost = Boolean(
   isCloudflarePages
-    && cloudflareBranch
-    && cloudflareProductionBranch
-    && cloudflareBranch !== cloudflareProductionBranch
+    && deploymentHost.endsWith(".pages.dev")
+    && deploymentHostSegments.length > 3
 );
 
 const isExplicitPreview = explicitSeoDeployment === "preview";
@@ -62,7 +61,7 @@ const isExplicitProduction = explicitSeoDeployment === "production";
 
 export const isPreviewDeployment = Boolean(
   isExplicitPreview
-    || (!isExplicitProduction && isNonProductionBranch)
+    || (!isExplicitProduction && isLikelyPreviewPagesHost)
 );
 export const siteUrl = configuredSiteUrl;
 export const metadataBase = new URL(siteUrl);
