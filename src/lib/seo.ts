@@ -45,10 +45,7 @@ function normalizeSiteUrl(value: string | undefined, fallback: string) {
 }
 
 const configuredSiteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL, DEFAULT_SITE_URL);
-const deploymentSiteUrl = normalizeSiteUrl(process.env.CF_PAGES_URL, configuredSiteUrl);
 const isCloudflarePages = process.env.CF_PAGES === "1";
-const canonicalHost = new URL(configuredSiteUrl).host;
-const deploymentHost = new URL(deploymentSiteUrl).host;
 const cloudflareBranch = process.env.CF_PAGES_BRANCH?.toLowerCase();
 const cloudflareProductionBranch = process.env.CF_PAGES_PRODUCTION_BRANCH?.toLowerCase();
 const explicitSeoDeployment = process.env.NEXT_PUBLIC_SEO_DEPLOYMENT?.toLowerCase();
@@ -60,22 +57,12 @@ const isNonProductionBranch = Boolean(
     && cloudflareBranch !== cloudflareProductionBranch
 );
 
-const deploymentHostSegments = deploymentHost.split(".");
-const isLikelyPreviewPagesHost = Boolean(
-  isCloudflarePages
-    && deploymentHost.endsWith(".pages.dev")
-    && deploymentHostSegments.length > 3
-);
-const isHostMismatch = isCloudflarePages && deploymentHost !== canonicalHost;
 const isExplicitPreview = explicitSeoDeployment === "preview";
 const isExplicitProduction = explicitSeoDeployment === "production";
 
-// Treat host mismatch as preview only when branch metadata is missing.
 export const isPreviewDeployment = Boolean(
   isExplicitPreview
-  || (!isExplicitProduction && (isNonProductionBranch
-    || (isLikelyPreviewPagesHost && !cloudflareProductionBranch)
-    || (isHostMismatch && !cloudflareBranch)))
+    || (!isExplicitProduction && isNonProductionBranch)
 );
 export const siteUrl = configuredSiteUrl;
 export const metadataBase = new URL(siteUrl);
