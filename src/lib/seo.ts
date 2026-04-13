@@ -32,27 +32,52 @@ export const siteConfig = {
   ],
 } as const;
 
-function normalizeSiteUrl(value: string | undefined) {
+function normalizeSiteUrl(value: string | undefined, fallback: string) {
   if (!value) {
-    // Cloudflare Pages specific logic
-    if (process.env.CF_PAGES === "1" && process.env.CF_PAGES_URL) {
-      try {
-        return new URL(process.env.CF_PAGES_URL).origin;
-      } catch {
-        return DEFAULT_SITE_URL;
-      }
-    }
-    return DEFAULT_SITE_URL;
+    return fallback;
   }
 
   try {
     return new URL(value).origin;
   } catch {
-    return DEFAULT_SITE_URL;
+    return fallback;
   }
 }
 
-export const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
+const configuredSiteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL, DEFAULT_SITE_URL);
+const deploymentSiteUrl = normalizeSiteUrl(process.env.CF_PAGES_URL, configuredSiteUrl);
+const isCloudflarePages = process.env.CF_PAGES === "1";
+const canonicalHost = new URL(configuredSiteUrl).host;
+const deploymentHost = new URL(deploymentSiteUrl).host;
+const cloudflareBranch = process.env.CF_PAGES_BRANCH?.toLowerCase();
+const cloudflareProductionBranch = process.env.CF_PAGES_PRODUCTION_BRANCH?.toLowerCase();
+const explicitSeoDeployment = process.env.NEXT_PUBLIC_SEO_DEPLOYMENT?.toLowerCase();
+
+const isNonProductionBranch = Boolean(
+  isCloudflarePages
+    && cloudflareBranch
+    && cloudflareProductionBranch
+    && cloudflareBranch !== cloudflareProductionBranch
+);
+
+const deploymentHostSegments = deploymentHost.split(".");
+const isLikelyPreviewPagesHost = Boolean(
+  isCloudflarePages
+    && deploymentHost.endsWith(".pages.dev")
+    && deploymentHostSegments.length > 3
+);
+const isHostMismatch = isCloudflarePages && deploymentHost !== canonicalHost;
+const isExplicitPreview = explicitSeoDeployment === "preview";
+const isExplicitProduction = explicitSeoDeployment === "production";
+
+// Treat host mismatch as preview only when branch metadata is missing.
+export const isPreviewDeployment = Boolean(
+  isExplicitPreview
+  || (!isExplicitProduction && (isNonProductionBranch
+    || (isLikelyPreviewPagesHost && !cloudflareProductionBranch)
+    || (isHostMismatch && !cloudflareBranch)))
+);
+export const siteUrl = configuredSiteUrl;
 export const metadataBase = new URL(siteUrl);
 
 export const defaultIcon = {
@@ -67,17 +92,30 @@ export const defaultAppleIcon = {
   type: "image/png",
 } as const;
 
-export const defaultRobots: Metadata["robots"] = {
-  index: true,
-  follow: true,
-  googleBot: {
-    index: true,
-    follow: true,
-    "max-image-preview": "large",
-    "max-snippet": -1,
-    "max-video-preview": -1,
-  },
-};
+export const defaultRobots: Metadata["robots"] = isPreviewDeployment
+  ? {
+      index: false,
+      follow: false,
+      nocache: true,
+      googleBot: {
+        index: false,
+        follow: false,
+        "max-image-preview": "none",
+        "max-snippet": 0,
+        "max-video-preview": 0,
+      },
+    }
+  : {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    };
 
 export const defaultOpenGraphImage = {
   url: `/opengraph-image?v=${ASSET_VERSION}`,

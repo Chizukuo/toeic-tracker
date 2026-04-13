@@ -1,15 +1,20 @@
 import type { MetadataRoute } from "next";
 
-import { siteUrl } from "@/lib/seo";
+import { isPreviewDeployment, siteUrl } from "@/lib/seo";
 
 export const dynamic = "force-static";
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: {
-      userAgent: "*",
-      allow: "/",
-    },
+    rules: isPreviewDeployment
+      ? {
+          userAgent: "*",
+          disallow: "/",
+        }
+      : {
+          userAgent: "*",
+          allow: "/",
+        },
     sitemap: `${siteUrl}/sitemap.xml`,
     host: siteUrl,
   };
