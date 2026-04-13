@@ -217,6 +217,8 @@
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   h1, h2, h3, h4 {
     text-wrap: balance;
@@ -290,6 +292,16 @@
   input[type="range"],
   select {
     cursor: pointer;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    a,
+    button,
+    input,
+    textarea,
+    select {
+      -webkit-tap-highlight-color: transparent;
+    }
   }
 }
 

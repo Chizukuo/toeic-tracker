@@ -132,7 +132,7 @@ export function AddEntryForm({
 
   return (
     <div className="space-y-3">
-      <div className="group relative flex gap-2 w-full flex-col">
+      <div className="group flex w-full items-start gap-2">
         <div className="relative flex-1 ring-1 ring-(--separator) transition-shadow focus-within:ring-2 focus-within:ring-(--cheese-gold)/30 rounded-[20px] bg-(--surface-elevated) shadow-xs overflow-hidden">
           <textarea
             ref={inputRef}
@@ -147,8 +147,12 @@ export function AddEntryForm({
               }
             }}
             onKeyDown={handleKeyDown}
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
             placeholder={locale === 'zh' ? '输入单词或短语...' : 'Type a word or phrase...'}
-            className="w-full resize-none min-h-11 bg-transparent px-5 py-3 pr-12 text-sm leading-6 text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) scrollbar-hide"
+            className="w-full resize-none min-h-11 bg-transparent px-5 py-3 pr-11 text-base sm:text-sm leading-6 text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) scrollbar-hide"
           />
           {isLooking && (
             <div className="absolute right-4 top-3.5">
@@ -196,36 +200,33 @@ export function AddEntryForm({
             )}
           </AnimatePresence>
         </div>
-
-        <div className="absolute right-1 top-1">
-          <motion.button
-            type="button"
-            onClick={handleAdd}
-            disabled={!text.trim()}
-            whileTap={{ scale: 0.94 }}
-            className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-full transition-all',
-              justAdded
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : text.trim()
-                  ? 'bg-(--cheese-gold-soft) text-(--cheese-gold) hover:bg-(--cheese-gold)/20'
-                  : 'bg-transparent text-(--label-tertiary) opacity-0 pointer-events-none'
+        <motion.button
+          type="button"
+          onClick={handleAdd}
+          disabled={!text.trim()}
+          whileTap={{ scale: 0.94 }}
+          className={cn(
+            'mt-1 flex size-9 shrink-0 items-center justify-center rounded-full transition-all',
+            justAdded
+              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              : text.trim()
+                ? 'bg-(--cheese-gold-soft) text-(--cheese-gold) hover:bg-(--cheese-gold)/20'
+                : 'bg-transparent text-(--label-tertiary) opacity-0 pointer-events-none'
+          )}
+          aria-label={locale === 'zh' ? '添加' : 'Add'}
+        >
+          <AnimatePresence mode="wait">
+            {justAdded ? (
+              <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                <Check className="size-4" />
+              </motion.div>
+            ) : (
+              <motion.div key="plus" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                <Plus className="size-4" />
+              </motion.div>
             )}
-            aria-label={locale === 'zh' ? '添加' : 'Add'}
-          >
-            <AnimatePresence mode="wait">
-              {justAdded ? (
-                <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-                  <Check className="size-4" />
-                </motion.div>
-              ) : (
-                <motion.div key="plus" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-                  <Plus className="size-4" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.button>
-        </div>
+          </AnimatePresence>
+        </motion.button>
       </div>
 
       {/* Manual definition (for phrases) */}
@@ -259,14 +260,14 @@ export function AddEntryForm({
                     value={manualDefinition}
                     onChange={(e) => setManualDefinition(e.target.value)}
                     placeholder={locale === 'zh' ? '填写释义或记忆提示…' : 'Add definition or memory hint…'}
-                    className="w-full resize-none rounded-[12px] bg-(--surface-grouped)/50 px-4 py-2.5 text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary)"
+                    className="w-full resize-none rounded-[12px] bg-(--surface-grouped)/50 px-4 py-2.5 text-base sm:text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary)"
                   />
                   <textarea
                     rows={2}
                     value={manualExampleSentence}
                     onChange={(e) => setManualExampleSentence(e.target.value)}
                     placeholder={locale === 'zh' ? '可选：粘贴你遇到这个词的原句语境…' : 'Optional: paste the original sentence context…'}
-                    className="w-full resize-none rounded-[12px] bg-(--surface-grouped)/50 px-4 py-2.5 text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary)"
+                    className="w-full resize-none rounded-[12px] bg-(--surface-grouped)/50 px-4 py-2.5 text-base sm:text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary)"
                   />
                 </motion.div>
               )}

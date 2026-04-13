@@ -38,7 +38,7 @@ export function FilterBar({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={locale === 'zh' ? '搜索生词…' : 'Search vocabulary…'}
-          className="h-8 w-full rounded-[10px] bg-(--surface-grouped) pl-9 pr-8 text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) hover:bg-(--surface-grouped)/80 focus:bg-(--surface-elevated) focus:ring-2 focus:ring-(--cheese-gold)/30"
+          className="h-10 sm:h-8 w-full rounded-[10px] bg-(--surface-grouped) pl-9 pr-8 text-base sm:text-[13px] text-(--label-primary) outline-none transition-all placeholder:text-(--label-tertiary) hover:bg-(--surface-grouped)/80 focus:bg-(--surface-elevated) focus:ring-2 focus:ring-(--cheese-gold)/30"
         />
         {searchQuery && (
           <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 hover:bg-(--separator)/50 transition-colors">
