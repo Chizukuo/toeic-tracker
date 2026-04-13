@@ -139,6 +139,27 @@ export function DataVaultPanel() {
 			if (!pasted) return;
 
 			const trimmed = pasted.trim();
+
+			if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+				try {
+					const url = new URL(trimmed);
+					const payload = extractSyncPayloadFromHash(url.hash);
+					if (payload) {
+						const snapshot = decodeSnapshotFromSyncPayload(payload);
+						setPendingSyncImport({
+							snapshot,
+							preview: getSyncPreview(snapshot),
+							linkLength: trimmed.length,
+						});
+						setSyncImportOpen(true);
+						e.preventDefault();
+						return;
+					}
+				} catch {
+					// Fall through to JSON attempt
+				}
+			}
+
 			if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
 				return;
 			}
@@ -369,6 +390,25 @@ export function DataVaultPanel() {
 			if (!rawText) {
 				pushFeedback('error', locale === 'zh' ? '剪贴板为空。' : 'Clipboard is empty.');
 				return;
+			}
+
+			if (rawText.startsWith('http://') || rawText.startsWith('https://')) {
+				try {
+					const url = new URL(rawText);
+					const payload = extractSyncPayloadFromHash(url.hash);
+					if (payload) {
+						const snapshot = decodeSnapshotFromSyncPayload(payload);
+						setPendingSyncImport({
+							snapshot,
+							preview: getSyncPreview(snapshot),
+							linkLength: rawText.length,
+						});
+						setSyncImportOpen(true);
+						return;
+					}
+				} catch {
+					// Fall through to JSON attempt
+				}
 			}
 
 			previewImportFromRaw(rawText, locale === 'zh' ? '剪贴板导入' : 'Clipboard Import');

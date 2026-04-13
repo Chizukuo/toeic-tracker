@@ -78,6 +78,12 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
   robots: defaultRobots,
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION ? {
+      "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION,
+    } : undefined,
+  },
 };
 
 export const viewport: Viewport = {

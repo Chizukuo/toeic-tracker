@@ -34,6 +34,14 @@ export const siteConfig = {
 
 function normalizeSiteUrl(value: string | undefined) {
   if (!value) {
+    // Cloudflare Pages specific logic
+    if (process.env.CF_PAGES === "1" && process.env.CF_PAGES_URL) {
+      try {
+        return new URL(process.env.CF_PAGES_URL).origin;
+      } catch {
+        return DEFAULT_SITE_URL;
+      }
+    }
     return DEFAULT_SITE_URL;
   }
 
