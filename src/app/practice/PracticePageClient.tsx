@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 import { DebugForm } from '@/components/DebugForm';
@@ -40,16 +40,25 @@ export default function PracticePageClient() {
 function PracticeFlow() {
   const { activeSession, locale, sessions } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const unresolvedBacklog = activeSession.type === 'R'
+    && (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0
+    && !activeSession.timerSummary?.resolvedUnfinished;
 
   const initialStep = useMemo((): PracticeStep => {
+    if (unresolvedBacklog) return 'timer';
     if (activeSession.status === 'debugged') return 'result';
     if (activeSession.timerSummary || activeSession.status === 'in-progress') return 'review';
     return 'timer';
-  }, [activeSession.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSession.id, unresolvedBacklog]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [step, setStep] = useState<PracticeStep>(initialStep);
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [autoFocusToken, setAutoFocusToken] = useState(0);
+
+  useEffect(() => {
+    setDirection('forward');
+    setStep(initialStep);
+  }, [activeSession.id, initialStep]);
 
   const goToStep = (next: PracticeStep) => {
     const order: PracticeStep[] = ['timer', 'review', 'result'];
@@ -164,7 +173,14 @@ function PracticeFlow() {
                 key={`debug-${activeSession.id}`}
                 activeSession={activeSession}
                 autoFocusToken={autoFocusToken}
-                onReviewSaved={() => goToStep('result')}
+                onReviewSaved={(nextStep) => {
+                  if (nextStep === 'unfinished') {
+                    goToStep('timer');
+                    return;
+                  }
+
+                  goToStep('result');
+                }}
                 onReviewUndone={() => {}}
               />
             </div>

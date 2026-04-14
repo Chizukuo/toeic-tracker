@@ -172,6 +172,8 @@ export function DebugForm({
   };
 
   const handleSave = () => {
+    const nextStatus: SessionRecord['status'] = unresolvedBacklog ? 'in-progress' : 'debugged';
+
     undoPayloadRef.current = {
       mistakes: activeSession.mistakes,
       reasons: activeSession.reasons,
@@ -183,7 +185,7 @@ export function DebugForm({
       mistakes,
       reasons,
       notes: notes.trim() || undefined,
-      status: 'debugged',
+      status: nextStatus,
     });
     setSaved(true);
     setUndoVisible(true);
@@ -510,7 +512,10 @@ export function DebugForm({
 
         <div className="deck-surface-strong p-3">
           <div className="mb-3 flex items-center justify-between gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
-            <span>{locale === 'zh' ? '保存后会将当前套题标记为已完成复盘。' : 'Saving will mark this set as reviewed.'}</span>
+            <span>{unresolvedBacklog
+              ? (locale === 'zh' ? '保存后会锁定严格复盘，并保持补录待完成状态。' : 'Saving locks strict review and keeps overtime resolution pending.')
+              : (locale === 'zh' ? '保存后会将当前套题标记为已完成复盘。' : 'Saving will mark this set as reviewed.')}
+            </span>
             <span className="font-mono uppercase tracking-[0.2em]">{totalMistakes}</span>
           </div>
           <div className="mb-2 text-[11px] text-zinc-400 dark:text-zinc-500">
@@ -525,7 +530,13 @@ export function DebugForm({
             className="h-14 w-full rounded-full text-base font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
           >
             {saved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
-            {saved ? `${copy.saveDiagnostics} OK` : !dirtyReview ? (locale === 'zh' ? '暂无变更' : 'No Changes') : `${copy.saveDiagnostics} ${copy.markDebugged}`}
+            {saved
+              ? `${copy.saveDiagnostics} OK`
+              : !dirtyReview
+                ? (locale === 'zh' ? '暂无变更' : 'No Changes')
+                : unresolvedBacklog
+                  ? (locale === 'zh' ? '保存复盘并进入补录' : 'Save Review & Continue Overtime')
+                  : `${copy.saveDiagnostics} ${copy.markDebugged}`}
           </Button>
 
           {undoVisible && (

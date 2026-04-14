@@ -170,17 +170,7 @@ export function UnfinishedTrackerPanel() {
       variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
       initial="hidden" animate="show"
     >
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {copy.unfinishedTrackerTitle}
-          </h1>
-          <p className="mt-1 text-[15px] text-zinc-500 dark:text-zinc-400">
-            {copy.unfinishedTrackerDescription}
-          </p>
-        </div>
-      </div>
-
+      {/* Page Title removed since InsightsPageClient provides it */}
       <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0 } } }} className="grid gap-4 md:grid-cols-3">
             <TrackerStat
               icon={<ClipboardList className="size-4" />}

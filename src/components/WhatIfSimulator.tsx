@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCcw, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { translatePart } from '@/lib/i18n';
@@ -24,20 +24,29 @@ export function WhatIfSimulator({
   const locale = useStore((state) => state.locale);
   const targetScore = useStore((state) => state.targetScore);
 
-  // Baseline mistakes from actual records (or 0 if none)
+  // Baseline mistakes for simulation sliders.
+  // If a set has not been attempted yet, treat it as all wrong in strict mode.
   const baselineListening = useMemo(() => {
-    const m = listeningSession?.mistakes;
-    return Object.fromEntries(LISTENING_PARTS.map((p) => [p, m?.[p] ?? 0])) as Record<MistakeKey, number>;
+    return buildBaselineMistakeMap(listeningSession, 'L');
   }, [listeningSession]);
 
   const baselineReading = useMemo(() => {
-    const m = readingSession?.mistakes;
-    return Object.fromEntries(READING_PARTS.map((p) => [p, m?.[p] ?? 0])) as Record<MistakeKey, number>;
+    return buildBaselineMistakeMap(readingSession, 'R');
   }, [readingSession]);
+
+  const lockedUnfinishedPenalty = Math.max(readingSession?.timerSummary?.unfinishedQuestions ?? 0, 0);
 
   // Simulated mistakes
   const [simListening, setSimListening] = useState<Record<MistakeKey, number>>(baselineListening);
   const [simReading, setSimReading] = useState<Record<MistakeKey, number>>(baselineReading);
+
+  useEffect(() => {
+    setSimListening(baselineListening);
+  }, [listeningSession?.id, baselineListening]);
+
+  useEffect(() => {
+    setSimReading(baselineReading);
+  }, [readingSession?.id, baselineReading]);
 
   const resetSimulation = () => {
     setSimListening(baselineListening);
@@ -53,25 +62,17 @@ export function WhatIfSimulator({
 
   // Calculate baseline scores
   const baselineScores = useMemo(() => {
-    const L = listeningSession ? estimateToeicSessionDualScore(listeningSession).strict.scaled : 0;
-    const R = readingSession ? estimateToeicSessionDualScore(readingSession).strict.scaled : 0;
+    const baselineListeningSession = buildSimulationSession(listeningSession, 'L', baselineListening);
+    const baselineReadingSession = buildSimulationSession(readingSession, 'R', baselineReading);
+    const L = estimateToeicSessionDualScore(baselineListeningSession).strict.scaled;
+    const R = estimateToeicSessionDualScore(baselineReadingSession).strict.scaled;
     return { L, R, T: L + R };
-  }, [listeningSession, readingSession]);
+  }, [baselineListening, baselineReading, listeningSession, readingSession]);
 
   // Calculate simulated scores using dummy sessions
   const simScores = useMemo(() => {
-    const dummyL = {
-      ...listeningSession,
-      status: 'debugged',
-      type: 'L',
-      mistakes: simListening,
-    } as SessionRecord;
-    const dummyR = {
-      ...readingSession,
-      status: 'debugged',
-      type: 'R',
-      mistakes: simReading,
-    } as SessionRecord;
+    const dummyL = buildSimulationSession(listeningSession, 'L', simListening);
+    const dummyR = buildSimulationSession(readingSession, 'R', simReading);
 
     const L = estimateToeicSessionDualScore(dummyL).strict.scaled;
     const R = estimateToeicSessionDualScore(dummyR).strict.scaled;
@@ -101,6 +102,13 @@ export function WhatIfSimulator({
               ? '如果你在某些重点题型少错几题，总分能提升多少？'
               : 'How much higher would you score if you made fewer mistakes in key sections?'}
           </p>
+          {lockedUnfinishedPenalty > 0 && (
+            <p className="mt-1 text-[12px] font-medium text-rose-500">
+              {locale === 'zh'
+                ? `已将 ${lockedUnfinishedPenalty} 题未完成题并入阅读错题基线。`
+                : `${lockedUnfinishedPenalty} unfinished items are merged into the reading mistake baseline.`}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-4 bg-white dark:bg-[#2C2C2E] p-3 rounded-2xl shadow-sm border border-black/5 dark:border-white/5">
           <div className="flex flex-col items-end">
@@ -131,6 +139,102 @@ export function WhatIfSimulator({
       </div>
     </div>
   );
+}
+
+function getStrictFullMistakeMap(type: 'L' | 'R') {
+  const parts = type === 'L' ? LISTENING_PARTS : READING_PARTS;
+
+  return Object.fromEntries(parts.map((part) => [part, PART_QUESTION_COUNTS[part]])) as Record<MistakeKey, number>;
+}
+
+function buildBaselineMistakeMap(session: SessionRecord | undefined, type: 'L' | 'R') {
+  if (!session || session.status === 'not-started') {
+    return getStrictFullMistakeMap(type);
+  }
+
+  const parts = type === 'L' ? LISTENING_PARTS : READING_PARTS;
+  const base = Object.fromEntries(parts.map((part) => [part, session.mistakes[part] ?? 0])) as Record<MistakeKey, number>;
+
+  if (type === 'R') {
+    return mergeUnfinishedIntoReadingMistakes(base, session.timerSummary?.unfinishedQuestions ?? 0);
+  }
+
+  return base;
+}
+
+function buildSimulationSession(
+  session: SessionRecord | undefined,
+  type: 'L' | 'R',
+  simulatedMistakes: Record<MistakeKey, number>
+) {
+  const fallback = {
+    id: `what-if-${type}`,
+    sprintDay: 0,
+    type,
+    setNumber: 0,
+    label: type,
+    title: type === 'L' ? 'Listening' : 'Reading',
+    targetMinutes: type === 'L' ? 45 : 75,
+    status: 'in-progress',
+    mistakes: {},
+    reasons: [],
+    readingLapTimes: {},
+  } as SessionRecord;
+
+  const base = session ?? fallback;
+  const lockAsAllWrong = !session || session.status === 'not-started';
+  const normalizedTimerSummary = type === 'R' && base.timerSummary
+    ? {
+        ...base.timerSummary,
+        unfinishedQuestions: 0,
+        resolvedUnfinished: true,
+      }
+    : base.timerSummary;
+
+  return {
+    ...base,
+    type,
+    status: lockAsAllWrong ? 'in-progress' : base.status,
+    mistakes: lockAsAllWrong
+      ? getStrictFullMistakeMap(type)
+      : simulatedMistakes,
+    timerSummary: lockAsAllWrong ? base.timerSummary : normalizedTimerSummary,
+  } as SessionRecord;
+}
+
+function mergeUnfinishedIntoReadingMistakes(
+  mistakes: Record<MistakeKey, number>,
+  unfinishedQuestions: number
+) {
+  const next = {
+    ...mistakes,
+  } as Record<MistakeKey, number>;
+
+  let remaining = Math.max(unfinishedQuestions, 0);
+  const fallbackOrder: Array<(typeof READING_PARTS)[number]> = [
+    'Part 7 Multiple',
+    'Part 7 Single',
+    'Part 6',
+    'Part 5',
+  ];
+
+  for (const part of fallbackOrder) {
+    if (remaining <= 0) {
+      break;
+    }
+
+    const current = next[part] ?? 0;
+    const capacity = PART_QUESTION_COUNTS[part] - current;
+    if (capacity <= 0) {
+      continue;
+    }
+
+    const assigned = Math.min(capacity, remaining);
+    next[part] = current + assigned;
+    remaining -= assigned;
+  }
+
+  return next;
 }
 
 function SliderGroup({

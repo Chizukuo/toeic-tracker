@@ -6,7 +6,9 @@ export type UXEventType =
   | 'overtime_saved'
   | 'auto_advance_triggered'
   | 'listening_start'
-  | 'listening_complete';
+  | 'listening_complete'
+  | 'overtime_start'
+  | 'overtime_stopped';
 
 export type UXEvent = {
   id: string;

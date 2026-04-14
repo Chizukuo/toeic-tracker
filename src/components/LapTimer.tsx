@@ -65,11 +65,14 @@ function toValidTime(value?: string) {
 
 function getInitialTimerState(session: SessionRecord, totalDurationMs: number): InitialTimerState {
   const runtime = session.timerRuntime;
+  const unresolvedBacklog = session.type === 'R'
+    && (session.timerSummary?.unfinishedQuestions ?? 0) > 0
+    && !hasResolvedUnfinished(session);
   const unfinishedDraft = runtime?.unfinishedQuestionsDraft ?? (session.timerSummary?.unfinishedQuestions ? String(session.timerSummary.unfinishedQuestions) : '');
 
   if (!runtime) {
     return {
-      timeLeft: totalDurationMs,
+      timeLeft: unresolvedBacklog ? 0 : totalDurationMs,
       isRunning: false,
       readingLapTimes: {},
       currentLapIndex: 0,
@@ -564,6 +567,42 @@ function ReadingTimer({
     trackUXEvent('timer_started', session.id);
   };
 
+  const startBacklogResolutionTimer = () => {
+    const now = Date.now();
+    const lockedUnfinished = Math.max(session.timerSummary?.unfinishedQuestions ?? 0, 0);
+
+    startedAtRef.current = toValidTime(session.timerSummary?.completedAt) ?? now;
+    lapStartedAtRef.current = null;
+    overtimeStartedAtRef.current = now;
+
+    setTimeLeft(0);
+    setIsRunning(true);
+    setIsOvertime(true);
+    setOvertimeElapsedMs(0);
+    setPendingSubmit(null);
+    setShowTimeoutDialog(false);
+    setLapUndo(null);
+    setUnfinishedQuestions(String(lockedUnfinished));
+
+    patchSession(session.id, {
+      status: 'in-progress',
+      readingLapTimes,
+      timerRuntime: {
+        startedAt: new Date(startedAtRef.current).toISOString(),
+        lapStartedAt: undefined,
+        currentLapIndex,
+        readingLapTimes,
+        unfinishedQuestionsDraft: String(lockedUnfinished),
+        timeLeftMs: 0,
+        isOvertime: true,
+        overtimeStartedAt: new Date(now).toISOString(),
+        overtimeElapsedMs: 0,
+      },
+    });
+
+    trackUXEvent('overtime_start', session.id);
+  };
+
   const captureLap = () => {
     if (!currentSegment || !lapStartedAtRef.current) {
       return;
@@ -714,6 +753,34 @@ function ReadingTimer({
     setOvertimeElapsedMs(0);
   };
 
+  const stopOvertimeTimer = () => {
+    const finalElapsed = overtimeStartedAtRef.current
+      ? Math.max(Date.now() - overtimeStartedAtRef.current, 0)
+      : overtimeElapsedMs;
+
+    patchSession(session.id, {
+      status: 'in-progress',
+      timerSummary: session.timerSummary
+        ? {
+            ...session.timerSummary,
+            overtimeElapsedMs: finalElapsed,
+          }
+        : session.timerSummary,
+      timerRuntime: undefined,
+    });
+
+    overtimeStartedAtRef.current = null;
+    setIsRunning(false);
+    setIsOvertime(false);
+    setPendingSubmit(null);
+    setShowTimeoutDialog(false);
+    setTimeLeft(0);
+    setOvertimeElapsedMs(finalElapsed);
+    setLapUndo(null);
+    onStrictAttemptSaved?.(session.id);
+    trackUXEvent('overtime_stopped', session.id);
+  };
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -789,17 +856,23 @@ function ReadingTimer({
           {!timerRunning && !pendingSubmit && !overtimeMode && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <Button
-                onClick={startTimer}
+                onClick={unresolvedBacklog ? startBacklogResolutionTimer : startTimer}
                 size="lg"
                 className={cn(
                   'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
-                  isListening
+                  unresolvedBacklog
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : isListening
                     ? 'bg-red-500 text-white hover:bg-red-600'
                     : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
                 )}
               >
-                <Play className="mr-2 size-5 fill-current" />
-                {session.timerSummary ? copy.restartStrictAttempt : copy.startStrictAttempt}
+                {unresolvedBacklog ? <Clock3 className="mr-2 size-5" /> : <Play className="mr-2 size-5 fill-current" />}
+                {unresolvedBacklog
+                  ? (locale === 'zh' ? '开始补录计时' : 'Start Overtime Timer')
+                  : session.timerSummary
+                    ? copy.restartStrictAttempt
+                    : copy.startStrictAttempt}
               </Button>
             </motion.div>
           )}
@@ -844,6 +917,19 @@ function ReadingTimer({
                    <span className="hidden sm:inline">{copy.forceSubmit}</span>
                  </Button>
                </div>
+            </motion.div>
+          )}
+
+          {timerRunning && overtimeMode && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex w-full sm:w-auto items-center justify-center">
+              <Button
+                size="lg"
+                onClick={stopOvertimeTimer}
+                className="h-14 rounded-full bg-red-500 text-white hover:bg-red-600 px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
+              >
+                <CheckCircle2 className="mr-2 size-5" />
+                {locale === 'zh' ? '结束补录计时' : 'Stop Overtime Timer'}
+              </Button>
             </motion.div>
           )}
         </div>

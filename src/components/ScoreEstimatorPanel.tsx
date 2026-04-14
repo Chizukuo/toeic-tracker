@@ -63,6 +63,21 @@ type HistoricalTrendPoint = {
   note?: string;
 };
 
+type ScoreTrendChartPoint = {
+  label: string;
+  fullDate: string;
+  timestamp: number;
+  estimatedScore?: number;
+  potentialScore?: number;
+  historicalScore?: number;
+  active?: boolean;
+  listening?: number;
+  reading?: number;
+  total?: number;
+  source?: 'manual' | 'estimated' | 'auto-estimated';
+  setLabel?: string;
+};
+
 type PartBreakdownItem = {
   label: string;
   mistakes: number;
@@ -214,6 +229,102 @@ export function ScoreEstimatorPanel() {
     }));
   }, [deferredHistoricalScores, locale]);
 
+  const inferredEstimateDate = useMemo(
+    () => getPairCompletionDate(selectedPairListening, selectedPairReading),
+    [selectedPairListening, selectedPairReading]
+  );
+
+  const estimatedTimeline = useMemo<ScoreTrendChartPoint[]>(() => {
+    if (mode === 'L') {
+      return listeningSessions
+        .map((session) => {
+          const estimate = dualEstimateMap.get(session.id);
+          const fullDate = getSessionCompletionDate(session);
+          const timestamp = fullDate ? dateKeyToTimestamp(fullDate) : Number.NaN;
+
+          if (!estimate?.strict.available || !fullDate || Number.isNaN(timestamp)) {
+            return null;
+          }
+
+          return {
+            label: formatShortDate(fullDate, locale),
+            fullDate,
+            timestamp,
+            estimatedScore: estimate.strict.scaled,
+            potentialScore: estimate.potential.available ? estimate.potential.scaled : undefined,
+            active: session.id === selectedListeningId,
+            source: 'auto-estimated' as const,
+            setLabel: session.label,
+          } as ScoreTrendChartPoint;
+        })
+        .filter((point) => point !== null)
+        .sort((left, right) => left!.timestamp - right!.timestamp) as ScoreTrendChartPoint[];
+    }
+
+    if (mode === 'R') {
+      return readingSessions
+        .map((session) => {
+          const estimate = dualEstimateMap.get(session.id);
+          const fullDate = getSessionCompletionDate(session);
+          const timestamp = fullDate ? dateKeyToTimestamp(fullDate) : Number.NaN;
+
+          if (!estimate?.strict.available || !fullDate || Number.isNaN(timestamp)) {
+            return null;
+          }
+
+          return {
+            label: formatShortDate(fullDate, locale),
+            fullDate,
+            timestamp,
+            estimatedScore: estimate.strict.scaled,
+            potentialScore: estimate.potential.available ? estimate.potential.scaled : undefined,
+            active: session.id === selectedReadingId,
+            source: 'auto-estimated' as const,
+            setLabel: session.label,
+          } as ScoreTrendChartPoint;
+        })
+        .filter((point) => point !== null)
+        .sort((left, right) => left!.timestamp - right!.timestamp) as ScoreTrendChartPoint[];
+    }
+
+    const pairCount = Math.max(listeningSessions.length, readingSessions.length);
+    return Array.from({ length: pairCount }, (_, index) => {
+      const setNumber = index + 1;
+      const listening = sessionMap.get(`L${setNumber}`);
+      const reading = sessionMap.get(`R${setNumber}`);
+      const estimateCombined = estimateToeicCombinedDualScore(listening, reading);
+      const fullDate = getPairCompletionDate(listening, reading);
+      const timestamp = fullDate ? dateKeyToTimestamp(fullDate) : Number.NaN;
+
+      if (!estimateCombined.strict.available || !fullDate || Number.isNaN(timestamp)) {
+        return null;
+      }
+
+      return {
+        label: formatShortDate(fullDate, locale),
+        fullDate,
+        timestamp,
+        estimatedScore: estimateCombined.strict.total,
+        potentialScore: estimateCombined.potential.available ? estimateCombined.potential.total : undefined,
+        active: selectedPair === `${setNumber}`,
+        source: 'auto-estimated' as const,
+        setLabel: `S${setNumber}`,
+      } as ScoreTrendChartPoint;
+    })
+      .filter((point) => point !== null)
+      .sort((a, b) => a!.timestamp - b!.timestamp) as ScoreTrendChartPoint[];
+  }, [
+    dualEstimateMap,
+    listeningSessions,
+    locale,
+    mode,
+    readingSessions,
+    selectedListeningId,
+    selectedPair,
+    selectedReadingId,
+    sessionMap,
+  ]);
+
   const manualTotalPreview = safeNumber(historyListening) + safeNumber(historyReading);
 
   const activeSummary = useMemo<ActiveSummary | null>(() => {
@@ -274,6 +385,74 @@ export function ScoreEstimatorPanel() {
     totalTrend,
   ]);
 
+  const scoreTrendData = useMemo<ScoreTrendChartPoint[]>(() => {
+    const historyTrend = historicalTrend
+      .map((point) => {
+        const timestamp = dateKeyToTimestamp(point.fullDate);
+        if (Number.isNaN(timestamp)) {
+          return null;
+        }
+
+        return {
+          label: point.label,
+          fullDate: point.fullDate,
+          timestamp,
+          historicalScore: mode === 'L' ? point.listening : mode === 'R' ? point.reading : point.total,
+          listening: point.listening,
+          reading: point.reading,
+          total: point.total,
+          source: point.source,
+        } as ScoreTrendChartPoint;
+      })
+      .filter((point) => point !== null) as ScoreTrendChartPoint[];
+
+    const mergedByDate = new Map<string, ScoreTrendChartPoint>();
+
+    const upsertPoint = (point: ScoreTrendChartPoint) => {
+      const existing = mergedByDate.get(point.fullDate);
+      if (!existing) {
+        mergedByDate.set(point.fullDate, { ...point });
+        return;
+      }
+
+      mergedByDate.set(point.fullDate, {
+        ...existing,
+        ...point,
+        label: existing.label,
+        fullDate: existing.fullDate,
+        timestamp: existing.timestamp,
+        estimatedScore: point.estimatedScore ?? existing.estimatedScore,
+        potentialScore: point.potentialScore ?? existing.potentialScore,
+        historicalScore: point.historicalScore ?? existing.historicalScore,
+        active: Boolean(existing.active || point.active),
+        listening: point.listening ?? existing.listening,
+        reading: point.reading ?? existing.reading,
+        total: point.total ?? existing.total,
+      });
+    };
+
+    estimatedTimeline.forEach(upsertPoint);
+    historyTrend.forEach(upsertPoint);
+
+    return [...mergedByDate.values()].sort((left, right) => left.timestamp - right.timestamp);
+  }, [estimatedTimeline, historicalTrend, mode]);
+
+  const estimatedLineLabel = mode === 'L'
+    ? (locale === 'zh' ? '自动估分听力' : 'Auto Estimated Listening')
+    : mode === 'R'
+      ? (locale === 'zh' ? '自动估分阅读' : 'Auto Estimated Reading')
+      : (locale === 'zh' ? '自动估分总分' : 'Auto Estimated Total');
+
+  const estimatedLineColor = mode === 'L' ? '#f59e0b' : mode === 'R' ? '#38bdf8' : '#ef4444';
+
+  const historicalLineLabel = mode === 'L'
+    ? (locale === 'zh' ? '历史听力' : 'Historical Listening')
+    : mode === 'R'
+      ? (locale === 'zh' ? '历史阅读' : 'Historical Reading')
+      : (locale === 'zh' ? '历史总分' : 'Historical Total');
+
+  const historicalLineColor = mode === 'L' ? '#f59e0b' : mode === 'R' ? '#38bdf8' : '#ef4444';
+
   function handleAddHistoricalScore() {
     if (!historyDate) {
       return;
@@ -294,7 +473,7 @@ export function ScoreEstimatorPanel() {
     if (!pairStrictEstimate.available || !pairStrictEstimate.listening || !pairStrictEstimate.reading) return;
     startTransition(() => {
       addHistoricalScore({
-        date: historyDate || getTodayDateLocal(),
+        date: historyDate || inferredEstimateDate || getTodayDateLocal(),
         listening: pairStrictEstimate.listening!.scaled,
         reading: pairStrictEstimate.reading!.scaled,
         total: pairStrictEstimate.total,
@@ -487,13 +666,32 @@ export function ScoreEstimatorPanel() {
           </div>
           
           <div className="flex-1 min-h-80">
-            {historicalTrend.length > 0 || (activeSummary && activeSummary.chart.length > 0) ? (
+            {scoreTrendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={historicalTrend.length > 0 ? historicalTrend : activeSummary?.chart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={scoreTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 4" stroke="currentColor" opacity={0.04} vertical={false} />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} dy={10} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} domain={['dataMin - 20', 'dataMax + 20']} dx={-10} />
-                  <Tooltip
+                  <Tooltip<number, string>
+                    labelFormatter={(_, payload: any[]) => {
+                      const point = payload?.[0]?.payload as ScoreTrendChartPoint | undefined;
+                      return point?.fullDate ?? '';
+                    }}
+                    formatter={(value: number, name: string, item: any) => {
+                      const point = item?.payload as ScoreTrendChartPoint | undefined;
+                      const sourceLabel = point?.source === 'auto-estimated'
+                        ? (locale === 'zh' ? '自动估分' : 'Auto Estimated')
+                        : point?.source === 'estimated'
+                          ? (locale === 'zh' ? '已保存估分' : 'Saved Estimate')
+                          : point?.source === 'manual'
+                            ? (locale === 'zh' ? '正式记录' : 'Official Record')
+                            : undefined;
+
+                      return [
+                        `${value}`,
+                        sourceLabel ? `${name} · ${sourceLabel}` : name,
+                      ];
+                    }}
                     contentStyle={{
                       background: 'rgba(255, 255, 255, 0.85)',
                       backdropFilter: 'blur(20px)',
@@ -506,7 +704,7 @@ export function ScoreEstimatorPanel() {
                     }}
                     itemStyle={{ color: '#18181b', fontWeight: 600 }}
                   />
-                  {(historicalTrend.length > 0 || mode === 'T') && (
+                  {mode === 'T' && (
                     <>
                       <ReferenceArea y1={120} y2={220} fill="#f43f5e" fillOpacity={0.03} />
                       <ReferenceArea y1={225} y2={545} fill="#f97316" fillOpacity={0.03} />
@@ -515,33 +713,25 @@ export function ScoreEstimatorPanel() {
                       <ReferenceArea y1={945} y2={990} fill="#3b82f6" fillOpacity={0.03} />
                     </>
                   )}
-                  {historicalTrend.length > 0 ? (
-                    <>
-                      <Line key="total" type="monotone" dataKey="total" name={locale === 'zh' ? '总分' : 'Total'} stroke="#ef4444" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 7, strokeWidth: 0 }} />
-                      <Line key="listening" type="monotone" dataKey="listening" name={locale === 'zh' ? '听力' : 'Listening'} stroke="#f59e0b" strokeWidth={2.5} strokeOpacity={0.6} dot={false} />
-                      <Line key="reading" type="monotone" dataKey="reading" name={locale === 'zh' ? '阅读' : 'Reading'} stroke="#38bdf8" strokeWidth={2.5} strokeOpacity={0.6} dot={false} />
-                    </>
-                  ) : (
+
+                  {estimatedTimeline.length > 0 ? (
                     <>
                       <Line
-                        key="active-score"
+                        key="estimated-score"
                         type="monotone"
-                        dataKey="score"
-                        name={mode === 'L' ? copy.scoreListeningLabel : mode === 'R' ? copy.scoreReadingLabel : copy.scoreTotalLabel}
-                        stroke={activeSummary?.color || "#18181b"}
+                        dataKey="estimatedScore"
+                        name={estimatedLineLabel}
+                        stroke={estimatedLineColor}
                         strokeWidth={3}
-                        dot={(props) => {
-                          const { cx, cy, payload, index } = props;
-                          if (cx === undefined || cy === undefined || !payload) return <g key={`dot-empty-${index}`} />;
-                          return <circle key={`dot-${payload.label}-${index}`} cx={cx} cy={cy} r={payload.active ? 7 : 4} fill={payload.active ? (activeSummary?.color || "#18181b") : '#fff'} stroke={activeSummary?.color || "#18181b"} strokeWidth={2} />;
-                        }}
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                        activeDot={{ r: 7, strokeWidth: 0 }}
                       />
                       <Line
-                        key="active-potential"
+                        key="estimated-potential"
                         type="monotone"
                         dataKey="potentialScore"
-                        name={locale === 'zh' ? '最高潜力' : 'Potential'}
-                        stroke={activeSummary?.color || "#18181b"}
+                        name={locale === 'zh' ? '估分潜力' : 'Estimated Potential'}
+                        stroke={estimatedLineColor}
                         strokeWidth={2}
                         strokeDasharray="4 4"
                         strokeOpacity={0.4}
@@ -549,6 +739,20 @@ export function ScoreEstimatorPanel() {
                         activeDot={false}
                       />
                     </>
+                  ) : null}
+
+                  {historicalTrend.length > 0 && (
+                    <Line
+                      key="historical-score"
+                      type="monotone"
+                      dataKey="historicalScore"
+                      name={historicalLineLabel}
+                      stroke={historicalLineColor}
+                      strokeWidth={2.5}
+                      strokeOpacity={0.75}
+                      dot={{ r: 3.5, strokeWidth: 1.5, fill: '#fff' }}
+                      activeDot={{ r: 6, strokeWidth: 0 }}
+                    />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -592,9 +796,16 @@ export function ScoreEstimatorPanel() {
                 {locale === 'zh' ? '保存至成绩单' : 'Save to Vault'}
               </Button>
               {canAutoRecordEstimate && (
-                <Button variant="outline" onClick={handleAutoAddEstimatedScore} className="w-full rounded-[14px] border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#1C1C1E] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 h-11 font-medium transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]">
-                  {locale === 'zh' ? '快捷保存当前估分' : 'Quick Save Estimate'}
-                </Button>
+                <div className="space-y-1.5">
+                  <Button variant="outline" onClick={handleAutoAddEstimatedScore} className="w-full rounded-[14px] border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#1C1C1E] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 h-11 font-medium transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]">
+                    {locale === 'zh' ? '快捷保存当前估分' : 'Quick Save Estimate'}
+                  </Button>
+                  <p className="text-[11px] text-zinc-400">
+                    {locale === 'zh'
+                      ? `日期自动读取：${inferredEstimateDate ?? getTodayDateLocal()}（可手动覆盖）`
+                      : `Auto date: ${inferredEstimateDate ?? getTodayDateLocal()} (editable)`}
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -900,6 +1111,46 @@ function confidenceBadgeClassName(tone: ConfidenceSummary['tone']) {
 function formatShortDate(value: string, locale: 'zh' | 'en') {
   const date = new Date(`${value}T00:00:00`);
   return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' }).format(date);
+}
+
+function dateKeyToTimestamp(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).getTime();
+}
+
+function toLocalDateKeyFromInstant(instant: string) {
+  const date = new Date(instant);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getSessionCompletionDate(session?: SessionRecord) {
+  if (!session?.timerSummary?.completedAt) {
+    return undefined;
+  }
+
+  return toLocalDateKeyFromInstant(session.timerSummary.completedAt);
+}
+
+function getPairCompletionDate(listening?: SessionRecord, reading?: SessionRecord) {
+  const listeningDate = getSessionCompletionDate(listening);
+  const readingDate = getSessionCompletionDate(reading);
+
+  if (!listeningDate && !readingDate) {
+    return undefined;
+  }
+
+  if (!listeningDate) {
+    return readingDate;
+  }
+
+  if (!readingDate) {
+    return listeningDate;
+  }
+
+  return readingDate > listeningDate ? readingDate : listeningDate;
 }
 
 function getTodayDateLocal() {

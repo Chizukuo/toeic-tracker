@@ -20,13 +20,12 @@ import {
   YAxis,
   Bar,
 } from 'recharts';
-import { TrendingDown, TrendingUp, Minus, AlertCircle } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, AlertCircle, Sparkles } from 'lucide-react';
 
 import {
   getAnalyticsDataConfidence,
-  getIncorrectAnswers,
   getSessionPartLossMap,
-  getPartsForType,
+  hasRecordedSessionData,
   LISTENING_PARTS,
   type AnalyticsConfidence,
   type MistakeKey,
@@ -90,19 +89,18 @@ export function AnalyticsDashboard() {
     const partMistakes = new Map<string, number>();
     const partAttempts = new Map<string, number>();
     const reasonCounts = new Map<string, number>();
+    const fullListeningLossMap = Object.fromEntries(
+      LISTENING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
+    ) as Partial<Record<MistakeKey, number>>;
+    const fullReadingLossMap = Object.fromEntries(
+      READING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
+    ) as Partial<Record<MistakeKey, number>>;
     let totalTrackedLoss = 0;
     let recordedSessions = 0;
 
     for (const session of deferredSessions) {
-      if (session.status !== 'not-started') {
+      if (hasRecordedSessionData(session)) {
         recordedSessions += 1;
-        const partLossMap = getSessionPartLossMap(session);
-
-        for (const part of getPartsForType(session.type)) {
-          partAttempts.set(part, (partAttempts.get(part) ?? 0) + 1);
-          partMistakes.set(part, (partMistakes.get(part) ?? 0) + partLossMap[part]);
-          totalTrackedLoss += partLossMap[part];
-        }
       }
 
       for (const reason of session.reasons) {
@@ -115,16 +113,53 @@ export function AnalyticsDashboard() {
       const setNumber = index + 1;
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
-      const listeningLoss = listening && listening.status !== 'not-started' ? getIncorrectAnswers(listening) : undefined;
-      const readingLoss = reading && reading.status !== 'not-started' ? getIncorrectAnswers(reading) : undefined;
+      const listeningRecorded = listening ? hasRecordedSessionData(listening) : false;
+      const readingRecorded = reading ? hasRecordedSessionData(reading) : false;
+      const pairHasData = listeningRecorded || readingRecorded;
+
+      const listeningLossMap = listeningRecorded && listening
+        ? getSessionPartLossMap(listening)
+        : pairHasData && listening
+          ? fullListeningLossMap
+          : undefined;
+      const readingLossMap = readingRecorded && reading
+        ? getSessionPartLossMap(reading)
+        : pairHasData && reading
+          ? fullReadingLossMap
+          : undefined;
+
+      const listeningLoss = listeningLossMap
+        ? LISTENING_PARTS.reduce((sum, part) => sum + (listeningLossMap[part] ?? 0), 0)
+        : undefined;
+      const readingLoss = readingLossMap
+        ? READING_PARTS.reduce((sum, part) => sum + (readingLossMap[part] ?? 0), 0)
+        : undefined;
       const hasAnyData = listeningLoss !== undefined || readingLoss !== undefined;
 
-      const listeningMistakes: Record<string, number> = listening && listening.status !== 'not-started'
-        ? Object.fromEntries(Object.entries(listening.mistakes))
+      const listeningMistakes: Record<string, number> = listeningLossMap
+        ? Object.fromEntries(LISTENING_PARTS.map((part) => [part, listeningLossMap[part] ?? 0]))
         : {};
-      const readingMistakes: Record<string, number> = reading && reading.status !== 'not-started'
-        ? Object.fromEntries(Object.entries(reading.mistakes))
+      const readingMistakes: Record<string, number> = readingLossMap
+        ? Object.fromEntries(READING_PARTS.map((part) => [part, readingLossMap[part] ?? 0]))
         : {};
+
+      if (listeningLossMap) {
+        for (const part of LISTENING_PARTS) {
+          const loss = listeningLossMap[part] ?? 0;
+          partAttempts.set(part, (partAttempts.get(part) ?? 0) + 1);
+          partMistakes.set(part, (partMistakes.get(part) ?? 0) + loss);
+          totalTrackedLoss += loss;
+        }
+      }
+
+      if (readingLossMap) {
+        for (const part of READING_PARTS) {
+          const loss = readingLossMap[part] ?? 0;
+          partAttempts.set(part, (partAttempts.get(part) ?? 0) + 1);
+          partMistakes.set(part, (partMistakes.get(part) ?? 0) + loss);
+          totalTrackedLoss += loss;
+        }
+      }
 
       return {
         set: `S${setNumber}`,
@@ -474,26 +509,26 @@ function HeaderInsight({ locale, confidence, summary, radarSummary }: { locale: 
   const riskLabel = confidence.issues[0] ? formatConfidenceIssue(locale, confidence.issues[0]) : null;
 
   return (
-    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
-      <div>
-        <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {locale === 'zh' ? '分析洞察' : 'Insights'}
-        </h1>
-        <p className="mt-1 text-[15px] text-zinc-500 dark:text-zinc-400">
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2 bg-zinc-50 dark:bg-[#1C1C1E] border border-black/5 dark:border-white/5 p-4 rounded-[16px] shadow-sm">
+      <div className="flex flex-1 items-center gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100/50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500">
+          <Sparkles className="size-5" />
+        </div>
+        <p className="text-[14px] font-medium text-zinc-700 dark:text-zinc-300 leading-snug">
           {buildHeroInsight(locale, summary, radarSummary)}
         </p>
       </div>
 
-      <div className="flex items-center gap-3 text-[13px] shrink-0">
+      <div className="flex items-center gap-3 text-[13px] shrink-0 bg-white dark:bg-[#2C2C2E] px-3 py-1.5 rounded-full border border-black/5 dark:border-white/5 shadow-sm">
         <span className={cn(
           "font-medium",
           isHigh ? "text-emerald-600 dark:text-emerald-400" : isMedium ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"
         )}>
-          {isHigh ? (locale === 'zh' ? '高可信度数据' : 'Stable Data') : isMedium ? (locale === 'zh' ? '中等可信度' : 'Usable Data') : (locale === 'zh' ? '数据不足' : 'Sparse Data')}
+          {isHigh ? (locale === 'zh' ? '高可信度' : 'Stable Data') : isMedium ? (locale === 'zh' ? '中等可信度' : 'Usable Data') : (locale === 'zh' ? '数据不足' : 'Sparse Data')}
         </span>
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
-        <span className="text-zinc-500 dark:text-zinc-400">
-          {confidence.recordedSessions} {locale === 'zh' ? '套测验' : 'sets'}
+        <span className="text-zinc-500 dark:text-zinc-400 font-medium">
+          {confidence.recordedSessions} <span className="font-normal">{locale === 'zh' ? '套测验' : 'sets'}</span>
         </span>
         {riskLabel && (
           <>

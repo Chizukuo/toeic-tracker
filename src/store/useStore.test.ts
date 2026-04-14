@@ -158,6 +158,43 @@ describe('useStore snapshot compatibility', () => {
     expect(nextState.sessions.find((session) => session.id === 'R4')?.timerSummary?.unfinishedQuestions).toBe(4);
   });
 
+  it('keeps existing vocabulary when imported snapshot omits vocabulary entries', () => {
+    const state = useStore.getState();
+
+    state.addVocabularyEntry({
+      text: 'board meeting',
+      definition: 'a formal meeting of directors',
+      sessionIds: ['R2'],
+      encounterCount: 2,
+      tags: [],
+    });
+
+    const existingVocabulary = useStore.getState().vocabularyEntries;
+    const sessions = createInitialSessions();
+
+    const result = state.importSnapshot({
+      app: SNAPSHOT_APP,
+      version: SNAPSHOT_VERSION,
+      meta: {
+        schema: 'cheese-toeic-snapshot',
+        snapshotVersion: SNAPSHOT_VERSION,
+        exportedFromStorageVersion: STORAGE_VERSION,
+        minimumReaderVersion: 1,
+      },
+      exportedAt: '2026-03-12T00:00:00.000Z',
+      data: {
+        sessions,
+        activeSessionId: 'L1',
+        locale: 'en',
+        examDate: '2026-06-20',
+        historicalScores: [],
+      },
+    });
+
+    expect(result.source).toBe('snapshot');
+    expect(useStore.getState().vocabularyEntries).toEqual(existingVocabulary);
+  });
+
   it('migrates legacy records into modern sessions and preserves compatible fields', () => {
     const result = useStore.getState().importSnapshot({
       records: [

@@ -414,6 +414,9 @@ export function parseImportSnapshot(
     typeof source.activeSessionId === 'string' && sessions.some((session) => session.id === source.activeSessionId)
       ? source.activeSessionId
       : 'L1';
+  const hasVocabularyEntriesPayload = isObjectRecord(source)
+    ? Object.prototype.hasOwnProperty.call(source, 'vocabularyEntries')
+    : false;
 
   return {
     sessions,
@@ -422,10 +425,12 @@ export function parseImportSnapshot(
     examDate: normalizeExamDate(source.examDate),
     historicalScores: normalizeHistoricalScores(source.historicalScores),
     sprintConfig: normalizeSprintConfig(source.sprintConfig),
-    vocabularyEntries: recoverVocabularyProvenance(
-      normalizeVocabularyEntries(source.vocabularyEntries),
-      currentState
-    ),
+    vocabularyEntries: hasVocabularyEntriesPayload
+      ? recoverVocabularyProvenance(
+          normalizeVocabularyEntries(source.vocabularyEntries),
+          currentState
+        )
+      : currentState?.vocabularyEntries ?? [],
     unlockedAchievements: normalizeUnlockedAchievements(source.unlockedAchievements),
     result: {
       source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',

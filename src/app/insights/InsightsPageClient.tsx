@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 
 import { DashboardShell, DeferredPanelPlaceholder, useDashboardContext } from '@/components/DashboardShell';
 import { cn } from '@/lib/utils';
-import { Activity, Calculator, ListChecks } from 'lucide-react';
+import { Activity, Calculator, ListChecks, Timer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AnalyticsDashboard = dynamic(
@@ -23,7 +23,12 @@ const UnfinishedTrackerPanel = dynamic(
   { loading: () => <DeferredPanelPlaceholder /> }
 );
 
-type InsightsTab = 'condition' | 'prediction' | 'action';
+const TimeAnalyticsPanel = dynamic(
+  () => import('@/app/insights/TimeAnalyticsPanel').then((m) => m.TimeAnalyticsPanel),
+  { loading: () => <DeferredPanelPlaceholder /> }
+);
+
+type InsightsTab = 'condition' | 'prediction' | 'action' | 'time';
 
 const tabMeta: Record<InsightsTab, { zh: string; en: string; desc_zh: string; desc_en: string; icon: typeof Activity }> = {
   condition: {
@@ -39,6 +44,13 @@ const tabMeta: Record<InsightsTab, { zh: string; en: string; desc_zh: string; de
     desc_zh: '分数估算与 CEFR 分级 — 预测考试表现',
     desc_en: 'Score estimation with CEFR projection',
     icon: Calculator,
+  },
+  time: {
+    zh: '用时',
+    en: 'Pacing',
+    desc_zh: '做题时间分布与速度短板分析 — 优化你的时间分配',
+    desc_en: 'Time distribution & pacing analysis',
+    icon: Timer,
   },
   action: {
     zh: '行动',
@@ -61,7 +73,7 @@ function InsightsContent() {
   const { locale } = useDashboardContext();
   const [tab, setTab] = useState<InsightsTab>('condition');
 
-  const tabs: InsightsTab[] = ['condition', 'prediction', 'action'];
+  const tabs: InsightsTab[] = ['condition', 'prediction', 'time', 'action'];
   const currentMeta = tabMeta[tab];
 
   return (
@@ -110,17 +122,19 @@ function InsightsContent() {
         </div>
       </div>
 
-      {/* Tab content with transition */}
+      {/* Content wrapper with transition */}
       <AnimatePresence mode="wait">
         <motion.div
           key={tab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.25 }}
+          initial={{ opacity: 0, y: 12, filter: 'blur(4px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, y: -12, filter: 'blur(4px)' }}
+          transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+          className="w-full"
         >
           {tab === 'condition' && <AnalyticsDashboard />}
           {tab === 'prediction' && <ScoreEstimatorPanel />}
+          {tab === 'time' && <TimeAnalyticsPanel />}
           {tab === 'action' && <UnfinishedTrackerPanel />}
         </motion.div>
       </AnimatePresence>

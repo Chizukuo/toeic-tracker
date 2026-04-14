@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
@@ -23,69 +23,69 @@ export function ActivityCalendar() {
   const [hoverStyle, setHoverStyle] = useState({ x: 0, y: 0, opacity: 0 });
   const [hoverData, setHoverData] = useState<{ dateStr: string; count: number } | null>(null);
 
-  // Generate the last 84 days (12 weeks * 7 days)
-  const countsByDate = new Map<string, number>();
+  const heatmapData = useMemo(() => {
+    const countsByDate = new Map<string, number>();
 
-  for (const session of sessions) {
-    if (session.status === 'debugged' && session.timerSummary?.completedAt) {
-      const dateStr = session.timerSummary.completedAt.split('T')[0];
-      countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
-    }
-  }
-
-  for (const score of historicalScores) {
-    const dateStr = score.date;
-    countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
-  }
-
-  const today = new Date();
-  // Use local timezone to map the days, to match exactly what the user sees as 'today'
-  const days = 84;
-
-  const results = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-    const count = countsByDate.get(dateStr) ?? 0;
-    results.push({
-      dateStr,
-      count,
-      level: Math.min(count, 4), // Cap at level 4 for colors
-    });
-  }
-
-  // group by week (7 days each)
-  const weeks = [];
-  for (let i = 0; i < results.length; i += 7) {
-    weeks.push(results.slice(i, i + 7));
-  }
-
-  const heatmapData = { weeks, maxStreak: calculateStreak(countsByDate) };
-
-  // Streak calculation
-  function calculateStreak(countsByDate: Map<string, number>) {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-    
-    if (!countsByDate.has(todayStr) && !countsByDate.has(yesterdayStr)) return 0;
-
-    let streak = 0;
-    let checkDate = countsByDate.has(todayStr) ? today : yesterday;
-    
-    let hasActiveDay = true;
-    while (hasActiveDay) {
-      const checkStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      if (countsByDate.has(checkStr)) {
-        streak++;
-        checkDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - 1);
-      } else {
-        hasActiveDay = false;
+    for (const session of sessions) {
+      if (session.status === 'debugged' && session.timerSummary?.completedAt) {
+        const dateStr = session.timerSummary.completedAt.split('T')[0];
+        countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
       }
     }
-    return streak;
-  }
+
+    for (const score of historicalScores) {
+      const dateStr = score.date;
+      countsByDate.set(dateStr, (countsByDate.get(dateStr) ?? 0) + 1);
+    }
+
+    const today = new Date();
+    // Use local timezone to map the days, to match exactly what the user sees as 'today'
+    const days = 84;
+
+    const results = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+      const count = countsByDate.get(dateStr) ?? 0;
+      results.push({
+        dateStr,
+        count,
+        level: Math.min(count, 4), // Cap at level 4 for colors
+      });
+    }
+
+    // group by week (7 days each)
+    const weeks = [];
+    for (let i = 0; i < results.length; i += 7) {
+      weeks.push(results.slice(i, i + 7));
+    }
+
+    // Streak calculation
+    function calculateStreak() {
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+      
+      if (!countsByDate.has(todayStr) && !countsByDate.has(yesterdayStr)) return 0;
+
+      let streak = 0;
+      let checkDate = countsByDate.has(todayStr) ? today : yesterday;
+      
+      let hasActiveDay = true;
+      while (hasActiveDay) {
+        const checkStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+        if (countsByDate.has(checkStr)) {
+          streak++;
+          checkDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - 1);
+        } else {
+          hasActiveDay = false;
+        }
+      }
+      return streak;
+    }
+
+    return { weeks, maxStreak: calculateStreak() };
+  }, [sessions, historicalScores]);
 
   // Effect to hide tooltip on scroll to prevent detachment
   useEffect(() => {

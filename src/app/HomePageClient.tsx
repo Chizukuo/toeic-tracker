@@ -1,20 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
-import { ActivityCalendar } from '@/components/ActivityCalendar';
-import { WeeklyReport } from '@/components/WeeklyReport';
 import { getNextStepRecommendation } from '@/lib/nextStep';
 import { estimateToeicCombinedScore, type MistakeKey } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 import { MissionConfigDialog } from '@/components/MissionConfigDialog';
-import { useState } from 'react';
+
+const ActivityCalendar = dynamic(() => import('@/components/ActivityCalendar').then(mod => mod.ActivityCalendar));
+const WeeklyReport = dynamic(() => import('@/components/WeeklyReport').then(mod => mod.WeeklyReport));
 
 export default function HomePageClient() {
   return (
