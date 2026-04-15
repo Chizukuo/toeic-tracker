@@ -991,7 +991,7 @@ function ReadingTimer({
                  className="h-16 px-10 rounded-full border-red-200 bg-white/70 text-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.15)] backdrop-blur-md hover:bg-white dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
                >
                  <CheckCircle2 className="size-5 sm:mr-2" />
-                 <span className="hidden sm:inline font-bold text-lg tracking-wide">{locale === 'zh' ? '??' : 'Submit Test'}</span>
+                 <span className="hidden sm:inline font-bold text-lg tracking-wide">{locale === 'zh' ? '交卷' : 'Submit Test'}</span>
                </Button>
             </motion.div>
           )}
@@ -1075,8 +1075,8 @@ function ReadingTimer({
                             : 'border-sky-300/70 bg-sky-100/80 text-sky-700 dark:border-sky-700/70 dark:bg-sky-900/40 dark:text-sky-200'
                         )}>
                           {active
-                            ? (locale === 'zh' ? '??' : 'Now')
-                            : (locale === 'zh' ? '??' : 'Start')}
+                            ? (locale === 'zh' ? '当前' : 'Now')
+                            : (locale === 'zh' ? '起点' : 'Start')}
                         </span>
                       )}
                       <div className="font-mono text-[10px] text-zinc-400">
