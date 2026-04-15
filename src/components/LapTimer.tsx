@@ -38,13 +38,6 @@ type PendingSubmit = {
   timedOut: boolean;
 };
 
-type LapUndoState = {
-  previousLapTimes: Partial<Record<ReadingLapKey, number>>;
-  previousLapIndex: number;
-  previousLapStartedAtMs: number;
-  capturedLapKey: ReadingLapKey;
-};
-
 type InitialTimerState = {
   timeLeft: number;
   isRunning: boolean;
@@ -379,7 +372,6 @@ function ReadingTimer({
   const [isOvertime, setIsOvertime] = useState(initialState.isOvertime);
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(initialState.showTimeoutDialog);
-  const [lapUndo, setLapUndo] = useState<LapUndoState | null>(null);
 
   const startedAtRef = useRef<number | null>(initialState.startedAtMs);
   const lapStartedAtRef = useRef<number | null>(initialState.lapStartedAtMs);
@@ -405,7 +397,7 @@ function ReadingTimer({
       timerRuntime: {
         ...session.timerRuntime,
         startedAt: session.timerRuntime?.startedAt ?? new Date(startedAtRef.current ?? Date.now()).toISOString(),
-        currentLapIndex,
+        currentLapIndex: currentLapIndex,
         readingLapTimes,
       },
     };
@@ -491,15 +483,72 @@ function ReadingTimer({
     };
   }
 
-  function persistRuntime(next: Partial<NonNullable<SessionRecord['timerRuntime']>>) {
+  function selectActiveLap(index: number) {
+    if (overtimeMode || index === currentLapIndex || (!timerRunning && isRunning)) {
+      if (!isRunning && !overtimeMode) setCurrentLapIndex(index);
+      return;
+    }
+
+    if (!timerRunning || !currentSegment || !lapStartedAtRef.current) {
+      setCurrentLapIndex(index);
+      return;
+    }
+
+    const now = Date.now();
+    const elapsed = Math.max(now - lapStartedAtRef.current, 0);
+    const nextLapTimes = elapsed > 0
+      ? {
+          ...readingLapTimes,
+          [currentSegment.key]: (readingLapTimes[currentSegment.key] ?? 0) + elapsed,
+        }
+      : readingLapTimes;
+
+    if (elapsed > 0) {
+      setReadingLapTimes(nextLapTimes);
+    }
+    
+    lapStartedAtRef.current = now;
+    setCurrentLapIndex(index);
+
     patchSession(session.id, {
       status: 'in-progress',
-      readingLapTimes,
+      readingLapTimes: nextLapTimes,
+      timerRuntime: {
+        startedAt: new Date(startedAtRef.current ?? now).toISOString(),
+        lapStartedAt: new Date(now).toISOString(),
+        currentLapIndex: index,
+        readingLapTimes: nextLapTimes,
+        unfinishedQuestionsDraft: unfinishedQuestions,
+        unfinishedByPartDraft,
+        timeLeftMs: Math.max(timeLeft, 0),
+      },
+    });
+  }
+
+  function stopAndFlushLapTime() {
+    if (!lapStartedAtRef.current || !currentSegment || !timerRunning || overtimeMode) {
+      return readingLapTimes;
+    }
+    const elapsed = Math.max(Date.now() - lapStartedAtRef.current, 1);
+    const nextTimes = {
+      ...readingLapTimes,
+      [currentSegment.key]: (readingLapTimes[currentSegment.key] ?? 0) + elapsed,
+    };
+    setReadingLapTimes(nextTimes);
+    lapStartedAtRef.current = Date.now();
+    return nextTimes;
+  }
+
+  function persistRuntime(next: Partial<NonNullable<SessionRecord['timerRuntime']>>, syncedTimes?: Partial<Record<ReadingLapKey, number>>) {
+    const times = syncedTimes ?? readingLapTimes;
+    patchSession(session.id, {
+      status: 'in-progress',
+      readingLapTimes: times,
       timerRuntime: {
         startedAt: new Date(startedAtRef.current ?? Date.now()).toISOString(),
         lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
-        currentLapIndex,
-        readingLapTimes,
+        currentLapIndex: currentLapIndex,
+        readingLapTimes: times,
         unfinishedQuestionsDraft: unfinishedQuestions,
         unfinishedByPartDraft,
         timeLeftMs: Math.max(timeLeft, 0),
@@ -517,7 +566,6 @@ function ReadingTimer({
     setPendingSubmit(null);
     setIsOvertime(false);
     setShowTimeoutDialog(false);
-    setLapUndo(null);
   }
 
   function commitStrictAttempt(options: PendingSubmit & {
@@ -565,30 +613,19 @@ function ReadingTimer({
     onFocusModeChange?.(timerRunning && !overtimeMode);
   }, [onFocusModeChange, overtimeMode, timerRunning]);
 
-  useEffect(() => {
-    if (!lapUndo) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setLapUndo(null);
-    }, 6000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [lapUndo]);
-
   const handleTimeoutReached = useEffectEvent(() => {
     if (isListening) {
       commitStrictAttempt({ forcedSubmit: true, timedOut: false, unfinishedCount: 0 });
       return;
     }
 
+    const finalTimes = stopAndFlushLapTime();
     const nextPending = { forcedSubmit: true, timedOut: true } satisfies PendingSubmit;
     setIsRunning(false);
     setPendingSubmit(nextPending);
     setShowTimeoutDialog(true);
     setTimeLeft(0);
-    persistRuntime({ pendingSubmit: nextPending, timeLeftMs: 0 });
+    persistRuntime({ pendingSubmit: nextPending, timeLeftMs: 0 }, finalTimes);
   });
 
   const syncPendingSubmitDraft = useEffectEvent(() => {
@@ -668,14 +705,12 @@ function ReadingTimer({
     setTimeLeft(totalDurationMs);
     setIsRunning(true);
     setReadingLapTimes({});
-    setCurrentLapIndex(0);
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
     setIsOvertime(false);
     setOvertimeElapsedMs(0);
     setUnfinishedQuestions('');
     setUnfinishedByPartDraft({});
-    setLapUndo(null);
 
     patchSession(session.id, {
       status: 'in-progress',
@@ -684,7 +719,7 @@ function ReadingTimer({
       timerRuntime: {
         startedAt: new Date(now).toISOString(),
         lapStartedAt: new Date(now).toISOString(),
-        currentLapIndex: 0,
+        currentLapIndex: currentLapIndex,
         readingLapTimes: {},
         unfinishedQuestionsDraft: '',
         unfinishedByPartDraft: {},
@@ -717,7 +752,6 @@ function ReadingTimer({
     setOvertimeElapsedMs(0);
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
-    setLapUndo(null);
     setUnfinishedQuestions(String(effectiveLockedUnfinished));
     setUnfinishedByPartDraft(lockedDistribution);
 
@@ -727,7 +761,7 @@ function ReadingTimer({
       timerRuntime: {
         startedAt: new Date(startedAtRef.current).toISOString(),
         lapStartedAt: undefined,
-        currentLapIndex,
+        currentLapIndex: currentLapIndex,
         readingLapTimes,
         unfinishedQuestionsDraft: String(effectiveLockedUnfinished),
         unfinishedByPartDraft: lockedDistribution,
@@ -741,100 +775,17 @@ function ReadingTimer({
     trackUXEvent('overtime_start', session.id);
   };
 
-  const captureLap = () => {
-    if (!currentSegment || !lapStartedAtRef.current) {
-      return;
-    }
-
-    // Removed secondary confirmation for final lap to ensure precise timing
-    /* if (currentLapIndex === READING_LAP_SEGMENTS.length - 1 && !awaitingFinalConfirm) {
-      setAwaitingFinalConfirm(true);
-      return;
-    } */
-
-    const now = Date.now();
-    const lapElapsed = now - lapStartedAtRef.current;
-    const nextLapTimes = {
-      ...readingLapTimes,
-      [currentSegment.key]: lapElapsed,
-    };
-
-    setReadingLapTimes(nextLapTimes);
-
-    if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
-      setLapUndo(null);
-      patchSession(session.id, {
-        status: 'in-progress',
-        readingLapTimes: nextLapTimes,
-      });
-      commitStrictAttempt({
-        forcedSubmit: false,
-        timedOut: false,
-        unfinishedCount: 0,
-        readingLapTimesOverride: nextLapTimes,
-      });
-      return;
-    }
-
-    setLapUndo({
-      previousLapTimes: readingLapTimes,
-      previousLapIndex: currentLapIndex,
-      previousLapStartedAtMs: lapStartedAtRef.current,
-      capturedLapKey: currentSegment.key,
-    });
-
-    lapStartedAtRef.current = now;
-    setCurrentLapIndex((value) => value + 1);
-    patchSession(session.id, {
-      status: 'in-progress',
-      readingLapTimes: nextLapTimes,
-      timerRuntime: {
-        startedAt: new Date(startedAtRef.current ?? now).toISOString(),
-        lapStartedAt: new Date(now).toISOString(),
-        currentLapIndex: currentLapIndex + 1,
-        readingLapTimes: nextLapTimes,
-        unfinishedQuestionsDraft: unfinishedQuestions,
-        unfinishedByPartDraft,
-      },
-    });
-  };
-
-  const undoLastLapCapture = () => {
-    if (!lapUndo || !timerRunning || overtimeMode) {
-      return;
-    }
-
-    setReadingLapTimes(lapUndo.previousLapTimes);
-    setCurrentLapIndex(lapUndo.previousLapIndex);
-    lapStartedAtRef.current = lapUndo.previousLapStartedAtMs;
-    setLapUndo(null);
-
-    patchSession(session.id, {
-      status: 'in-progress',
-      readingLapTimes: lapUndo.previousLapTimes,
-      timerRuntime: {
-        startedAt: new Date(startedAtRef.current ?? Date.now()).toISOString(),
-        lapStartedAt: new Date(lapUndo.previousLapStartedAtMs).toISOString(),
-        currentLapIndex: lapUndo.previousLapIndex,
-        readingLapTimes: lapUndo.previousLapTimes,
-        unfinishedQuestionsDraft: unfinishedQuestions,
-        unfinishedByPartDraft,
-        timeLeftMs: Math.max(timeLeft, 0),
-      },
-    });
-  };
-
   const submitForced = () => {
     if (isListening) {
       commitStrictAttempt({ forcedSubmit: true, timedOut: false, unfinishedCount: 0 });
       return;
     }
 
+    const finalTimes = stopAndFlushLapTime();
     const nextPending = { forcedSubmit: true, timedOut: false } satisfies PendingSubmit;
     setIsRunning(false);
-    setLapUndo(null);
     setPendingSubmit(nextPending);
-    persistRuntime({ pendingSubmit: nextPending, timeLeftMs: timeLeft });
+    persistRuntime({ pendingSubmit: nextPending, timeLeftMs: timeLeft }, finalTimes);
   };
 
   const strictSubmitFromPending = () => {
@@ -888,7 +839,7 @@ function ReadingTimer({
       timerRuntime: {
         startedAt: new Date(startedAtRef.current ?? now).toISOString(),
         lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
-        currentLapIndex,
+        currentLapIndex: currentLapIndex,
         readingLapTimes,
         unfinishedQuestionsDraft: String(unresolved.unfinishedCount),
         unfinishedByPartDraft: unresolved.unfinishedByPart,
@@ -902,7 +853,6 @@ function ReadingTimer({
     overtimeStartedAtRef.current = now;
     setIsOvertime(true);
     setIsRunning(true);
-    setLapUndo(null);
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
     setTimeLeft(0);
@@ -932,7 +882,6 @@ function ReadingTimer({
     setShowTimeoutDialog(false);
     setTimeLeft(0);
     setOvertimeElapsedMs(finalElapsed);
-    setLapUndo(null);
     onStrictAttemptSaved?.(session.id);
     trackUXEvent('overtime_stopped', session.id);
   };
@@ -1034,45 +983,16 @@ function ReadingTimer({
           )}
 
           {timerRunning && !overtimeMode && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-               {!isListening && currentSegment && (
-                 <Button
-                    size="lg"
-                    onClick={captureLap}
-                     className={cn(
-                       'h-16 w-full sm:w-64 rounded-full text-lg font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
-                       currentLapIndex === READING_LAP_SEGMENTS.length - 1
-                         ? 'bg-amber-500 text-amber-950 hover:bg-amber-600'
-                         : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
-                     )}
-                 >
-                    {currentLapIndex === READING_LAP_SEGMENTS.length - 1 ? (
-                      <>
-                        <CheckCircle2 className="mr-2 size-5" />
-                        {copy.lapAction(currentSegment.shortLabel)}
-                      </>
-                    ) : (
-                      <>
-                        <Flag className="mr-2 size-5 fill-current" />
-                        {copy.lapAction(currentSegment.shortLabel)}
-                      </>
-                    )}
-                 </Button>
-               )}
-               
-               <div className="flex gap-2">
-                 
-                 
-                 <Button
-                   variant="outline"
-                   size="lg"
-                   onClick={submitForced}
-                   className="h-16 rounded-full border-red-200 bg-red-50/50 text-red-600 backdrop-blur-md hover:bg-red-100/80 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
-                 >
-                   <ShieldAlert className="size-5 sm:mr-2" />
-                   <span className="hidden sm:inline">{copy.forceSubmit}</span>
-                 </Button>
-               </div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex w-full sm:w-auto items-center justify-center">
+               <Button
+                 variant="outline"
+                 size="lg"
+                 onClick={submitForced}
+                 className="h-16 px-10 rounded-full border-red-200 bg-white/70 text-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.15)] backdrop-blur-md hover:bg-white dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
+               >
+                 <CheckCircle2 className="size-5 sm:mr-2" />
+                 <span className="hidden sm:inline font-bold text-lg tracking-wide">{locale === 'zh' ? '??' : 'Submit Test'}</span>
+               </Button>
             </motion.div>
           )}
 
@@ -1090,30 +1010,6 @@ function ReadingTimer({
           )}
         </div>
 
-        <AnimatePresence>
-          {lapUndo && !isListening && timerRunning && !overtimeMode && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="mt-6 mx-auto flex max-w-sm items-center justify-between rounded-full border border-amber-200 bg-amber-50/90 px-4 py-3 shadow-lg backdrop-blur-xl relative z-20 dark:border-amber-900/50 dark:bg-amber-900/80"
-            >
-              <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                {locale === 'zh'
-                  ? `已记录 ${translatePart(locale, lapUndo.capturedLapKey)}`
-                  : `Recorded ${translatePart(locale, lapUndo.capturedLapKey)}`}
-              </span>
-              <button
-                type="button"
-                onClick={undoLastLapCapture}
-                className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-amber-600 shadow-sm transition-transform hover:scale-105 active:scale-95 dark:bg-amber-950 dark:text-amber-300"
-              >
-                {locale === 'zh' ? '撤销' : 'Undo'}
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
         {/* Ambient progress indicator in background */}
         {timerRunning && (
           <div className="absolute inset-0 pointer-events-none z-0 opacity-10 overflow-hidden rounded-[36px]">
@@ -1127,7 +1023,7 @@ function ReadingTimer({
 
       {!isListening && (
         <div className="rounded-[32px] border border-zinc-200/50 bg-white/40 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/40">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
               {copy.readingLapSequence}
             </div>
@@ -1135,28 +1031,57 @@ function ReadingTimer({
               {copy.doneCount(completedLapCount, 4)}
             </div>
           </div>
+          <div className="mt-2.5 text-[12px] text-zinc-500 dark:text-zinc-400 mb-5">
+            {locale === 'zh'
+              ? timerRunning
+                ? '点击卡片无缝切换题型，系统自动累计耗时；完成后点击上方“交卷”。'
+                : '先点击这里选择起点，再点击上方按钮开始计时。'
+              : timerRunning
+                ? 'Tap cards to switch active parts seamlessly. Tap Submit when finished test.'
+                : 'Select your starting point, then start the timer above.'}
+          </div>
           <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {READING_LAP_SEGMENTS.map((segment, index) => {
               const completed = readingLapTimes[segment.key] !== undefined;
               const active = timerRunning && !overtimeMode && currentLapIndex === index;
+              const preselected = !timerRunning && !overtimeMode && currentLapIndex === index;
               const stored = session.readingLapTimes[segment.key];
 
               return (
-                <div
+                <button
+                  type="button"
                   key={segment.key}
+                  onClick={() => selectActiveLap(index)}
+                  disabled={overtimeMode}
                   className={cn(
-                    'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300',
+                    'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer',
                     completed
                       ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10'
                       : active
                         ? 'border-amber-400/50 bg-amber-50 shadow-md scale-[1.02] dark:border-amber-500/30 dark:bg-amber-900/20'
-                        : 'border-zinc-200/50 bg-white/50 dark:border-white/5 dark:bg-zinc-900/50 opacity-70'
+                        : preselected
+                          ? 'border-sky-300/70 bg-sky-50/70 dark:border-sky-700/70 dark:bg-sky-900/20'
+                        : 'border-zinc-200/50 bg-white/50 dark:border-white/5 dark:bg-zinc-900/50 opacity-70 hover:opacity-100 hover:border-zinc-300/70 hover:dark:border-white/15'
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className={cn("font-mono text-[10px] font-semibold tracking-wider", completed ? "text-emerald-600 dark:text-emerald-400" : active ? "text-amber-600 dark:text-amber-400" : "text-zinc-400 dark:text-zinc-500")}>{segment.shortLabel}</div>
-                    <div className="font-mono text-[10px] text-zinc-400">
-                       {segment.baselineMinutes}m
+                    <div className={cn("font-mono text-[10px] font-semibold tracking-wider", completed ? "text-emerald-600 dark:text-emerald-400" : active ? "text-amber-600 dark:text-amber-400" : preselected ? "text-sky-600 dark:text-sky-400" : "text-zinc-400 dark:text-zinc-500")}>{segment.shortLabel}</div>
+                    <div className="flex items-center gap-1.5">
+                      {(active || preselected) && (
+                        <span className={cn(
+                          'rounded-full border px-1.5 py-0.5 text-[9px] font-semibold tracking-wider',
+                          active
+                            ? 'border-amber-300/70 bg-amber-100/80 text-amber-700 dark:border-amber-700/70 dark:bg-amber-900/40 dark:text-amber-200'
+                            : 'border-sky-300/70 bg-sky-100/80 text-sky-700 dark:border-sky-700/70 dark:bg-sky-900/40 dark:text-sky-200'
+                        )}>
+                          {active
+                            ? (locale === 'zh' ? '??' : 'Now')
+                            : (locale === 'zh' ? '??' : 'Start')}
+                        </span>
+                      )}
+                      <div className="font-mono text-[10px] text-zinc-400">
+                        {segment.baselineMinutes}m
+                      </div>
                     </div>
                   </div>
                   <div className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
@@ -1167,7 +1092,7 @@ function ReadingTimer({
                         ? copy.lastRun(formatMinutes(stored))
                         : copy.awaitingCapture}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

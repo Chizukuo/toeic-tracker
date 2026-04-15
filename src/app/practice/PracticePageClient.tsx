@@ -21,6 +21,18 @@ const TimeWaterfallChart = dynamic(
 
 type PracticeStep = 'timer' | 'review' | 'result';
 
+function resolvePracticeStep(session: ReturnType<typeof useDashboardContext>['activeSession']): PracticeStep {
+  const unresolvedBacklog = session.type === 'R'
+    && (session.timerSummary?.unfinishedQuestions ?? 0) > 0
+    && !session.timerSummary?.resolvedUnfinished;
+
+  if (unresolvedBacklog) return 'timer';
+  if (session.timerRuntime?.startedAt && !session.timerSummary) return 'timer';
+  if (session.status === 'debugged') return 'result';
+  if (session.timerSummary || session.status === 'in-progress') return 'review';
+  return 'timer';
+}
+
 const slideVariants = {
   enterFromRight: { opacity: 0, x: 60 },
   enterFromLeft: { opacity: 0, x: -60 },
@@ -44,21 +56,14 @@ function PracticeFlow() {
     && (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0
     && !activeSession.timerSummary?.resolvedUnfinished;
 
-  const initialStep = useMemo((): PracticeStep => {
-    if (unresolvedBacklog) return 'timer';
-    if (activeSession.status === 'debugged') return 'result';
-    if (activeSession.timerSummary || activeSession.status === 'in-progress') return 'review';
-    return 'timer';
-  }, [activeSession.id, unresolvedBacklog]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [step, setStep] = useState<PracticeStep>(initialStep);
+  const [step, setStep] = useState<PracticeStep>(() => resolvePracticeStep(activeSession));
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [autoFocusToken, setAutoFocusToken] = useState(0);
 
   useEffect(() => {
     setDirection('forward');
-    setStep(initialStep);
-  }, [activeSession.id, initialStep]);
+    setStep(resolvePracticeStep(activeSession));
+  }, [activeSession.id]);
 
   const goToStep = (next: PracticeStep) => {
     const order: PracticeStep[] = ['timer', 'review', 'result'];
