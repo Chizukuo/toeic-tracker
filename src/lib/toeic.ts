@@ -644,12 +644,16 @@ function buildPartMistakeMap(record: SessionRecord, mode: "strict" | "potential"
 
 	if (record.type === "R" && mode === "strict") {
 		let remainingUnfinished = Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
-		const fallbackOrder: ReadingPartKey[] = [
-			"Part 7 Multiple",
-			"Part 7 Single",
-			"Part 6",
-			"Part 5",
-		];
+
+		// dynamically order by the ones without readingLapTimes first, then reverse chronological of standard parts
+		// this adapts to different question answering sequences
+		const lapTimes = record.readingLapTimes ?? {};
+		const fallbackOrder = [...READING_PARTS].sort((a, b) => {
+			const aHasLap = lapTimes[a as ReadingLapKey] !== undefined ? 1 : 0;
+			const bHasLap = lapTimes[b as ReadingLapKey] !== undefined ? 1 : 0;
+			if (aHasLap !== bHasLap) return aHasLap - bHasLap; // parts without lap times come first
+			return READING_PARTS.indexOf(b) - READING_PARTS.indexOf(a); // otherwise reverse normal order
+		});
 
 		for (const part of fallbackOrder) {
 			if (remainingUnfinished <= 0) {

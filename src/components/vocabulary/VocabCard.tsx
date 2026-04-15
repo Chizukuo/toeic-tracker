@@ -281,50 +281,9 @@ export function VocabCard({
                   </div>
                 )}
 
-                {(normalizedEnDefinition || entry.exampleSentence) && (
-                  <div className="mt-3.5 space-y-3">
-                    {normalizedEnDefinition && normalizedEnDefinition !== normalizedDefinition && (
-                      <div className="relative pl-3.5 before:absolute before:inset-y-0.5 before:left-0 before:w-0.5 before:rounded-full before:bg-(--separator)/60">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-0.5">
-                          {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
-                        </div>
-                        <p className="text-[13px] leading-relaxed text-(--label-secondary)">
-                          {normalizedEnDefinition}
-                        </p>
-                      </div>
-                    )}
-                    {entry.exampleSentence && (
-                      <div className="relative pl-3.5 before:absolute before:inset-y-0.5 before:left-0 before:w-0.5 before:rounded-full before:bg-(--separator)/60">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-0.5 flex items-center gap-1.5">
-                          {locale === 'zh' ? 'EXAMPLE' : 'EXAMPLE'}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-                              window.speechSynthesis.cancel();
-                              const utterance = new SpeechSynthesisUtterance(entry.exampleSentence!);
-                              utterance.lang = 'en-US';
-                              window.speechSynthesis.speak(utterance);
-                            }}
-                            className="text-(--label-tertiary) hover:text-(--cheese-gold) transition-colors"
-                            title={locale === 'zh' ? '朗读例句' : 'Read example'}
-                          >
-                            <Volume2 className="size-3" />
-                          </button>
-                        </div>
-                        <p className="text-[13px] italic leading-relaxed text-(--label-secondary)">
-                          {entry.exampleSentence}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
             )}
 
-            {(entry.sessionIds.length > 0 || entry.tags.length > 0) && (
+            {(normalizedEnDefinition || entry.exampleSentence || entry.sessionIds.length > 0 || entry.tags.length > 0) ? (
               <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
@@ -332,8 +291,19 @@ export function VocabCard({
               >
                 {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                 {expanded
-                  ? (locale === 'zh' ? '收起溯源' : 'Collapse metadata')
-                  : (locale === 'zh' ? '展开追踪来源' : 'View tracking metadata')}
+                  ? (locale === 'zh' ? '收起详情' : 'Collapse details')
+                  : (locale === 'zh' ? '展开详情' : 'Expand details')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+                className="mt-3 flex sm:hidden items-center gap-1 text-[11px] font-medium text-(--label-tertiary) hover:text-(--label-secondary) transition-colors"
+              >
+                {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                {expanded
+                  ? (locale === 'zh' ? '收起' : 'Collapse')
+                  : (locale === 'zh' ? '展开操作' : 'Actions')}
               </button>
             )}
 
@@ -346,6 +316,47 @@ export function VocabCard({
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="overflow-hidden"
                 >
+                  {!shouldMaskDetails && (normalizedEnDefinition || entry.exampleSentence) && (
+                    <div className="mt-3.5 mb-3 space-y-3">
+                      {normalizedEnDefinition && normalizedEnDefinition !== normalizedDefinition && (
+                        <div className="relative pl-3.5 before:absolute before:inset-y-0.5 before:left-0 before:w-0.5 before:rounded-full before:bg-(--separator)/60">
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-0.5">
+                            {locale === 'zh' ? 'EN DEFINITION' : 'EN DEFINITION'}
+                          </div>
+                          <p className="text-[13px] leading-relaxed text-(--label-secondary)">
+                            {normalizedEnDefinition}
+                          </p>
+                        </div>
+                      )}
+                      {entry.exampleSentence && (
+                        <div className="relative pl-3.5 before:absolute before:inset-y-0.5 before:left-0 before:w-0.5 before:rounded-full before:bg-(--separator)/60">
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-(--label-tertiary) mb-0.5 flex items-center gap-1.5">
+                            {locale === 'zh' ? 'EXAMPLE' : 'EXAMPLE'}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+                                window.speechSynthesis.cancel();
+                                const utterance = new SpeechSynthesisUtterance(entry.exampleSentence!);
+                                utterance.lang = 'en-US';
+                                window.speechSynthesis.speak(utterance);
+                              }}
+                              className="text-(--label-tertiary) hover:text-(--cheese-gold) transition-colors"
+                              title={locale === 'zh' ? '朗读例句' : 'Read example'}
+                            >
+                              <Volume2 className="size-3" />
+                            </button>
+                          </div>
+                          <p className="text-[13px] italic leading-relaxed text-(--label-secondary)">
+                            {entry.exampleSentence}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-3 space-y-2">
                     {entry.sessionIds.length > 0 && (
                       <div className="flex flex-wrap gap-1 pt-1 opacity-80 mix-blend-luminosity">
@@ -373,36 +384,37 @@ export function VocabCard({
                       </div>
                     )}
                   </div>
+                  
+                  {/* Mobile action buttons moved inside details */}
+                  <div className="mt-4 flex sm:hidden items-center gap-2 border-t border-(--separator)/40 pt-3 opacity-90">
+                    <button
+                      type="button"
+                      onClick={() => onKnockdown(entry.id)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-[12px] bg-(--surface-grouped) px-3 py-2.5 text-xs font-semibold text-orange-600 active:scale-95 dark:text-orange-400 ring-1 ring-inset ring-(--separator)/50"
+                    >
+                      <AlertTriangle className="size-3.5" />
+                      {locale === 'zh' ? '出错' : 'Miss'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onComeback(entry.id)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-[12px] bg-(--surface-grouped) px-3 py-2.5 text-xs font-semibold text-emerald-600 active:scale-95 dark:text-emerald-400 ring-1 ring-inset ring-(--separator)/50"
+                    >
+                      <Check className="size-3.5" />
+                      {locale === 'zh' ? '掌握' : 'Hit'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(entry.id)}
+                      className="flex items-center justify-center rounded-[12px] bg-(--surface-grouped) p-2.5 text-rose-600 active:scale-95 shrink-0 dark:text-rose-400 ring-1 ring-inset ring-(--separator)/50"
+                      aria-label={locale === 'zh' ? '删除' : 'Remove'}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-
-          <div className="mt-4 flex sm:hidden items-center gap-2 border-t border-(--separator)/40 pt-3 opacity-90">
-            <button
-              type="button"
-              onClick={() => onKnockdown(entry.id)}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-[12px] bg-(--surface-grouped) px-3 py-2.5 text-xs font-semibold text-orange-600 active:scale-95 dark:text-orange-400 ring-1 ring-inset ring-(--separator)/50"
-            >
-              <AlertTriangle className="size-3.5" />
-              {locale === 'zh' ? '出错' : 'Miss'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onComeback(entry.id)}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-[12px] bg-(--surface-grouped) px-3 py-2.5 text-xs font-semibold text-emerald-600 active:scale-95 dark:text-emerald-400 ring-1 ring-inset ring-(--separator)/50"
-            >
-              <Check className="size-3.5" />
-              {locale === 'zh' ? '掌握' : 'Hit'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onRemove(entry.id)}
-              className="flex items-center justify-center rounded-[12px] bg-(--surface-grouped) p-2.5 text-rose-600 active:scale-95 shrink-0 dark:text-rose-400 ring-1 ring-inset ring-(--separator)/50"
-              aria-label={locale === 'zh' ? '删除' : 'Remove'}
-            >
-              <Trash2 className="size-3.5" />
-            </button>
           </div>
 
           <div className="absolute right-0 top-0 hidden sm:flex translate-y-1 items-center gap-0.5 rounded-full border border-(--separator)/60 bg-(--surface-elevated)/85 p-1 shadow-sm backdrop-blur-md transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto pointer-events-none z-10 dark:bg-[#1a1a1a]/85">

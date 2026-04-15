@@ -52,7 +52,7 @@ export function TimeAnalyticsPanel() {
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 px-1">
               {locale === 'zh' ? '阅读训练记录' : 'Reading History'}
             </h3>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {readingSessions.map(session => {
                 const isActive = session.id === selectedSessionId || (!selectedSessionId && session.id === selectedSession?.id);
                 const isOvertime = session.timerSummary?.timedOut;
@@ -60,9 +60,17 @@ export function TimeAnalyticsPanel() {
                 return (
                   <button
                     key={session.id}
-                    onClick={() => setSelectedSessionId(session.id)}
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      // On mobile, auto-scroll to the chart so the user knows it updated
+                      if (window.innerWidth < 1024) {
+                        setTimeout(() => {
+                          document.getElementById('waterfall-chart-container')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 50);
+                      }
+                    }}
                     className={cn(
-                      "flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left group",
+                      "flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left group shrink-0 min-w-[240px] lg:min-w-0 lg:w-full snap-start",
                       isActive 
                         ? "border-blue-500/30 bg-blue-50/80 dark:bg-blue-900/15 shadow-[0_2px_12px_rgba(59,130,246,0.08)]" 
                         : "border-black/5 dark:border-white/5 bg-white dark:bg-[#1C1C1E] hover:border-black/10 dark:hover:border-white/10 shadow-sm"
@@ -102,7 +110,7 @@ export function TimeAnalyticsPanel() {
             </div>
           </div>
           
-          <div className="lg:col-span-3 min-h-[500px]">
+          <div id="waterfall-chart-container" className="lg:col-span-3 min-h-[500px]">
              <AnimatePresence mode="wait">
                {selectedSession ? (
                  <motion.div
