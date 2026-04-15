@@ -281,6 +281,7 @@ export function VocabCard({
                   </div>
                 )}
 
+              </>
             )}
 
             {(normalizedEnDefinition || entry.exampleSentence || entry.sessionIds.length > 0 || entry.tags.length > 0) ? (

@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   type MistakeKey,
+  type ReadingPartKey,
   type ReadingLapKey,
   type SessionRecord,
   type SessionStatus,
@@ -76,6 +77,9 @@ function sameTimerSummary(left: TimerSummary | undefined, right: TimerSummary | 
     left?.timedOut === right?.timedOut &&
     left?.unfinishedQuestions === right?.unfinishedQuestions &&
     left?.resolvedUnfinished === right?.resolvedUnfinished &&
+    sameNumberRecord<ReadingPartKey>(left?.unfinishedByPart, right?.unfinishedByPart) &&
+    left?.unfinishedByPartMeta?.source === right?.unfinishedByPartMeta?.source &&
+    left?.unfinishedByPartMeta?.confidence === right?.unfinishedByPartMeta?.confidence &&
     left?.overtimeElapsedMs === right?.overtimeElapsedMs &&
     left?.completedAt === right?.completedAt
   );
@@ -96,6 +100,7 @@ function sameTimerRuntime(left: TimerRuntimeState | undefined, right: TimerRunti
     left?.overtimeElapsedMs === right?.overtimeElapsedMs &&
     samePendingSubmit(left?.pendingSubmit, right?.pendingSubmit) &&
     left?.unfinishedQuestionsDraft === right?.unfinishedQuestionsDraft &&
+    sameNumberRecord<ReadingPartKey>(left?.unfinishedByPartDraft, right?.unfinishedByPartDraft) &&
     left?.timeLeftMs === right?.timeLeftMs
   );
 }

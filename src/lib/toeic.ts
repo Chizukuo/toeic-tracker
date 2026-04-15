@@ -43,12 +43,23 @@ export type MistakeKey = ListeningPartKey | ReadingPartKey;
 
 export type ReadingLapKey = ReadingPartKey;
 
+export type ReadingUnfinishedByPart = Partial<Record<ReadingPartKey, number>>;
+
+export type UnfinishedByPartSource = "manual" | "inferred" | "fallback";
+
+export type UnfinishedByPartMeta = {
+	source: UnfinishedByPartSource;
+	confidence: number;
+};
+
 export type TimerSummary = {
 	totalElapsedMs: number;
 	forcedSubmit: boolean;
 	timedOut: boolean;
 	unfinishedQuestions: number;
 	resolvedUnfinished: boolean;
+	unfinishedByPart?: ReadingUnfinishedByPart;
+	unfinishedByPartMeta?: UnfinishedByPartMeta;
 	overtimeElapsedMs?: number;
 	completedAt: string;
 };
@@ -66,6 +77,7 @@ export type TimerRuntimeState = {
 		timedOut: boolean;
 	};
 	unfinishedQuestionsDraft?: string;
+	unfinishedByPartDraft?: ReadingUnfinishedByPart;
 	timeLeftMs?: number;
 };
 
@@ -621,8 +633,252 @@ function clampRawScore(value: number, type: SessionType) {
 	return Math.min(totalQuestions, Math.max(value, 0));
 }
 
+function clampConfidence(value: number | undefined) {
+	if (typeof value !== "number" || Number.isNaN(value)) {
+		return 0;
+	}
+
+	return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+export function normalizeReadingPartDistribution(
+	source?: Partial<Record<ReadingPartKey, number>>
+): ReadingUnfinishedByPart {
+	if (!source) {
+		return {};
+	}
+
+	const normalized: ReadingUnfinishedByPart = {};
+
+	for (const part of READING_PARTS) {
+		const value = source[part];
+		if (typeof value !== "number" || Number.isNaN(value)) {
+			continue;
+		}
+
+		const safe = Math.max(0, Math.floor(value));
+		if (safe > 0) {
+			normalized[part] = safe;
+		}
+	}
+
+	return normalized;
+}
+
+export function sumReadingPartDistribution(
+	source?: Partial<Record<ReadingPartKey, number>>
+) {
+	const normalized = normalizeReadingPartDistribution(source);
+	return READING_PARTS.reduce((sum, part) => sum + (normalized[part] ?? 0), 0);
+}
+
 function roundToNearestFive(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, Math.round(value / 5) * 5));
+}
+
+function getReadingFallbackOrder(record: SessionRecord): ReadingPartKey[] {
+	const lapTimes = record.readingLapTimes ?? {};
+	const currentLapIndex = record.timerRuntime?.currentLapIndex;
+
+	return [...READING_PARTS].sort((left, right) => {
+		const leftHasLap = lapTimes[left] !== undefined ? 1 : 0;
+		const rightHasLap = lapTimes[right] !== undefined ? 1 : 0;
+		if (leftHasLap !== rightHasLap) {
+			return leftHasLap - rightHasLap;
+		}
+
+		if (typeof currentLapIndex === "number") {
+			const leftIndex = READING_PARTS.indexOf(left);
+			const rightIndex = READING_PARTS.indexOf(right);
+			const leftAhead = leftIndex >= currentLapIndex ? 1 : 0;
+			const rightAhead = rightIndex >= currentLapIndex ? 1 : 0;
+			if (leftAhead !== rightAhead) {
+				return rightAhead - leftAhead;
+			}
+		}
+
+		return READING_PARTS.indexOf(right) - READING_PARTS.indexOf(left);
+	});
+}
+
+function allocateReadingUnfinishedByWeights(
+	unfinishedCount: number,
+	weights: Record<ReadingPartKey, number>,
+	capacities: Record<ReadingPartKey, number>
+) {
+	const distribution: ReadingUnfinishedByPart = {};
+	let remaining = Math.max(0, Math.floor(unfinishedCount));
+
+	if (remaining <= 0) {
+		return { distribution, remaining: 0 };
+	}
+
+	const candidates = READING_PARTS.filter((part) => capacities[part] > 0);
+	if (candidates.length === 0) {
+		return { distribution, remaining };
+	}
+
+	const normalizedWeights = Object.fromEntries(
+		READING_PARTS.map((part) => [part, Math.max(0.0001, weights[part] ?? 0)])
+	) as Record<ReadingPartKey, number>;
+	const totalWeight = candidates.reduce((sum, part) => sum + normalizedWeights[part], 0);
+	const fractions: Array<{ part: ReadingPartKey; fraction: number }> = [];
+
+	if (totalWeight > 0) {
+		for (const part of candidates) {
+			const raw = (remaining * normalizedWeights[part]) / totalWeight;
+			const base = Math.min(capacities[part], Math.floor(raw));
+			if (base > 0) {
+				distribution[part] = base;
+				remaining -= base;
+			}
+
+			fractions.push({
+				part,
+				fraction: raw - Math.floor(raw),
+			});
+		}
+
+		fractions.sort((left, right) => {
+			if (right.fraction !== left.fraction) {
+				return right.fraction - left.fraction;
+			}
+			return normalizedWeights[right.part] - normalizedWeights[left.part];
+		});
+
+		while (remaining > 0) {
+			const next = fractions.find((entry) => (distribution[entry.part] ?? 0) < capacities[entry.part]);
+			if (!next) {
+				break;
+			}
+
+			distribution[next.part] = (distribution[next.part] ?? 0) + 1;
+			remaining -= 1;
+		}
+	}
+
+	return { distribution, remaining };
+}
+
+export function inferReadingUnfinishedDistribution(
+	record: SessionRecord,
+	unfinishedCount: number
+): {
+	distribution: ReadingUnfinishedByPart;
+	confidence: number;
+	source: Exclude<UnfinishedByPartSource, "manual">;
+} {
+	const targetUnfinished = Math.max(0, Math.floor(unfinishedCount));
+	if (record.type !== "R" || targetUnfinished <= 0) {
+		return {
+			distribution: {},
+			confidence: 1,
+			source: "fallback",
+		};
+	}
+
+	const weights = Object.fromEntries(
+		READING_PARTS.map((part) => [part, 1])
+	) as Record<ReadingPartKey, number>;
+	const currentLapIndex = record.timerRuntime?.currentLapIndex;
+	const completedLapCount = READING_PARTS.reduce(
+		(sum, part) => sum + (record.readingLapTimes[part] !== undefined ? 1 : 0),
+		0
+	);
+	const hasSignal = completedLapCount > 0 || typeof currentLapIndex === "number";
+
+	for (const part of READING_PARTS) {
+		const hasLap = record.readingLapTimes[part] !== undefined;
+		weights[part] += hasLap ? 0.05 : 2.8;
+	}
+
+	if (typeof currentLapIndex === "number") {
+		for (let index = 0; index < READING_PARTS.length; index += 1) {
+			const part = READING_PARTS[index];
+			weights[part] += index >= currentLapIndex ? 1.8 : 0.05;
+		}
+	}
+
+	if (!hasSignal) {
+		const distribution: ReadingUnfinishedByPart = {};
+		let remaining = targetUnfinished;
+
+		for (const part of [...READING_PARTS].reverse()) {
+			if (remaining <= 0) {
+				break;
+			}
+
+			const capacity = Math.max(0, PART_QUESTION_COUNTS[part] - Math.max(0, record.mistakes[part] ?? 0));
+			if (capacity <= 0) {
+				continue;
+			}
+
+			const assigned = Math.min(capacity, remaining);
+			distribution[part] = assigned;
+			remaining -= assigned;
+		}
+
+		return {
+			distribution,
+			confidence: 0.25,
+			source: "fallback",
+		};
+	}
+
+	const capacities = Object.fromEntries(
+		READING_PARTS.map((part) => [
+			part,
+			Math.max(0, PART_QUESTION_COUNTS[part] - Math.max(0, record.mistakes[part] ?? 0)),
+		])
+	) as Record<ReadingPartKey, number>;
+	const noLapParts = READING_PARTS.filter((part) => record.readingLapTimes[part] === undefined);
+
+	if (noLapParts.length > 0 && typeof currentLapIndex === "number") {
+		for (let index = 0; index < READING_PARTS.length; index += 1) {
+			const part = READING_PARTS[index];
+			if (record.readingLapTimes[part] !== undefined && index < currentLapIndex) {
+				capacities[part] = 0;
+			}
+		}
+	}
+
+	const weightedAllocation = allocateReadingUnfinishedByWeights(
+		targetUnfinished,
+		weights,
+		capacities
+	);
+	const distribution = { ...weightedAllocation.distribution };
+	let remaining = weightedAllocation.remaining;
+
+	if (remaining > 0) {
+		for (const part of getReadingFallbackOrder(record)) {
+			if (remaining <= 0) {
+				break;
+			}
+
+			const used = distribution[part] ?? 0;
+			const capacity = capacities[part] - used;
+			if (capacity <= 0) {
+				continue;
+			}
+
+			const assigned = Math.min(capacity, remaining);
+			distribution[part] = used + assigned;
+			remaining -= assigned;
+		}
+	}
+
+	const noLapAssigned = noLapParts.reduce((sum, part) => sum + (distribution[part] ?? 0), 0);
+	const noLapShare = targetUnfinished > 0 ? noLapAssigned / targetUnfinished : 0;
+	const confidence = hasSignal
+		? clampConfidence(0.45 + noLapShare * 0.35 + (typeof currentLapIndex === "number" ? 0.15 : 0))
+		: 0.25;
+
+	return {
+		distribution,
+		confidence,
+		source: hasSignal ? "inferred" : "fallback",
+	};
 }
 
 function mergeMistakeSources(record: SessionRecord) {
@@ -643,19 +899,46 @@ function buildPartMistakeMap(record: SessionRecord, mode: "strict" | "potential"
 	)) as Record<MistakeKey, number>;
 
 	if (record.type === "R" && mode === "strict") {
-		let remainingUnfinished = Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
+		const unfinishedCount = Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0);
+		let remainingUnfinished = unfinishedCount;
+		if (remainingUnfinished <= 0) {
+			return mistakes;
+		}
 
-		// dynamically order by the ones without readingLapTimes first, then reverse chronological of standard parts
-		// this adapts to different question answering sequences
-		const lapTimes = record.readingLapTimes ?? {};
-		const fallbackOrder = [...READING_PARTS].sort((a, b) => {
-			const aHasLap = lapTimes[a as ReadingLapKey] !== undefined ? 1 : 0;
-			const bHasLap = lapTimes[b as ReadingLapKey] !== undefined ? 1 : 0;
-			if (aHasLap !== bHasLap) return aHasLap - bHasLap; // parts without lap times come first
-			return READING_PARTS.indexOf(b) - READING_PARTS.indexOf(a); // otherwise reverse normal order
-		});
+		const manualDistribution = normalizeReadingPartDistribution(record.timerSummary?.unfinishedByPart);
+		const manualTotal = sumReadingPartDistribution(manualDistribution);
+		const inferred = manualTotal > 0
+			? undefined
+			: inferReadingUnfinishedDistribution(record, unfinishedCount);
+		const preferredDistribution = manualTotal > 0
+			? manualDistribution
+			: inferred?.distribution ?? {};
 
-		for (const part of fallbackOrder) {
+		for (const part of READING_PARTS) {
+			if (remainingUnfinished <= 0) {
+				break;
+			}
+
+			const target = Math.max(0, preferredDistribution[part] ?? 0);
+			if (target <= 0) {
+				continue;
+			}
+
+			const capacity = PART_QUESTION_COUNTS[part] - mistakes[part];
+			if (capacity <= 0) {
+				continue;
+			}
+
+			const assigned = Math.min(capacity, target, remainingUnfinished);
+			if (assigned <= 0) {
+				continue;
+			}
+
+			mistakes[part] += assigned;
+			remainingUnfinished -= assigned;
+		}
+
+		for (const part of getReadingFallbackOrder(record)) {
 			if (remainingUnfinished <= 0) {
 				break;
 			}
@@ -1012,6 +1295,19 @@ export function mergeSessionWithDefaults(
 			? {
 				...incoming.timerSummary,
 				resolvedUnfinished: incoming.timerSummary.resolvedUnfinished ?? false,
+				unfinishedByPart: normalizeReadingPartDistribution(incoming.timerSummary.unfinishedByPart),
+				unfinishedByPartMeta: incoming.timerSummary.unfinishedByPartMeta
+					? {
+						source: incoming.timerSummary.unfinishedByPartMeta.source,
+						confidence: clampConfidence(incoming.timerSummary.unfinishedByPartMeta.confidence),
+					}
+					: undefined,
+			}
+			: undefined,
+		timerRuntime: incoming.timerRuntime
+			? {
+				...incoming.timerRuntime,
+				unfinishedByPartDraft: normalizeReadingPartDistribution(incoming.timerRuntime.unfinishedByPartDraft),
 			}
 			: undefined,
 	} as SessionRecord;

@@ -15,13 +15,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { getCopy, translatePart } from '@/lib/i18n';
 import {
+  READING_PARTS,
   READING_LAP_SEGMENTS,
   formatClock,
   formatMinutes,
   getTargetDurationMs,
   hasResolvedUnfinished,
+  inferReadingUnfinishedDistribution,
+  normalizeReadingPartDistribution,
+  sumReadingPartDistribution,
+  type ReadingPartKey,
   type ReadingLapKey,
   type SessionRecord,
+  type UnfinishedByPartMeta,
 } from '@/lib/toeic';
 import { trackUXEvent } from '@/lib/uxEvent';
 import { cn } from '@/lib/utils';
@@ -45,6 +51,7 @@ type InitialTimerState = {
   readingLapTimes: Partial<Record<ReadingLapKey, number>>;
   currentLapIndex: number;
   unfinishedQuestions: string;
+  unfinishedByPartDraft: Partial<Record<ReadingPartKey, number>>;
   pendingSubmit: PendingSubmit | null;
   startedAtMs: number | null;
   lapStartedAtMs: number | null;
@@ -69,6 +76,16 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
     && (session.timerSummary?.unfinishedQuestions ?? 0) > 0
     && !hasResolvedUnfinished(session);
   const unfinishedDraft = runtime?.unfinishedQuestionsDraft ?? (session.timerSummary?.unfinishedQuestions ? String(session.timerSummary.unfinishedQuestions) : '');
+  const summaryDistribution = normalizeReadingPartDistribution(session.timerSummary?.unfinishedByPart);
+  const runtimeDistribution = normalizeReadingPartDistribution(runtime?.unfinishedByPartDraft);
+  const inferredDistribution = unresolvedBacklog && sumReadingPartDistribution(summaryDistribution) === 0
+    ? inferReadingUnfinishedDistribution(session, session.timerSummary?.unfinishedQuestions ?? 0).distribution
+    : {};
+  const unfinishedByPartDraft = sumReadingPartDistribution(runtimeDistribution) > 0
+    ? runtimeDistribution
+    : sumReadingPartDistribution(summaryDistribution) > 0
+      ? summaryDistribution
+      : inferredDistribution;
 
   if (!runtime) {
     return {
@@ -77,6 +94,7 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
       readingLapTimes: {},
       currentLapIndex: 0,
       unfinishedQuestions: unfinishedDraft,
+      unfinishedByPartDraft,
       pendingSubmit: null,
       startedAtMs: null,
       lapStartedAtMs: null,
@@ -100,6 +118,7 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
       readingLapTimes: runtime.readingLapTimes,
       currentLapIndex: runtime.currentLapIndex,
       unfinishedQuestions: unfinishedDraft,
+      unfinishedByPartDraft,
       pendingSubmit: null,
       startedAtMs,
       lapStartedAtMs,
@@ -123,6 +142,7 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
     readingLapTimes: runtime.readingLapTimes,
     currentLapIndex: runtime.currentLapIndex,
     unfinishedQuestions: unfinishedDraft,
+    unfinishedByPartDraft,
     pendingSubmit,
     startedAtMs,
     lapStartedAtMs,
@@ -354,6 +374,7 @@ function ReadingTimer({
   const [readingLapTimes, setReadingLapTimes] = useState<Partial<Record<ReadingLapKey, number>>>(initialState.readingLapTimes);
   const [currentLapIndex, setCurrentLapIndex] = useState(initialState.currentLapIndex);
   const [unfinishedQuestions, setUnfinishedQuestions] = useState(initialState.unfinishedQuestions);
+  const [unfinishedByPartDraft, setUnfinishedByPartDraft] = useState<Partial<Record<ReadingPartKey, number>>>(initialState.unfinishedByPartDraft);
   const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(initialState.pendingSubmit);
   const [isOvertime, setIsOvertime] = useState(initialState.isOvertime);
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
@@ -375,6 +396,100 @@ function ReadingTimer({
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
+  const unfinishedByPartTotal = useMemo(() => sumReadingPartDistribution(unfinishedByPartDraft), [unfinishedByPartDraft]);
+
+  function buildInferenceRecord(): SessionRecord {
+    return {
+      ...session,
+      readingLapTimes,
+      timerRuntime: {
+        ...session.timerRuntime,
+        startedAt: session.timerRuntime?.startedAt ?? new Date(startedAtRef.current ?? Date.now()).toISOString(),
+        currentLapIndex,
+        readingLapTimes,
+      },
+    };
+  }
+
+  function applySmartUnfinishedDistribution(target?: number) {
+    const parsed = typeof target === 'number' ? target : Number(unfinishedQuestions);
+    const unfinishedCount = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+    if (unfinishedCount <= 0) {
+      setUnfinishedByPartDraft({});
+      setUnfinishedQuestions('0');
+      return;
+    }
+
+    const inferred = inferReadingUnfinishedDistribution(buildInferenceRecord(), unfinishedCount);
+    const normalized = normalizeReadingPartDistribution(inferred.distribution);
+    const normalizedTotal = sumReadingPartDistribution(normalized);
+    setUnfinishedByPartDraft(normalized);
+    setUnfinishedQuestions(String(normalizedTotal > 0 ? normalizedTotal : unfinishedCount));
+  }
+
+  function updateUnfinishedByPart(part: ReadingPartKey, value: string) {
+    const parsed = Number(value);
+    const safe = Number.isNaN(parsed) ? 0 : Math.max(0, Math.floor(parsed));
+
+    setUnfinishedByPartDraft((current) => {
+      const next = { ...current };
+      if (safe > 0) {
+        next[part] = safe;
+      } else {
+        delete next[part];
+      }
+
+      const total = sumReadingPartDistribution(next);
+      setUnfinishedQuestions(String(total));
+      return next;
+    });
+  }
+
+  function updateUnfinishedQuestionsInput(value: string) {
+    setUnfinishedQuestions(value);
+
+    const parsed = Number(value);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      setUnfinishedByPartDraft({});
+    }
+  }
+
+  function deriveUnfinishedSubmission(unfinishedCountInput: number): {
+    unfinishedCount: number;
+    unfinishedByPart?: Partial<Record<ReadingPartKey, number>>;
+    unfinishedByPartMeta?: UnfinishedByPartMeta;
+  } {
+    const requested = Math.max(0, Math.floor(unfinishedCountInput));
+    const manualDistribution = normalizeReadingPartDistribution(unfinishedByPartDraft);
+    const manualTotal = sumReadingPartDistribution(manualDistribution);
+
+    if (manualTotal > 0) {
+      return {
+        unfinishedCount: manualTotal,
+        unfinishedByPart: manualDistribution,
+        unfinishedByPartMeta: {
+          source: 'manual',
+          confidence: 1,
+        },
+      };
+    }
+
+    if (requested <= 0) {
+      return {
+        unfinishedCount: 0,
+      };
+    }
+
+    const inferred = inferReadingUnfinishedDistribution(buildInferenceRecord(), requested);
+    return {
+      unfinishedCount: requested,
+      unfinishedByPart: normalizeReadingPartDistribution(inferred.distribution),
+      unfinishedByPartMeta: {
+        source: inferred.source,
+        confidence: inferred.confidence,
+      },
+    };
+  }
 
   function persistRuntime(next: Partial<NonNullable<SessionRecord['timerRuntime']>>) {
     patchSession(session.id, {
@@ -386,6 +501,7 @@ function ReadingTimer({
         currentLapIndex,
         readingLapTimes,
         unfinishedQuestionsDraft: unfinishedQuestions,
+        unfinishedByPartDraft,
         timeLeftMs: Math.max(timeLeft, 0),
         ...session.timerRuntime,
         ...next,
@@ -406,6 +522,8 @@ function ReadingTimer({
 
   function commitStrictAttempt(options: PendingSubmit & {
     unfinishedCount: number;
+    unfinishedByPart?: Partial<Record<ReadingPartKey, number>>;
+    unfinishedByPartMeta?: UnfinishedByPartMeta;
     readingLapTimesOverride?: Partial<Record<ReadingLapKey, number>>;
     keepOvertimeRuntime?: boolean;
   }) {
@@ -425,6 +543,8 @@ function ReadingTimer({
         timedOut: options.timedOut && options.unfinishedCount > 0,
         unfinishedQuestions: options.unfinishedCount,
         resolvedUnfinished: options.unfinishedCount === 0,
+        unfinishedByPart: options.unfinishedByPart,
+        unfinishedByPartMeta: options.unfinishedByPartMeta,
         overtimeElapsedMs: session.timerSummary?.overtimeElapsedMs,
         completedAt: new Date().toISOString(),
       },
@@ -435,6 +555,7 @@ function ReadingTimer({
       resetLocalTimerState();
       setTimeLeft(totalDurationMs);
       setUnfinishedQuestions(options.unfinishedCount > 0 ? String(options.unfinishedCount) : '');
+      setUnfinishedByPartDraft(options.unfinishedByPart ?? {});
       onStrictAttemptSaved?.(session.id);
       trackUXEvent('strict_attempt_saved', session.id);
     }
@@ -480,6 +601,7 @@ function ReadingTimer({
       timerRuntime: {
         ...runtime,
         unfinishedQuestionsDraft: unfinishedQuestions,
+        unfinishedByPartDraft,
         pendingSubmit: pendingSubmit ?? undefined,
       },
     });
@@ -523,16 +645,19 @@ function ReadingTimer({
 
     const runtimePending = session.timerRuntime.pendingSubmit;
     const sameDraft = session.timerRuntime.unfinishedQuestionsDraft === unfinishedQuestions;
+    const runtimeByPartDraft = normalizeReadingPartDistribution(session.timerRuntime.unfinishedByPartDraft);
+    const currentByPartDraft = normalizeReadingPartDistribution(unfinishedByPartDraft);
+    const sameByPartDraft = READING_PARTS.every((part) => runtimeByPartDraft[part] === currentByPartDraft[part]);
     const samePending =
       runtimePending?.forcedSubmit === pendingSubmit.forcedSubmit &&
       runtimePending?.timedOut === pendingSubmit.timedOut;
 
-    if (sameDraft && samePending) {
+    if (sameDraft && samePending && sameByPartDraft) {
       return;
     }
 
     syncPendingSubmitDraft();
-  }, [pendingSubmit, session.timerRuntime, unfinishedQuestions]);
+  }, [pendingSubmit, session.timerRuntime, unfinishedByPartDraft, unfinishedQuestions]);
 
   const startTimer = () => {
     const now = Date.now();
@@ -549,6 +674,7 @@ function ReadingTimer({
     setIsOvertime(false);
     setOvertimeElapsedMs(0);
     setUnfinishedQuestions('');
+    setUnfinishedByPartDraft({});
     setLapUndo(null);
 
     patchSession(session.id, {
@@ -561,6 +687,7 @@ function ReadingTimer({
         currentLapIndex: 0,
         readingLapTimes: {},
         unfinishedQuestionsDraft: '',
+        unfinishedByPartDraft: {},
       },
     });
 
@@ -570,6 +697,15 @@ function ReadingTimer({
   const startBacklogResolutionTimer = () => {
     const now = Date.now();
     const lockedUnfinished = Math.max(session.timerSummary?.unfinishedQuestions ?? 0, 0);
+    const summaryDistribution = normalizeReadingPartDistribution(session.timerSummary?.unfinishedByPart);
+    const inferredDistribution = sumReadingPartDistribution(summaryDistribution) > 0
+      ? summaryDistribution
+      : inferReadingUnfinishedDistribution(buildInferenceRecord(), lockedUnfinished).distribution;
+    const lockedDistribution = normalizeReadingPartDistribution(inferredDistribution);
+    const effectiveLockedUnfinished = Math.max(
+      lockedUnfinished,
+      sumReadingPartDistribution(lockedDistribution)
+    );
 
     startedAtRef.current = toValidTime(session.timerSummary?.completedAt) ?? now;
     lapStartedAtRef.current = null;
@@ -582,7 +718,8 @@ function ReadingTimer({
     setPendingSubmit(null);
     setShowTimeoutDialog(false);
     setLapUndo(null);
-    setUnfinishedQuestions(String(lockedUnfinished));
+    setUnfinishedQuestions(String(effectiveLockedUnfinished));
+    setUnfinishedByPartDraft(lockedDistribution);
 
     patchSession(session.id, {
       status: 'in-progress',
@@ -592,7 +729,8 @@ function ReadingTimer({
         lapStartedAt: undefined,
         currentLapIndex,
         readingLapTimes,
-        unfinishedQuestionsDraft: String(lockedUnfinished),
+        unfinishedQuestionsDraft: String(effectiveLockedUnfinished),
+        unfinishedByPartDraft: lockedDistribution,
         timeLeftMs: 0,
         isOvertime: true,
         overtimeStartedAt: new Date(now).toISOString(),
@@ -656,6 +794,7 @@ function ReadingTimer({
         currentLapIndex: currentLapIndex + 1,
         readingLapTimes: nextLapTimes,
         unfinishedQuestionsDraft: unfinishedQuestions,
+        unfinishedByPartDraft,
       },
     });
   };
@@ -679,6 +818,7 @@ function ReadingTimer({
         currentLapIndex: lapUndo.previousLapIndex,
         readingLapTimes: lapUndo.previousLapTimes,
         unfinishedQuestionsDraft: unfinishedQuestions,
+        unfinishedByPartDraft,
         timeLeftMs: Math.max(timeLeft, 0),
       },
     });
@@ -702,27 +842,42 @@ function ReadingTimer({
       return;
     }
 
-    const unfinishedCount = Number(unfinishedQuestions);
-    if (Number.isNaN(unfinishedCount) || unfinishedCount < 0) {
+    const inputCount = Number(unfinishedQuestions);
+    if (Number.isNaN(inputCount) || inputCount < 0) {
       return;
     }
 
-    commitStrictAttempt({ ...pendingSubmit, unfinishedCount });
+    const unresolved = deriveUnfinishedSubmission(inputCount);
+    setUnfinishedQuestions(String(unresolved.unfinishedCount));
+    setUnfinishedByPartDraft(unresolved.unfinishedByPart ?? {});
+
+    commitStrictAttempt({
+      ...pendingSubmit,
+      unfinishedCount: unresolved.unfinishedCount,
+      unfinishedByPart: unresolved.unfinishedByPart,
+      unfinishedByPartMeta: unresolved.unfinishedByPartMeta,
+    });
   };
 
   const startOvertime = () => {
-    const unfinishedCount = Number(unfinishedQuestions);
-    if (Number.isNaN(unfinishedCount) || unfinishedCount < 0) {
+    const inputCount = Number(unfinishedQuestions);
+    if (Number.isNaN(inputCount) || inputCount < 0) {
       return;
     }
+
+    const unresolved = deriveUnfinishedSubmission(inputCount);
+    setUnfinishedQuestions(String(unresolved.unfinishedCount));
+    setUnfinishedByPartDraft(unresolved.unfinishedByPart ?? {});
 
     const now = Date.now();
     const strictSummary = {
       totalElapsedMs: totalDurationMs,
       forcedSubmit: true,
-      timedOut: unfinishedCount > 0,
-      unfinishedQuestions: unfinishedCount,
-      resolvedUnfinished: unfinishedCount === 0,
+      timedOut: unresolved.unfinishedCount > 0,
+      unfinishedQuestions: unresolved.unfinishedCount,
+      resolvedUnfinished: unresolved.unfinishedCount === 0,
+      unfinishedByPart: unresolved.unfinishedByPart,
+      unfinishedByPartMeta: unresolved.unfinishedByPartMeta,
       completedAt: new Date().toISOString(),
     };
 
@@ -735,7 +890,8 @@ function ReadingTimer({
         lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
         currentLapIndex,
         readingLapTimes,
-        unfinishedQuestionsDraft: String(unfinishedCount),
+        unfinishedQuestionsDraft: String(unresolved.unfinishedCount),
+        unfinishedByPartDraft: unresolved.unfinishedByPart,
         timeLeftMs: 0,
         isOvertime: true,
         overtimeStartedAt: new Date(now).toISOString(),
@@ -1037,7 +1193,7 @@ function ReadingTimer({
                 type="number"
                 min="0"
                 value={unfinishedQuestions}
-                onChange={(event) => setUnfinishedQuestions(event.target.value)}
+                onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
                 className="h-11 w-24 border-0 bg-transparent text-center text-lg font-semibold focus-visible:ring-0"
                 placeholder={copy.unfinishedPlaceholder}
               />
@@ -1045,6 +1201,41 @@ function ReadingTimer({
                 {copy.saveSubmitData}
               </Button>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-red-200/80 bg-white/70 p-3 dark:border-red-900/30 dark:bg-zinc-950/60">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold tracking-wide text-zinc-600 dark:text-zinc-300">
+                {locale === 'zh' ? '按题型填写（适配乱序做题）' : 'By Part (for non-linear solving order)'}
+              </div>
+              <button
+                type="button"
+                onClick={() => applySmartUnfinishedDistribution()}
+                className="rounded-full border border-zinc-200/80 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+              >
+                {locale === 'zh' ? '智能分配' : 'Smart fill'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {READING_PARTS.map((part) => (
+                <label key={`pending-${part}`} className="rounded-xl border border-zinc-200/80 bg-white/90 px-2.5 py-2 dark:border-zinc-800 dark:bg-zinc-900/90">
+                  <div className="mb-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{translatePart(locale, part)}</div>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={unfinishedByPartDraft[part] ?? ''}
+                    onChange={(event) => updateUnfinishedByPart(part, event.target.value)}
+                    className="h-9 border-zinc-200/80 bg-white/80 text-center text-base font-semibold dark:border-zinc-700 dark:bg-zinc-950/80"
+                    placeholder="0"
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {locale === 'zh'
+                ? `题型合计 ${unfinishedByPartTotal} 题，未完成总数 ${unfinishedQuestions || '0'} 题。`
+                : `${unfinishedByPartTotal} by-part, ${unfinishedQuestions || '0'} total.`}
+            </p>
           </div>
         </motion.div>
       )}
@@ -1091,12 +1282,47 @@ function ReadingTimer({
                  type="number"
                  min="0"
                  value={unfinishedQuestions}
-                 onChange={(event) => setUnfinishedQuestions(event.target.value)}
+                 onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
                  className="h-16 text-center text-3xl font-semibold bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl border-zinc-200 dark:border-zinc-800"
                  placeholder="0"
                  autoFocus
                />
                <span className="mt-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">{locale === 'zh' ? '未完题数' : 'Unfinished Count'}</span>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  {locale === 'zh' ? '按题型填写（推荐）' : 'By Part (recommended)'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => applySmartUnfinishedDistribution()}
+                  className="rounded-full border border-zinc-200/80 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+                >
+                  {locale === 'zh' ? '智能分配' : 'Smart fill'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {READING_PARTS.map((part) => (
+                  <label key={`dialog-${part}`} className="rounded-xl border border-zinc-200/80 bg-white/90 px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-900/90">
+                    <div className="mb-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{translatePart(locale, part)}</div>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={unfinishedByPartDraft[part] ?? ''}
+                      onChange={(event) => updateUnfinishedByPart(part, event.target.value)}
+                      className="h-9 border-zinc-200/80 bg-white/80 text-center text-base font-semibold dark:border-zinc-700 dark:bg-zinc-950/80"
+                      placeholder="0"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                {locale === 'zh'
+                  ? `题型合计 ${unfinishedByPartTotal} 题。`
+                  : `${unfinishedByPartTotal} by-part total.`}
+              </p>
             </div>
           </div>
 

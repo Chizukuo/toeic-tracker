@@ -49,6 +49,9 @@ const TIMER_RUNTIME_FLAG_TIME_LEFT = 16;
 const TIMER_RUNTIME_FLAG_IS_OVERTIME = 32;
 const TIMER_RUNTIME_FLAG_OVERTIME_STARTED_AT = 64;
 const TIMER_RUNTIME_FLAG_OVERTIME_ELAPSED = 128;
+const TIMER_RUNTIME_FLAG_UNFINISHED_BY_PART_DRAFT = 256;
+
+const UNFINISHED_BY_PART_SOURCE_CODES = ['fallback', 'inferred', 'manual'] as const;
 
 const METADATA_FLAG_OVERRIDE = 1;
 const DEFAULT_MINIMUM_READER_VERSION = 1;
@@ -56,7 +59,7 @@ const DEFAULT_MINIMUM_READER_VERSION = 1;
 type StatusCode = 0 | 1 | 2;
 type LocaleCode = 0 | 1;
 
-type CompactTimerSummary = [number, number, number, string, number?, number?];
+type CompactTimerSummary = [number, number, number, string, number?, number[]?, number?];
 type CompactTimerRuntime = [string, number, number, ...(string | number | number[])[]];
 type CompactSessionDelta = [number, number, ...(number | number[] | CompactTimerSummary | CompactTimerRuntime | string)[]];
 type CompactHistoricalScore = [string, number, number, number, number, string, string?];
@@ -313,6 +316,17 @@ function encodeTimerSummary(snapshot: SprintSnapshot['data']['sessions'][number]
     return undefined;
   }
 
+  const unfinishedByPartPairs = encodeNumberPairs(snapshot.unfinishedByPart ?? {}, READING_PARTS);
+  const sourceCode = snapshot.unfinishedByPartMeta
+    ? UNFINISHED_BY_PART_SOURCE_CODES.indexOf(snapshot.unfinishedByPartMeta.source)
+    : -1;
+  const confidenceBucket = snapshot.unfinishedByPartMeta
+    ? Math.max(0, Math.min(100, Math.round(snapshot.unfinishedByPartMeta.confidence * 100)))
+    : undefined;
+  const metaCode = sourceCode >= 0 && confidenceBucket !== undefined
+    ? sourceCode * 101 + confidenceBucket
+    : undefined;
+
   return [
     snapshot.totalElapsedMs,
     (snapshot.forcedSubmit ? 1 : 0) |
@@ -321,6 +335,8 @@ function encodeTimerSummary(snapshot: SprintSnapshot['data']['sessions'][number]
     snapshot.unfinishedQuestions,
     encodeInstant(snapshot.completedAt, anchor),
     snapshot.overtimeElapsedMs,
+    unfinishedByPartPairs.length > 0 ? unfinishedByPartPairs : undefined,
+    metaCode,
   ] satisfies CompactTimerSummary;
 }
 
@@ -336,6 +352,17 @@ function decodeTimerSummary(summary: CompactTimerSummary | undefined, anchor: st
     unfinishedQuestions: summary[2],
     resolvedUnfinished: Boolean(summary[1] & 4),
     completedAt: decodeInstant(summary[3], anchor) ?? new Date(0).toISOString(),
+    ...(Array.isArray(summary[5])
+      ? { unfinishedByPart: decodeNumberPairs(summary[5], READING_PARTS) }
+      : {}),
+    ...(typeof summary[6] === 'number'
+      ? {
+          unfinishedByPartMeta: {
+            source: UNFINISHED_BY_PART_SOURCE_CODES[Math.floor(summary[6] / 101)] ?? 'fallback',
+            confidence: Math.max(0, Math.min(1, (summary[6] % 101) / 100)),
+          },
+        }
+      : {}),
     ...(typeof summary[4] === 'number' ? { overtimeElapsedMs: summary[4] } : {}),
   };
 }
@@ -370,6 +397,12 @@ function encodeTimerRuntime(snapshot: SprintSnapshot['data']['sessions'][number]
   if (snapshot.unfinishedQuestionsDraft) {
     flags |= TIMER_RUNTIME_FLAG_UNFINISHED_DRAFT;
     payload.push(snapshot.unfinishedQuestionsDraft);
+  }
+
+  const unfinishedByPartDraftPairs = encodeNumberPairs(snapshot.unfinishedByPartDraft ?? {}, READING_PARTS);
+  if (unfinishedByPartDraftPairs.length > 0) {
+    flags |= TIMER_RUNTIME_FLAG_UNFINISHED_BY_PART_DRAFT;
+    payload.push(unfinishedByPartDraftPairs);
   }
 
   if (snapshot.timeLeftMs !== undefined) {
@@ -441,6 +474,10 @@ function decodeTimerRuntime(runtime: CompactTimerRuntime | undefined, anchor: st
 
   if (flags & TIMER_RUNTIME_FLAG_UNFINISHED_DRAFT) {
     decoded.unfinishedQuestionsDraft = nextString() || undefined;
+  }
+
+  if (flags & TIMER_RUNTIME_FLAG_UNFINISHED_BY_PART_DRAFT) {
+    decoded.unfinishedByPartDraft = decodeNumberPairs(nextNumberArray(), READING_PARTS);
   }
 
   if (flags & TIMER_RUNTIME_FLAG_TIME_LEFT) {

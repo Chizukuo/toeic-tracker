@@ -10,6 +10,43 @@ import {
 } from '@/lib/toeic';
 
 describe('toeic scoring rules', () => {
+  it('respects manual unfinished distribution before fallback allocation', () => {
+    const reading = createInitialSessions().find((session) => session.id === 'R1');
+
+    if (!reading) {
+      throw new Error('Missing R1 session fixture');
+    }
+
+    reading.status = 'debugged';
+    reading.mistakes = {
+      'Part 5': 2,
+      'Part 6': 1,
+    };
+    reading.timerSummary = {
+      totalElapsedMs: 75 * 60 * 1000,
+      forcedSubmit: true,
+      timedOut: true,
+      unfinishedQuestions: 7,
+      resolvedUnfinished: false,
+      unfinishedByPart: {
+        'Part 5': 2,
+        'Part 7 Single': 5,
+      },
+      unfinishedByPartMeta: {
+        source: 'manual',
+        confidence: 1,
+      },
+      completedAt: '2026-03-11T09:00:00.000Z',
+    };
+
+    const lossMap = getSessionPartLossMap(reading);
+
+    expect(lossMap['Part 5']).toBe(4);
+    expect(lossMap['Part 6']).toBe(1);
+    expect(lossMap['Part 7 Single']).toBe(5);
+    expect(lossMap['Part 7 Multiple']).toBe(0);
+  });
+
   it('allocates unfinished reading questions from the back of the paper first', () => {
     const reading = createInitialSessions().find((session) => session.id === 'R1');
 
@@ -37,6 +74,40 @@ describe('toeic scoring rules', () => {
     expect(lossMap['Part 7 Single']).toBe(0);
     expect(lossMap['Part 6']).toBe(1);
     expect(lossMap['Part 5']).toBe(2);
+  });
+
+  it('infers unfinished distribution to late reading sections when earlier laps were captured', () => {
+    const reading = createInitialSessions().find((session) => session.id === 'R3');
+
+    if (!reading) {
+      throw new Error('Missing R3 session fixture');
+    }
+
+    reading.status = 'in-progress';
+    reading.readingLapTimes = {
+      'Part 5': 10 * 60 * 1000,
+      'Part 6': 8 * 60 * 1000,
+    };
+    reading.timerRuntime = {
+      startedAt: '2026-03-11T08:00:00.000Z',
+      lapStartedAt: '2026-03-11T08:18:00.000Z',
+      currentLapIndex: 2,
+      readingLapTimes: reading.readingLapTimes,
+    };
+    reading.timerSummary = {
+      totalElapsedMs: 75 * 60 * 1000,
+      forcedSubmit: true,
+      timedOut: true,
+      unfinishedQuestions: 6,
+      resolvedUnfinished: false,
+      completedAt: '2026-03-11T09:15:00.000Z',
+    };
+
+    const lossMap = getSessionPartLossMap(reading);
+
+    expect(lossMap['Part 5']).toBe(0);
+    expect(lossMap['Part 6']).toBe(0);
+    expect((lossMap['Part 7 Single'] ?? 0) + (lossMap['Part 7 Multiple'] ?? 0)).toBe(6);
   });
 
   it('downgrades confidence when a session is still running or lacks a timer-summary', () => {
