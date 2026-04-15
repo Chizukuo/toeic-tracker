@@ -121,14 +121,16 @@ function MissionControl() {
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link
-                href={nextStepHref}
-                onClick={() => { if (nextStep.targetSessionId) selectSession(nextStep.targetSessionId); }}
-                className="inline-flex items-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-7 py-3.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 active:scale-[0.97] dark:text-zinc-900"
-              >
-                {nextStep.cta}
-                <ArrowRight className="size-4" />
-              </Link>
+              <motion.div whileTap={{ scale: 0.97 }} className="inline-block">
+                <Link
+                  href={nextStepHref}
+                  onClick={() => { if (nextStep.targetSessionId) selectSession(nextStep.targetSessionId); }}
+                  className="inline-flex items-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-7 py-3.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
+                >
+                  {nextStep.cta}
+                  <ArrowRight className="size-4" />
+                </Link>
+              </motion.div>
 
               {nextStep.targetSessionId && (
                 <span className="cheese-pill">{nextStep.targetSessionId}</span>
@@ -181,9 +183,9 @@ function MissionControl() {
                   onClick={() => selectSession(session.id)}
                   title={`${session.label} — ${session.title}`}
                   className={cn(
-                    'group flex flex-col items-center justify-center gap-1.5 rounded-[10px] p-1.5 transition-all sm:p-2',
+                    'relative group flex flex-col items-center justify-center gap-1.5 rounded-[10px] p-1.5 transition-colors sm:p-2',
                     isActive
-                      ? 'bg-[var(--cheese-gold-soft)] ring-2 ring-[var(--cheese-gold)]/40'
+                      ? '' // active styling is handled by the sliding background
                       : isDone
                         ? 'bg-emerald-500/8 hover:bg-emerald-500/15 dark:bg-emerald-500/10'
                         : isInProgress
@@ -191,9 +193,16 @@ function MissionControl() {
                           : 'bg-[var(--surface-grouped)]/50 hover:bg-[var(--surface-grouped)]'
                   )}
                 >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeSessionHighlight"
+                      className="absolute inset-0 rounded-[10px] bg-[var(--cheese-gold-soft)] ring-2 ring-[var(--cheese-gold)]/40 pointer-events-none"
+                      transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+                    />
+                  )}
                   <div
                     className={cn(
-                      'size-3 rounded-full transition-transform sm:size-4',
+                      'relative z-10 size-3 rounded-full transition-transform sm:size-4',
                       isDone
                         ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]'
                         : isInProgress || isActive
@@ -203,7 +212,7 @@ function MissionControl() {
                     )}
                   />
                   <span className={cn(
-                    'text-[9px] font-bold leading-none sm:text-[10px]',
+                    'relative z-10 text-[9px] font-bold leading-none sm:text-[10px]',
                     isActive ? 'text-[var(--cheese-gold)]' : 'text-[var(--label-tertiary)]'
                   )}>
                     {session.label}
@@ -223,75 +232,81 @@ function MissionControl() {
       >
         <div className="grid gap-4 sm:grid-cols-3">
           {/* Score Estimate */}
-          <Link href="/insights" className="group">
-            <div className="cheese-card cheese-card-amber h-full p-5">
+          <motion.div whileTap={{ scale: 0.97 }}>
+            <Link href="/insights" className="group block h-full">
+              <div className="cheese-card cheese-card-amber h-full p-5">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-gold-soft)]">
+                    <Zap className="size-3.5 text-[var(--cheese-gold)]" />
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
+                    {locale === 'zh' ? '估分' : 'Score'}
+                  </span>
+                </div>
+                <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
+                  {scoreEstimate ? scoreEstimate.total : '—'}
+                </div>
+                <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
+                  {scoreEstimate
+                    ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
+                    : locale === 'zh' ? '完成至少一套后可估分' : 'Complete a set to estimate'}
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+
+          {/* Weakest Part */}
+          <motion.div whileTap={{ scale: 0.97 }}>
+            <Link href="/insights" className="group block h-full">
+              <div className="cheese-card cheese-card-rose h-full p-5">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-rose-500/10 dark:bg-rose-500/15">
+                    <Crosshair className="size-3.5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
+                    {locale === 'zh' ? '弱项' : 'Weak Spot'}
+                  </span>
+                </div>
+                <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
+                  {weakestPart ? translatePart(locale, weakestPart) : '—'}
+                </div>
+                <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
+                  {weakestPart
+                    ? locale === 'zh' ? '当前最大失分源' : 'Highest loss source'
+                    : locale === 'zh' ? '暂无数据' : 'No data yet'}
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+
+          {/* Exam Countdown (Clickable for Goal Config) */}
+          <motion.div whileTap={{ scale: 0.97 }} className="h-full">
+            <button 
+               type="button"
+               onClick={() => setIsConfigOpen(true)}
+               className="cheese-card cheese-card-cyan h-full p-5 text-left w-full hover:brightness-105 transition-all"
+            >
               <div className="flex items-center gap-2">
-                <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-gold-soft)]">
-                  <Zap className="size-3.5 text-[var(--cheese-gold)]" />
+                <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-cyan-soft)]">
+                  <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
                 </div>
                 <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '估分' : 'Score'}
+                  {locale === 'zh' ? '目标配置' : 'Mission Goal'}
                 </span>
               </div>
               <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-                {scoreEstimate ? scoreEstimate.total : '—'}
-              </div>
-              <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
-                {scoreEstimate
-                  ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
-                  : locale === 'zh' ? '完成至少一套后可估分' : 'Complete a set to estimate'}
-              </div>
-            </div>
-          </Link>
-
-          {/* Weakest Part */}
-          <Link href="/insights" className="group">
-            <div className="cheese-card cheese-card-rose h-full p-5">
-              <div className="flex items-center gap-2">
-                <div className="flex size-7 items-center justify-center rounded-full bg-rose-500/10 dark:bg-rose-500/15">
-                  <Crosshair className="size-3.5 text-rose-600 dark:text-rose-400" />
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '弱项' : 'Weak Spot'}
+                {daysUntilExam}
+                <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
+                  {locale === 'zh' ? '天' : 'days'}
                 </span>
               </div>
-              <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
-                {weakestPart ? translatePart(locale, weakestPart) : '—'}
+              <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
+                <span className="font-medium">{examDate}</span>
+                <span className="opacity-50">·</span>
+                <span>{locale === 'zh' ? `设为 ${sessions.length / 2} 套` : `${sessions.length / 2} Sets`}</span>
               </div>
-              <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
-                {weakestPart
-                  ? locale === 'zh' ? '当前最大失分源' : 'Highest loss source'
-                  : locale === 'zh' ? '暂无数据' : 'No data yet'}
-              </div>
-            </div>
-          </Link>
-
-          {/* Exam Countdown (Clickable for Goal Config) */}
-          <button 
-             type="button"
-             onClick={() => setIsConfigOpen(true)}
-             className="cheese-card cheese-card-cyan h-full p-5 text-left w-full hover:scale-[1.02] active:scale-[0.98] transition-transform"
-          >
-            <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-full bg-[var(--cheese-cyan-soft)]">
-                <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
-              </div>
-              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                {locale === 'zh' ? '目标配置' : 'Mission Goal'}
-              </span>
-            </div>
-            <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-              {daysUntilExam}
-              <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
-                {locale === 'zh' ? '天' : 'days'}
-              </span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
-              <span className="font-medium">{examDate}</span>
-              <span className="opacity-50">·</span>
-              <span>{locale === 'zh' ? `设为 ${sessions.length / 2} 套` : `${sessions.length / 2} Sets`}</span>
-            </div>
-          </button>
+            </button>
+          </motion.div>
         </div>
       </motion.div>
 

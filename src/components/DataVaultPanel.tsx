@@ -99,7 +99,7 @@ export function DataVaultPanel() {
 		setPendingFileImport({
 			fileName,
 			payload: parsed,
-			parsed: preview,
+			parsed: preview as ParsedImportSnapshot,
 			rawBytes: new TextEncoder().encode(rawText).length,
 		});
 		setImportOpen(true);
@@ -502,7 +502,7 @@ export function DataVaultPanel() {
 				setPendingFileImport({
 					fileName: locale === 'zh' ? '自动备份恢复' : 'Auto-Backup Restore',
 					payload: parsed,
-					parsed: preview,
+					parsed: preview as ParsedImportSnapshot,
 					rawBytes: new TextEncoder().encode(raw).length,
 				});
 				setImportOpen(true);

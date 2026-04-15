@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshCcw, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { translatePart } from '@/lib/i18n';
@@ -40,13 +40,18 @@ export function WhatIfSimulator({
   const [simListening, setSimListening] = useState<Record<MistakeKey, number>>(baselineListening);
   const [simReading, setSimReading] = useState<Record<MistakeKey, number>>(baselineReading);
 
-  useEffect(() => {
-    setSimListening(baselineListening);
-  }, [listeningSession?.id, baselineListening]);
+  const [prevListeningId, setPrevListeningId] = useState(listeningSession?.id);
+  const [prevReadingId, setPrevReadingId] = useState(readingSession?.id);
 
-  useEffect(() => {
+  if (listeningSession?.id !== prevListeningId) {
+    setPrevListeningId(listeningSession?.id);
+    setSimListening(baselineListening);
+  }
+
+  if (readingSession?.id !== prevReadingId) {
+    setPrevReadingId(readingSession?.id);
     setSimReading(baselineReading);
-  }, [readingSession?.id, baselineReading]);
+  }
 
   const resetSimulation = () => {
     setSimListening(baselineListening);

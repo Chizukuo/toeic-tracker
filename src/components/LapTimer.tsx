@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, Flag, Play, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,8 @@ type InitialTimerState = {
   overtimeElapsedMs: number;
   showTimeoutDialog: boolean;
 };
+
+const getNow = () => Date.now();
 
 function toValidTime(value?: string) {
   if (!value) {
@@ -124,7 +126,7 @@ function getInitialTimerState(session: SessionRecord, totalDurationMs: number): 
 
   const restoredTimeLeft = typeof runtime.timeLeftMs === 'number'
     ? Math.max(runtime.timeLeftMs, 0)
-    : Math.max(totalDurationMs - (Date.now() - startedAtMs), 0);
+    : Math.max(totalDurationMs - (getNow() - startedAtMs), 0);
   const pendingSubmit = runtime.pendingSubmit ?? (session.type === 'R' && restoredTimeLeft <= 0
     ? { forcedSubmit: true, timedOut: true }
     : null);
@@ -163,7 +165,7 @@ function ListeningFlow({
     const runtime = session.timerRuntime;
     if (!runtime?.startedAt) return 0;
     const startMs = toValidTime(runtime.startedAt);
-    return startMs ? Math.max(Date.now() - startMs, 0) : 0;
+    return startMs ? Math.max(getNow() - startMs, 0) : 0;
   });
   const [isActive, setIsActive] = useState(() => {
     const runtime = session.timerRuntime;
@@ -180,7 +182,7 @@ function ListeningFlow({
 
   // Start stopwatch
   const handleStart = useCallback(() => {
-    const now = Date.now();
+    const now = getNow();
     startedAtRef.current = now;
     setIsActive(true);
     setElapsedMs(0);
@@ -224,7 +226,7 @@ function ListeningFlow({
     if (!isActive) return;
     const id = window.setInterval(() => {
       const start = startedAtRef.current;
-      setElapsedMs(start ? Date.now() - start : 0);
+      setElapsedMs(start ? getNow() - start : 0);
     }, 1000);
     return () => window.clearInterval(id);
   }, [isActive]);
@@ -418,7 +420,7 @@ function ReadingTimer({
       readingLapTimes,
       timerRuntime: {
         ...session.timerRuntime,
-        startedAt: session.timerRuntime?.startedAt ?? new Date(startedAtRef.current ?? Date.now()).toISOString(),
+        startedAt: session.timerRuntime?.startedAt ?? new Date(startedAtRef.current ?? getNow()).toISOString(),
         currentLapIndex: currentLapIndex,
         readingLapTimes,
       },
@@ -516,7 +518,7 @@ function ReadingTimer({
       return;
     }
 
-    const now = Date.now();
+    const now = getNow();
     const elapsed = Math.max(now - lapStartedAtRef.current, 0);
     const nextLapTimes = elapsed > 0
       ? {
@@ -551,13 +553,13 @@ function ReadingTimer({
     if (!lapStartedAtRef.current || !currentSegment || !timerRunning || overtimeMode) {
       return readingLapTimes;
     }
-    const elapsed = Math.max(Date.now() - lapStartedAtRef.current, 1);
+    const elapsed = Math.max(getNow() - lapStartedAtRef.current, 1);
     const nextTimes = {
       ...readingLapTimes,
       [currentSegment.key]: (readingLapTimes[currentSegment.key] ?? 0) + elapsed,
     };
     setReadingLapTimes(nextTimes);
-    lapStartedAtRef.current = Date.now();
+    lapStartedAtRef.current = getNow();
     return nextTimes;
   }
 
@@ -567,7 +569,7 @@ function ReadingTimer({
       status: 'in-progress',
       readingLapTimes: times,
       timerRuntime: {
-        startedAt: new Date(startedAtRef.current ?? Date.now()).toISOString(),
+        startedAt: new Date(startedAtRef.current ?? getNow()).toISOString(),
         lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
         currentLapIndex: currentLapIndex,
         readingLapTimes: times,
@@ -601,7 +603,7 @@ function ReadingTimer({
     const elapsedMs = options.timedOut
       ? totalDurationMs
       : startedAtRef.current
-        ? Math.min(Math.max(Date.now() - startedAtRef.current, 0), totalDurationMs)
+        ? Math.min(Math.max(getNow() - startedAtRef.current, 0), totalDurationMs)
         : totalDurationMs - timeLeft;
 
     patchSession(session.id, {
@@ -677,7 +679,7 @@ function ReadingTimer({
           return;
         }
 
-        setOvertimeElapsedMs(Math.max(Date.now() - overtimeStartedAtRef.current, 0));
+        setOvertimeElapsedMs(Math.max(getNow() - overtimeStartedAtRef.current, 0));
         return;
       }
 
@@ -685,7 +687,7 @@ function ReadingTimer({
         return;
       }
 
-      const remaining = Math.max(totalDurationMs - (Date.now() - startedAtRef.current), 0);
+      const remaining = Math.max(totalDurationMs - (getNow() - startedAtRef.current), 0);
       setTimeLeft(remaining);
 
       if (remaining === 0) {
@@ -719,7 +721,7 @@ function ReadingTimer({
   }, [pendingSubmit, session.timerRuntime, unfinishedByPartDraft, unfinishedQuestions]);
 
   const startTimer = () => {
-    const now = Date.now();
+    const now = getNow();
 
     startedAtRef.current = now;
     lapStartedAtRef.current = now;
@@ -752,7 +754,7 @@ function ReadingTimer({
   };
 
   const startBacklogResolutionTimer = () => {
-    const now = Date.now();
+    const now = getNow();
     const lockedUnfinished = Math.max(session.timerSummary?.unfinishedQuestions ?? 0, 0);
     const summaryDistribution = normalizeReadingPartDistribution(session.timerSummary?.unfinishedByPart);
     const inferredDistribution = sumReadingPartDistribution(summaryDistribution) > 0
@@ -842,7 +844,7 @@ function ReadingTimer({
     setUnfinishedQuestions(String(unresolved.unfinishedCount));
     setUnfinishedByPartDraft(unresolved.unfinishedByPart ?? {});
 
-    const now = Date.now();
+    const now = getNow();
     const strictSummary = {
       totalElapsedMs: totalDurationMs,
       forcedSubmit: true,
@@ -883,7 +885,7 @@ function ReadingTimer({
 
   const stopOvertimeTimer = () => {
     const finalElapsed = overtimeStartedAtRef.current
-      ? Math.max(Date.now() - overtimeStartedAtRef.current, 0)
+      ? Math.max(getNow() - overtimeStartedAtRef.current, 0)
       : overtimeElapsedMs;
 
     patchSession(session.id, {

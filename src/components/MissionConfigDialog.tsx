@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Target, CalendarDays, Zap } from 'lucide-react';
+import { Target, CalendarDays, Zap, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useStore } from '@/store/useStore';
@@ -79,6 +79,14 @@ function MissionConfigDialogContent({
 }: MissionConfigDialogContentProps) {
   const [draftDate, setDraftDate] = useState(initialDate);
   const [draftLength, setDraftLength] = useState(initialLength);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveClick = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      onSave(draftDate, draftLength);
+    }, 400);
+  };
 
   return (
     <>
@@ -151,11 +159,12 @@ function MissionConfigDialogContent({
                 {PRESET_LENGTHS.map((len) => {
                   const isSelected = draftLength === len;
                   return (
-                    <button
+                    <motion.button
                       key={len}
                       type="button"
+                      whileTap={{ scale: 0.92 }}
                       onClick={() => setDraftLength(len)}
-                      className={`flex flex-col items-center justify-center gap-1 hover:scale-[1.02] active:scale-[0.98] rounded-[14px] border border-(--separator) py-3 text-sm font-bold transition-all ${
+                      className={`flex flex-col items-center justify-center gap-1 hover:scale-[1.02] rounded-[14px] border border-(--separator) py-3 text-sm font-bold transition-colors ${
                         isSelected
                           ? 'bg-amber-500 text-white border-amber-600 shadow-[0_2px_10px_rgba(245,158,11,0.25)] dark:bg-amber-500 dark:text-zinc-950'
                           : 'bg-(--surface-grouped) text-(--label-secondary) hover:bg-(--surface-elevated)'
@@ -165,7 +174,7 @@ function MissionConfigDialogContent({
                       <span className={`text-[10px] uppercase font-bold tracking-wider ${isSelected ? 'text-amber-100 dark:text-amber-900' : 'text-(--label-tertiary)'}`}>
                         {locale === 'zh' ? '套' : 'Sets'}
                       </span>
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -179,10 +188,33 @@ function MissionConfigDialogContent({
                 {copy.cancelAction}
               </Button>
               <Button
-                onClick={() => onSave(draftDate, draftLength)}
-                className="rounded-full bg-(--cheese-gold) hover:brightness-110 active:scale-[0.97] text-white dark:text-zinc-900 border-0 px-6 font-bold shadow-sm transition-all focus:ring-2 focus:ring-(--cheese-gold)/50 focus:ring-offset-2"
+                onClick={handleSaveClick}
+                disabled={isSaving}
+                className="relative overflow-hidden rounded-full bg-(--cheese-gold) hover:brightness-110 active:scale-[0.97] text-white dark:text-zinc-900 border-0 px-6 font-bold shadow-sm transition-all focus:ring-2 focus:ring-(--cheese-gold)/50 focus:ring-offset-2 disabled:opacity-90"
               >
-                {copy.saveConfig || (locale === 'zh' ? '保存目标' : 'Save Goal')}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {isSaving ? (
+                    <motion.div
+                      key="saved"
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      className="flex items-center gap-2"
+                    >
+                      <Check className="size-4" />
+                      {locale === 'zh' ? '已保存' : 'Saved'}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="save"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                    >
+                      {copy.saveConfig || (locale === 'zh' ? '保存目标' : 'Save Goal')}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </Button>
             </div>
           </div>

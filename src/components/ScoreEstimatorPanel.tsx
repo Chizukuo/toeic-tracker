@@ -673,12 +673,14 @@ export function ScoreEstimatorPanel() {
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} dy={10} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} domain={['dataMin - 20', 'dataMax + 20']} dx={-10} />
                   <Tooltip<number, string>
-                    labelFormatter={(_, payload: any[]) => {
-                      const point = payload?.[0]?.payload as ScoreTrendChartPoint | undefined;
+                    labelFormatter={(_, payload: unknown[]) => {
+                      const typedPayload = payload as { payload: ScoreTrendChartPoint }[];
+                      const point = typedPayload?.[0]?.payload;
                       return point?.fullDate ?? '';
                     }}
-                    formatter={(value: number, name: string, item: any) => {
-                      const point = item?.payload as ScoreTrendChartPoint | undefined;
+                    formatter={(value: number, name: string, item: unknown) => {
+                      const typedItem = item as { payload: ScoreTrendChartPoint };
+                      const point = typedItem?.payload;
                       const sourceLabel = point?.source === 'auto-estimated'
                         ? (locale === 'zh' ? '自动估分' : 'Auto Estimated')
                         : point?.source === 'estimated'

@@ -310,6 +310,7 @@ export function parseImportSnapshot(
     sprintConfig: SprintConfig;
     vocabularyEntries: VocabularyEntry[];
     unlockedAchievements: string[];
+    achievementUnlocks: Record<string, string>;
   }
 ) {
   const recoverVocabularyProvenance = (
@@ -414,6 +415,7 @@ export function parseImportSnapshot(
       sprintConfig: SPRINT_DEFAULT_CONFIG,
       vocabularyEntries: [],
       unlockedAchievements: [],
+      achievementUnlocks: {},
       result: {
         source: 'legacy-records' as const,
         importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
