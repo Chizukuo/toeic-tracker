@@ -385,6 +385,28 @@ function ReadingTimer({
   const overtimeMode = isOvertime && Boolean(session.timerRuntime?.isOvertime);
   const timerRunning = isRunning && (!isOvertime || overtimeMode);
   const currentSegment = READING_LAP_SEGMENTS[currentLapIndex];
+
+  useEffect(() => {
+    if (timerRunning && !overtimeMode && currentLapIndex !== undefined && !isListening) {
+      // Use requestAnimationFrame or setTimeout to let React and default click behaviors finish
+      const frame = requestAnimationFrame(() => {
+        if (currentLapIndex < READING_LAP_SEGMENTS.length - 1) {
+          const nextButton = document.getElementById(`segment-btn-${currentLapIndex + 1}`);
+          if (nextButton) {
+            nextButton.focus({ preventScroll: true });
+          }
+        } else if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
+          const submitBtn = document.getElementById('submit-test-btn');
+          if (submitBtn) {
+            submitBtn.focus({ preventScroll: true });
+          }
+        }
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [timerRunning, currentLapIndex, overtimeMode, isListening]);
+
+
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
@@ -984,9 +1006,10 @@ function ReadingTimer({
 
           {timerRunning && !overtimeMode && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex w-full sm:w-auto items-center justify-center">
-               <Button
+                              <Button
                  variant="outline"
                  size="lg"
+                 id="submit-test-btn"
                  onClick={submitForced}
                  className="h-16 px-10 rounded-full border-red-200 bg-white/70 text-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.15)] backdrop-blur-md hover:bg-white dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
                >
@@ -1048,20 +1071,21 @@ function ReadingTimer({
               const stored = session.readingLapTimes[segment.key];
 
               return (
-                <button
+                                <button
                   type="button"
                   key={segment.key}
+                  id={`segment-btn-${index}`}
                   onClick={() => selectActiveLap(index)}
                   disabled={overtimeMode}
                   className={cn(
-                    'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer',
+                    'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50/50 dark:focus-visible:ring-offset-zinc-900',
                     completed
-                      ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10'
+                      ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10 focus-visible:ring-emerald-400/50'
                       : active
-                        ? 'border-amber-400/50 bg-amber-50 shadow-md scale-[1.02] dark:border-amber-500/30 dark:bg-amber-900/20'
+                        ? 'border-amber-400/50 bg-amber-50 shadow-md scale-[1.02] dark:border-amber-500/30 dark:bg-amber-900/20 focus-visible:ring-amber-400/50'
                         : preselected
-                          ? 'border-sky-300/70 bg-sky-50/70 dark:border-sky-700/70 dark:bg-sky-900/20'
-                        : 'border-zinc-200/50 bg-white/50 dark:border-white/5 dark:bg-zinc-900/50 opacity-70 hover:opacity-100 hover:border-zinc-300/70 hover:dark:border-white/15'
+                          ? 'border-sky-300/70 bg-sky-50/70 dark:border-sky-700/70 dark:bg-sky-900/20 focus-visible:ring-sky-400/50'
+                        : 'border-zinc-200/50 bg-white/50 dark:border-white/5 dark:bg-zinc-900/50 opacity-70 hover:opacity-100 hover:border-zinc-300/70 hover:dark:border-white/15 focus-visible:ring-zinc-400/50 focus-visible:opacity-100'
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
