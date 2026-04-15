@@ -212,7 +212,7 @@ export function UnfinishedTrackerPanel() {
               </div>
 
               {unfinishedSessions.length === 0 ? (
-                <div className="mt-6 flex min-h-64 flex-col items-center justify-center px-6 py-8 text-center rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800">
+                <div className="mt-6 flex min-h-64 flex-col items-center justify-center px-6 py-8 text-center rounded-[24px] border border-dashed border-zinc-200 dark:border-zinc-800">
                   <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                     <ClipboardList className="size-6" />
                   </div>
@@ -288,7 +288,7 @@ export function UnfinishedTrackerPanel() {
 
               <div className="mt-5 space-y-3">
                 {unfinishedSessions.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-[14px] text-zinc-400 rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800">
+                  <div className="px-4 py-8 text-center text-[14px] text-zinc-400 rounded-[24px] border border-dashed border-zinc-200 dark:border-zinc-800">
                     {copy.unfinishedNoneDescription}
                   </div>
                 ) : (
@@ -298,7 +298,7 @@ export function UnfinishedTrackerPanel() {
                       type="button"
                       onClick={() => openSession(session.id)}
                       className={cn(
-                        'flex w-full items-center justify-between gap-3 rounded-[20px] border p-4 text-left transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
+                        'flex w-full items-center justify-between gap-3 rounded-[24px] border p-4 text-left transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
                         session.active
                           ? 'border-amber-400/40 bg-amber-400/5 dark:bg-amber-400/10 shadow-sm'
                           : 'border-black/4 dark:border-white/4 bg-white dark:bg-[#1C1C1E] hover:bg-zinc-50 dark:hover:bg-[#2C2C2E]'
@@ -446,7 +446,7 @@ function InsightTile({
   onClick?: () => void;
 }) {
   return (
-    <div className="p-4 rounded-[20px] bg-white dark:bg-[#1C1C1E] border border-black/4 dark:border-white/4 shadow-sm">
+    <div className="p-4 rounded-[24px] bg-white dark:bg-[#1C1C1E] border border-black/4 dark:border-white/4 shadow-sm">
       <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">{title}</div>
       <div className="mt-2 text-[14px] leading-relaxed text-zinc-600 dark:text-zinc-300">{body}</div>
       {actionLabel && onClick ? (

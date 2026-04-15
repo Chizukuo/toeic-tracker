@@ -135,6 +135,7 @@ interface AppState {
   vocabularyEntries: VocabularyEntry[];
   targetScore: number;
   unlockedAchievements: string[];
+  achievementUnlocks: Record<string, string>;
   justUnlocked: string[];
 
   // Core actions
@@ -208,6 +209,7 @@ export const useStore = create<AppState>()(
       vocabularyEntries: [],
       targetScore: 850,
       unlockedAchievements: [],
+      achievementUnlocks: {},
       justUnlocked: [],
 
       dismissAchievement: (id) => set((state) => ({ justUnlocked: state.justUnlocked.filter((i) => i !== id) })),
@@ -224,6 +226,7 @@ export const useStore = create<AppState>()(
             historicalScores: normalizeHistoricalScores(state.historicalScores),
             vocabularyEntries: normalizeVocabularyEntries(state.vocabularyEntries),
             unlockedAchievements: Array.isArray(state.unlockedAchievements) ? state.unlockedAchievements : [],
+            achievementUnlocks: state.achievementUnlocks || {},
           };
         }),
 
@@ -278,10 +281,13 @@ export const useStore = create<AppState>()(
 
           const nextState = { ...state, historicalScores: nextHistoricalScores };
           const newlyUnlocked = evaluateAchievements(nextState);
+          const now = new Date().toISOString();
+          const newDates = Object.fromEntries(newlyUnlocked.map(id => [id, now]));
 
           return {
             historicalScores: nextHistoricalScores,
             unlockedAchievements: [...state.unlockedAchievements, ...newlyUnlocked],
+            achievementUnlocks: { ...(state.achievementUnlocks || {}), ...newDates },
             justUnlocked: [...state.justUnlocked, ...newlyUnlocked],
           };
         }),
@@ -361,10 +367,13 @@ export const useStore = create<AppState>()(
           
           const nextState = { ...state, sessions };
           const newlyUnlocked = evaluateAchievements(nextState);
+          const now = new Date().toISOString();
+          const newDates = Object.fromEntries(newlyUnlocked.map(id => [id, now]));
 
           return {
             sessions,
             unlockedAchievements: [...state.unlockedAchievements, ...newlyUnlocked],
+            achievementUnlocks: { ...(state.achievementUnlocks || {}), ...newDates },
             justUnlocked: [...state.justUnlocked, ...newlyUnlocked],
           };
         }),
@@ -518,6 +527,10 @@ export const useStore = create<AppState>()(
           sprintConfig: next.sprintConfig,
           vocabularyEntries: next.vocabularyEntries,
           unlockedAchievements: importedAchievements,
+          achievementUnlocks:
+            next.result.source === 'snapshot' || next.result.source === 'vocabulary-list'
+              ? next.achievementUnlocks
+              : get().achievementUnlocks,
         });
         return next.result;
       },
@@ -547,6 +560,7 @@ export const useStore = create<AppState>()(
         sprintConfig: state.sprintConfig,
         vocabularyEntries: state.vocabularyEntries,
         unlockedAchievements: state.unlockedAchievements,
+        achievementUnlocks: state.achievementUnlocks,
       }),
       migrate: (persistedState: unknown, version) => {
         return migratePersistedState(persistedState, version);

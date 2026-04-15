@@ -16,6 +16,7 @@ import { MissionConfigDialog } from '@/components/MissionConfigDialog';
 
 const ActivityCalendar = dynamic(() => import('@/components/ActivityCalendar').then(mod => mod.ActivityCalendar));
 const WeeklyReport = dynamic(() => import('@/components/WeeklyReport').then(mod => mod.WeeklyReport));
+const AchievementPanel = dynamic(() => import('@/components/AchievementPanel').then(mod => mod.AchievementPanel));
 
 export default function HomePageClient() {
   return (
@@ -302,8 +303,9 @@ function MissionControl() {
         className="grid gap-6 lg:grid-cols-[1fr_300px]"
       >
         <ActivityCalendar />
-        <div className="flex flex-col justify-end">
-           <WeeklyReport />
+        <div className="flex flex-col justify-end gap-6">
+          <AchievementPanel />
+          <WeeklyReport />
         </div>
       </motion.div>
 

@@ -118,7 +118,7 @@ export function VocabCard({
       tabIndex={recallMode ? 0 : -1}
       onKeyDown={handleCardKeyDown}
       className={cn(
-        'group relative overflow-hidden rounded-[16px] border bg-(--surface-elevated) transition-shadow hover:shadow-(--shadow-medium) outline-none',
+        'group relative overflow-hidden rounded-[24px] border bg-(--surface-elevated) transition-all hover:shadow-(--shadow-medium) outline-none backdrop-blur-2xl',
         recallMode && 'focus-visible:ring-2 focus-visible:ring-(--cheese-gold)/35',
         isRepeatOffender
           ? 'border-rose-500/20 bg-rose-500/3 dark:border-rose-400/15 dark:bg-rose-400/4'
@@ -126,7 +126,7 @@ export function VocabCard({
       )}
     >
       {isRepeatOffender && (
-        <div className="absolute inset-y-0 left-0 w-0.75 rounded-l-[16px] bg-linear-to-b from-rose-400 to-rose-600" />
+        <div className="absolute inset-y-0 left-0 w-0.75 rounded-l-[24px] bg-linear-to-b from-rose-400 to-rose-600" />
       )}
 
       <div className="px-4 py-4 sm:px-5">

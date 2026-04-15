@@ -109,7 +109,8 @@ export function AnalyticsDashboard() {
     }
 
     const trendCount = Math.max(sprintConfig.listeningCount, sprintConfig.readingCount);
-    const trendData: LossTrendPoint[] = Array.from({ length: trendCount }, (_, index) => {
+    const trendData: LossTrendPoint[] = [];
+    for (let index = 0; index < trendCount; index++) {
       const setNumber = index + 1;
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
@@ -161,7 +162,7 @@ export function AnalyticsDashboard() {
         }
       }
 
-      return {
+      trendData.push({
         set: `S${setNumber}`,
         Listening: listeningLoss,
         Reading: readingLoss,
@@ -169,8 +170,8 @@ export function AnalyticsDashboard() {
         paired: listeningLoss !== undefined && readingLoss !== undefined,
         ...listeningMistakes,
         ...readingMistakes,
-      };
-    });
+      });
+    }
 
     const radarData: RadarPoint[] = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
       const totalMistakes = partMistakes.get(part) ?? 0;

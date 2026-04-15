@@ -82,25 +82,27 @@ function MissionConfigDialogContent({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 text-left">
+      <div className="fixed inset-x-0 bottom-0 sm:inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 text-left">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
+          className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm"
           onClick={onClose}
         />
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          initial={{ opacity: 0, y: "100%" }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: "100%" }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-md overflow-hidden rounded-[24px] border border-(--glass-border) bg-(--surface-elevated) shadow-(--shadow-elevated)"
+          className="relative w-full max-w-md overflow-hidden rounded-t-[32px] sm:rounded-[24px] border border-(--glass-border) bg-(--surface-elevated) shadow-(--shadow-elevated) pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-0"
         >
           {/* Header Area */}
-          <div className="relative border-b border-(--separator) bg-zinc-50/50 p-6 dark:bg-zinc-900/50">
+          <div className="relative border-b border-(--separator) bg-zinc-50/50 p-6 pt-8 sm:pt-6 dark:bg-zinc-900/50">
+            {/* Grabber on mobile */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700 sm:hidden" />
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
                 <Target className="size-5" />

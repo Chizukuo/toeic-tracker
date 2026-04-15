@@ -116,7 +116,7 @@ export function ActivityCalendar() {
       </div>
       
       <div 
-        className="bg-white/60 dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.04] rounded-[20px] p-5 shadow-(--shadow-soft) overflow-x-auto no-scrollbar"
+        className="bg-white/60 dark:bg-[#1C1C1E] border border-black/[0.04] dark:border-white/[0.04] rounded-[24px] p-5 shadow-(--shadow-soft) overflow-x-auto no-scrollbar"
         onMouseLeave={() => setHoverStyle(prev => ({ ...prev, opacity: 0 }))}
       >
         <div className="flex flex-col gap-3 min-w-max">

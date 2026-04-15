@@ -62,6 +62,7 @@ export type SprintSnapshot = {
     vocabularyEntries?: VocabularyEntry[];
     targetScore?: number;
     unlockedAchievements?: string[];
+    achievementUnlocks?: Record<string, string>;
   };
 };
 
@@ -86,6 +87,7 @@ type SnapshotLike = {
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
     unlockedAchievements?: unknown;
+    achievementUnlocks?: unknown;
   };
   state?: {
     sessions?: unknown;
@@ -97,6 +99,7 @@ type SnapshotLike = {
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
     unlockedAchievements?: unknown;
+    achievementUnlocks?: unknown;
   };
   sessions?: unknown;
   activeSessionId?: string;
@@ -107,6 +110,7 @@ type SnapshotLike = {
   sprintConfig?: unknown;
   vocabularyEntries?: unknown;
   unlockedAchievements?: unknown;
+  achievementUnlocks?: unknown;
 };
 
 export type ParsedImportSnapshot = {
@@ -118,6 +122,7 @@ export type ParsedImportSnapshot = {
   sprintConfig: SprintConfig;
   vocabularyEntries: VocabularyEntry[];
   unlockedAchievements: string[];
+  achievementUnlocks: Record<string, string>;
   result: ImportSnapshotResult;
 };
 
@@ -144,6 +149,19 @@ function normalizeUnlockedAchievements(incoming: unknown): string[] {
   return Array.isArray(incoming)
     ? incoming.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function normalizeAchievementUnlocks(incoming: unknown): Record<string, string> {
+  if (typeof incoming === 'object' && incoming !== null) {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(incoming)) {
+      if (typeof value === 'string') {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+  return {};
 }
 
 export function getPersistStorage() {
@@ -432,6 +450,7 @@ export function parseImportSnapshot(
         )
       : currentState?.vocabularyEntries ?? [],
     unlockedAchievements: normalizeUnlockedAchievements(source.unlockedAchievements),
+    achievementUnlocks: normalizeAchievementUnlocks(source.achievementUnlocks),
     result: {
       source: isObjectRecord(candidate.data) ? 'snapshot' : isObjectRecord(candidate.state) ? 'persisted-state' : 'state',
       importedVersion: typeof snapshotVersion === 'number' ? snapshotVersion : 'legacy',
@@ -455,6 +474,7 @@ export function createSnapshot(state: {
   vocabularyEntries: VocabularyEntry[];
   targetScore: number;
   unlockedAchievements: string[];
+  achievementUnlocks: Record<string, string>;
 }): SprintSnapshot {
   return {
     app: SNAPSHOT_APP,
@@ -476,6 +496,7 @@ export function createSnapshot(state: {
       vocabularyEntries: state.vocabularyEntries,
       targetScore: state.targetScore,
       unlockedAchievements: state.unlockedAchievements,
+      achievementUnlocks: state.achievementUnlocks,
     },
   };
 }

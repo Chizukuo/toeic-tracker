@@ -757,7 +757,7 @@ export function ScoreEstimatorPanel() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-[14px] text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/20 rounded-[20px] border border-dashed border-zinc-200 dark:border-zinc-800">
+              <div className="h-full flex items-center justify-center text-[14px] text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/20 rounded-[24px] border border-dashed border-zinc-200 dark:border-zinc-800">
                 {locale === 'zh' ? '暂无趋势数据，请添加记录' : 'No trend data yet, add a record'}
               </div>
             )}
@@ -772,7 +772,7 @@ export function ScoreEstimatorPanel() {
               {locale === 'zh' ? '记录正式成绩' : 'Add Official Record'}
             </h3>
             
-            <div className="bg-white dark:bg-[#1C1C1E] rounded-[20px] overflow-hidden border border-black/4 dark:border-white/4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="bg-white dark:bg-[#1C1C1E] rounded-[24px] overflow-hidden border border-black/4 dark:border-white/4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-black/5 dark:border-white/5">
                 <span className="text-[14px] font-medium text-zinc-500 dark:text-zinc-400">{locale === 'zh' ? '日期' : 'Date'}</span>
                 <input type="date" value={historyDate} onChange={(e) => setHistoryDate(e.target.value)} className="bg-transparent text-right text-[14px] font-semibold text-zinc-900 dark:text-zinc-50 outline-none w-32.5 cursor-pointer" />

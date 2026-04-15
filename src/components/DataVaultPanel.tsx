@@ -529,7 +529,7 @@ export function DataVaultPanel() {
 						transition={{ type: 'spring', bounce: 0.16, duration: 0.34 }}
 						className="pointer-events-none fixed right-3 top-22 z-60 w-72 max-w-[calc(100%-1.5rem)] sm:right-5 sm:top-24"
 					>
-						<div className={`pointer-events-auto overflow-hidden rounded-[20px] border backdrop-blur-2xl ${feedbackClassName(feedback.tone)}`}>
+						<div className={`pointer-events-auto overflow-hidden rounded-[24px] border backdrop-blur-2xl ${feedbackClassName(feedback.tone)}`}>
 							<div className="flex items-start gap-2.5 px-3.5 pb-2.5 pt-2.5">
 								<div className={`mt-0.5 rounded-full p-1.5 ${feedbackIconWrapClassName(feedback.tone)}`}>
 									{feedback.tone === 'success' ? (
@@ -639,7 +639,7 @@ export function DataVaultPanel() {
 								</div>
 							</div>
 
-							<div className="deck-surface-soft m-1 rounded-[20px] grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-1 overflow-hidden">
+							<div className="deck-surface-soft m-1 rounded-[24px] grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-1 overflow-hidden">
 								<SyncMetric label={copy.syncPreviewVersion} value={`v${syncDraft.preview.version}`} />
 								<SyncMetric label={copy.syncPreviewSessions} value={`${syncDraft.preview.sessionCount}`} />
 								<SyncMetric label={copy.syncPreviewHistory} value={`${syncDraft.preview.historyCount}`} />

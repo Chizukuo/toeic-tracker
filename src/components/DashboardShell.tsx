@@ -235,7 +235,7 @@ export function DashboardShell({
         }}
       >
 
-        <header className="fixed left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[20px] border border-(--glass-border) bg-(--glass-bg) px-2 py-2 shadow-(--shadow-elevated) backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ top: 'max(1rem, env(safe-area-inset-top))', boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
+        <header className="fixed left-1/2 z-50 flex w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 items-center justify-between gap-1.5 rounded-[24px] border border-(--glass-border) bg-(--glass-bg) px-2 py-2 shadow-(--shadow-elevated) backdrop-blur-2xl transition-all duration-300 sm:w-[calc(100%-2rem)] lg:gap-3" style={{ top: 'max(1rem, env(safe-area-inset-top))', boxShadow: 'var(--shadow-elevated), var(--glass-highlight)' }}>
            <Link href="/" aria-label={copy.appName} className="relative z-10 ml-2 flex shrink-0 items-center justify-center transition-transform hover:scale-105 active:scale-95">
              <BrandIconSvg className="size-7 opacity-90" />
           </Link>
@@ -309,7 +309,7 @@ export function DashboardShell({
               />
 
               <motion.nav
-                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[20px] border border-(--separator) bg-(--surface-elevated) p-2.5 shadow-(--shadow-elevated) backdrop-blur-xl md:hidden"
+                className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[24px] border border-(--separator) bg-(--surface-elevated) p-2.5 shadow-(--shadow-elevated) backdrop-blur-xl md:hidden"
                 style={{ top: 'calc(5.3rem + env(safe-area-inset-top))' }}
                 initial={{ opacity: 0, y: -16, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -439,7 +439,7 @@ export function DeferredSection({ component: Component }: { component: Component
 
 export function DeferredPanelPlaceholder() {
   return (
-    <div className="overflow-hidden rounded-[20px] border border-(--separator) bg-(--surface-elevated)">
+    <div className="overflow-hidden rounded-[24px] border border-(--separator) bg-(--surface-elevated)">
       <div className="h-16 border-b border-(--separator) px-6 py-5" />
       <div className="grid gap-4 p-6">
         <div className="h-24 animate-pulse rounded-[16px] bg-(--surface-grouped)" />

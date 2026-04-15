@@ -133,7 +133,7 @@ export function AddEntryForm({
   return (
     <div className="space-y-3">
       <div className="group flex w-full items-start gap-2">
-        <div className="relative flex-1 ring-1 ring-(--separator) transition-shadow focus-within:ring-2 focus-within:ring-(--cheese-gold)/30 rounded-[20px] bg-(--surface-elevated) shadow-xs overflow-hidden">
+        <div className="relative flex-1 ring-1 ring-(--separator) transition-all focus-within:ring-2 focus-within:ring-(--cheese-gold)/30 rounded-[24px] bg-(--surface-elevated)/80 backdrop-blur-2xl overflow-hidden">
           <textarea
             ref={inputRef}
             rows={text.includes('\n') ? Math.min(text.split('\n').length, 5) : 1}

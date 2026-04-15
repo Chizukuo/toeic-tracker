@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 import { DebugForm } from '@/components/DebugForm';
@@ -52,18 +52,17 @@ export default function PracticePageClient() {
 function PracticeFlow() {
   const { activeSession, locale, sessions } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
-  const unresolvedBacklog = activeSession.type === 'R'
-    && (activeSession.timerSummary?.unfinishedQuestions ?? 0) > 0
-    && !activeSession.timerSummary?.resolvedUnfinished;
 
   const [step, setStep] = useState<PracticeStep>(() => resolvePracticeStep(activeSession));
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [autoFocusToken, setAutoFocusToken] = useState(0);
 
-  useEffect(() => {
+  const [prevSessionId, setPrevSessionId] = useState(activeSession.id);
+  if (activeSession.id !== prevSessionId) {
+    setPrevSessionId(activeSession.id);
     setDirection('forward');
     setStep(resolvePracticeStep(activeSession));
-  }, [activeSession.id]);
+  }
 
   const goToStep = (next: PracticeStep) => {
     const order: PracticeStep[] = ['timer', 'review', 'result'];

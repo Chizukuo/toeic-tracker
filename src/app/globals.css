@@ -45,11 +45,19 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  --animate-shimmer: shimmer 2s infinite linear;
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   CHEESE DESIGN LANGUAGE — Light Mode Tokens
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════�?
+   CHEESE DESIGN LANGUAGE �?Light Mode Tokens
+   ══════════════════════════════════════════════════════════�?*/
 
 :root {
   color-scheme: light;
@@ -88,7 +96,7 @@
   --sidebar-border: rgba(120, 90, 50, 0.08);
   --sidebar-ring: rgba(217, 119, 6, 0.35);
 
-  /* ── Cheese Design Language — Surface System ── */
+  /* ── Cheese Design Language �?Surface System ── */
   --surface-primary: #fafaf8;
   --surface-grouped: #f3f1ec;
   --surface-elevated: hsla(38, 30%, 99%, 0.82);
@@ -120,9 +128,9 @@
   --tooltip-color: #1a1a1c;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   CHEESE DESIGN LANGUAGE — Dark Mode Tokens
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════�?
+   CHEESE DESIGN LANGUAGE �?Dark Mode Tokens
+   ══════════════════════════════════════════════════════════�?*/
 
 .dark {
   color-scheme: dark;
@@ -160,7 +168,7 @@
   --sidebar-border: rgba(255, 255, 255, 0.07);
   --sidebar-ring: rgba(251, 191, 36, 0.40);
 
-  /* ── Cheese Design Language — Surface System ── */
+  /* ── Cheese Design Language �?Surface System ── */
   --surface-primary: #0c0a09;
   --surface-grouped: hsla(24, 6%, 10%, 0.90);
   --surface-elevated: hsla(24, 6%, 14%, 0.72);
@@ -176,7 +184,7 @@
   --cheese-cyan: #22d3ee;
   --cheese-cyan-soft: rgba(34, 211, 238, 0.12);
 
-  /* ── Shadows (subtle in dark — not disabled) ── */
+  /* ── Shadows (subtle in dark �?not disabled) ── */
   --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.15);
   --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.35), 0 8px 28px rgba(0, 0, 0, 0.20);
   --shadow-floating: 0 12px 40px rgba(0, 0, 0, 0.45), 0 20px 56px rgba(0, 0, 0, 0.25);
@@ -192,9 +200,9 @@
   --tooltip-color: #fafaf9;
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════�?
    BASE LAYER
-   ═══════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════�?*/
 
 @layer base {
   * {
@@ -305,9 +313,9 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   CHEESE DESIGN LANGUAGE — Utility Classes
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════�?
+   CHEESE DESIGN LANGUAGE �?Utility Classes
+   ══════════════════════════════════════════════════════════�?*/
 
 @layer utilities {
   .no-scrollbar {
@@ -321,7 +329,7 @@
 
   /* ── Card: page-level container (Glass Material) ── */
   .cheese-card {
-    border-radius: 20px;
+    border-radius: 24px;
     border: 1px solid var(--glass-border);
     background: var(--glass-bg);
     backdrop-filter: blur(24px) saturate(1.4);
@@ -423,12 +431,12 @@
     border-top-color: #fb7185;
   }
 
-  /* ═══ Backward Compatibility Aliases ═══
+  /* ══�?Backward Compatibility Aliases ══�?
      Old class names still work but now point to the unified system.
      These will be cleaned up as components switch to cheese-* names. */
 
   .deck-card {
-    border-radius: 20px;
+    border-radius: 24px;
     border: 1px solid var(--separator);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-soft);
@@ -444,7 +452,7 @@
   }
 
   .deck-surface {
-    @apply rounded-[20px];
+    @apply rounded-[24px];
     border: 1px solid var(--separator);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-soft);
@@ -477,7 +485,7 @@
   }
 
   .glass-panel {
-    border-radius: 20px;
+    border-radius: 24px;
     border: 1px solid var(--separator);
     background: var(--surface-elevated);
     box-shadow: var(--shadow-soft);
@@ -488,9 +496,9 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   DARK MODE — Subtle ambient warmth (matches brand icon blooms)
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════�?
+   DARK MODE �?Subtle ambient warmth (matches brand icon blooms)
+   ══════════════════════════════════════════════════════════�?*/
 
 .dark body {
   background-image:
@@ -498,9 +506,9 @@
     radial-gradient(ellipse 45% 40% at 88% 85%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   VIEW TRANSITIONS — Theme switching animation
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════�?
+   VIEW TRANSITIONS �?Theme switching animation
+   ══════════════════════════════════════════════════════════�?*/
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -516,9 +524,9 @@ html.theme-switching::view-transition-old(root) {
   animation: themeFade 260ms ease;
 }
 
-/* ═══════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════�?
    KEYFRAMES
-   ═══════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════�?*/
 
 @keyframes revealFade {
   from {
@@ -563,9 +571,9 @@ html.theme-switching::view-transition-old(root) {
 .timer-glow-amber { animation: timerGlow 2s ease-in-out infinite; }
 .timer-glow-red   { animation: redGlow 1.5s ease-in-out infinite; }
 
-/* ═══════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════�?
    REDUCED MOTION
-   ═══════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════�?*/
 
 @media (prefers-reduced-motion: reduce) {
   html {
