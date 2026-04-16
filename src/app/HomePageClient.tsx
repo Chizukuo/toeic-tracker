@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
 import { getNextStepRecommendation } from '@/lib/nextStep';
-import { estimateToeicCombinedScore, type MistakeKey } from '@/lib/toeic';
+import { estimateToeicCombinedScore, isSessionEstimateEligible, type MistakeKey } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -62,8 +62,8 @@ function MissionControl() {
   }, [examDate, nowTs]);
 
   const scoreEstimate = useMemo(() => {
-    const latestL = [...sessions].reverse().find((s) => s.type === 'L' && s.status !== 'not-started');
-    const latestR = [...sessions].reverse().find((s) => s.type === 'R' && s.status !== 'not-started');
+    const latestL = [...sessions].reverse().find((s) => s.type === 'L' && isSessionEstimateEligible(s));
+    const latestR = [...sessions].reverse().find((s) => s.type === 'R' && isSessionEstimateEligible(s));
     if (!latestL && !latestR) return null;
     const combined = estimateToeicCombinedScore(latestL, latestR, 'strict');
     return combined.available ? combined : null;

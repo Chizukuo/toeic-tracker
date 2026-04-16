@@ -313,6 +313,31 @@ export function parseImportSnapshot(
     achievementUnlocks: Record<string, string>;
   }
 ) {
+  const mergeImportedVocabularyEntry = (
+    importedEntry: VocabularyEntry,
+    matchedEntry?: VocabularyEntry,
+    sessionIds?: string[]
+  ): VocabularyEntry => {
+    if (!matchedEntry) {
+      return sessionIds ? { ...importedEntry, sessionIds } : importedEntry;
+    }
+
+    return {
+      ...matchedEntry,
+      ...importedEntry,
+      id: matchedEntry.id,
+      sessionIds: sessionIds ?? matchedEntry.sessionIds,
+      encounterCount: matchedEntry.encounterCount,
+      knockdownCount: matchedEntry.knockdownCount,
+      comebackCount: matchedEntry.comebackCount,
+      lastKnockdownAt: matchedEntry.lastKnockdownAt,
+      lastComebackAt: matchedEntry.lastComebackAt,
+      createdAt: matchedEntry.createdAt,
+      updatedAt: matchedEntry.updatedAt,
+      tags: matchedEntry.tags,
+    };
+  };
+
   const recoverVocabularyProvenance = (
     importedEntries: VocabularyEntry[],
     context?: ImportContext
@@ -326,16 +351,15 @@ export function parseImportSnapshot(
     );
 
     return importedEntries.map((entry) => {
-      if (entry.sessionIds.length > 0) {
-        return entry;
-      }
-
       const matched = existingByText.get(entry.text.trim().toLowerCase());
-      if (matched && matched.sessionIds.length > 0) {
-        return { ...entry, sessionIds: [...matched.sessionIds] };
-      }
+      const sessionIds =
+        entry.sessionIds.length > 0
+          ? entry.sessionIds
+          : matched?.sessionIds.length
+            ? matched.sessionIds
+            : [context.activeSessionId];
 
-      return { ...entry, sessionIds: [context.activeSessionId] };
+      return mergeImportedVocabularyEntry(entry, matched, sessionIds);
     });
   };
 
@@ -347,7 +371,8 @@ export function parseImportSnapshot(
       const importedVocab = recoverVocabularyProvenance(normalizeVocabularyEntries(snapshot), currentState);
       const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
       for (const entry of importedVocab) {
-        mergedMap.set(entry.text.toLowerCase(), entry);
+        const matched = mergedMap.get(entry.text.toLowerCase());
+        mergedMap.set(entry.text.toLowerCase(), mergeImportedVocabularyEntry(entry, matched, entry.sessionIds));
       }
       return {
         ...currentState,
@@ -367,7 +392,8 @@ export function parseImportSnapshot(
     const importedVocab = recoverVocabularyProvenance(normalizeVocabularyEntries(snapshot.vocabularyEntries), currentState);
     const mergedMap = new Map(currentState.vocabularyEntries.map(e => [e.text.toLowerCase(), e]));
     for (const entry of importedVocab) {
-      mergedMap.set(entry.text.toLowerCase(), entry);
+      const matched = mergedMap.get(entry.text.toLowerCase());
+      mergedMap.set(entry.text.toLowerCase(), mergeImportedVocabularyEntry(entry, matched, entry.sessionIds));
     }
     return {
       ...currentState,

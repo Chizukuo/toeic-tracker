@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialSessions,
   estimateToeicCombinedScore,
+  estimateToeicSessionScore,
   getAnalyticsDataConfidence,
   getCombinedDataConfidence,
   getSessionDataConfidence,
@@ -253,5 +254,50 @@ describe('toeic scoring rules', () => {
     expect(strict.reading?.unfinishedPenalty).toBe(6);
     expect(potential.reading?.unfinishedPenalty).toBe(0);
     expect(confidence.issues).not.toContain('unfinished-backlog');
+  });
+
+  it('does not expose estimate availability for in-progress non-timeout sessions', () => {
+    const listening = createInitialSessions().find((session) => session.id === 'L4');
+
+    if (!listening) {
+      throw new Error('Missing L4 session fixture');
+    }
+
+    listening.status = 'in-progress';
+    listening.mistakes = {
+      'Part 2': 6,
+      'Part 3': 7,
+    };
+
+    const estimate = estimateToeicSessionScore(listening, 'strict');
+
+    expect(estimate.available).toBe(false);
+  });
+
+  it('allows provisional estimate availability when an in-progress session timed out', () => {
+    const reading = createInitialSessions().find((session) => session.id === 'R6');
+
+    if (!reading) {
+      throw new Error('Missing R6 session fixture');
+    }
+
+    reading.status = 'in-progress';
+    reading.mistakes = {
+      'Part 5': 4,
+      'Part 6': 2,
+      'Part 7 Single': 6,
+    };
+    reading.timerSummary = {
+      totalElapsedMs: 75 * 60 * 1000,
+      forcedSubmit: true,
+      timedOut: true,
+      unfinishedQuestions: 5,
+      resolvedUnfinished: false,
+      completedAt: '2026-03-11T13:00:00.000Z',
+    };
+
+    const estimate = estimateToeicSessionScore(reading, 'strict');
+
+    expect(estimate.available).toBe(true);
   });
 });

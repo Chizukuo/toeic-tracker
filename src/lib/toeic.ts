@@ -501,6 +501,19 @@ export function hasRecordedSessionData(record: SessionRecord) {
 	);
 }
 
+export function isSessionEstimateEligible(record: SessionRecord) {
+	if (!hasRecordedSessionData(record)) {
+		return false;
+	}
+
+	if (record.status === "debugged") {
+		return true;
+	}
+
+	// In-progress attempts are estimatable only when the strict run timed out.
+	return Boolean(record.timerSummary?.timedOut);
+}
+
 export function getSessionDataConfidence(record: SessionRecord): DataConfidence {
 	const issues: DataConfidenceIssue[] = [];
 
@@ -1087,7 +1100,7 @@ export function estimateToeicSessionScore(
 		.sort((left, right) => right.errorRate - left.errorRate);
 	const weakestPart = partStats[0]?.part;
 	const strongestPart = [...partStats].sort((left, right) => left.errorRate - right.errorRate)[0]?.part;
-	const available = hasRecordedSessionData(record);
+	const available = isSessionEstimateEligible(record);
 	const interval = {
 		min: roundToNearestFive(scaled - config.sem, 5, 495),
 		max: roundToNearestFive(scaled + config.sem, 5, 495),
@@ -1323,8 +1336,8 @@ export function estimateAggregatedScore(
 	sessions: SessionRecord[],
 	mode: "strict" | "potential" = "strict"
 ): ToeicCombinedEstimate | null {
-	const listeningDone = sessions.filter((s) => s.type === "L" && hasRecordedSessionData(s));
-	const readingDone = sessions.filter((s) => s.type === "R" && hasRecordedSessionData(s));
+	const listeningDone = sessions.filter((s) => s.type === "L" && isSessionEstimateEligible(s));
+	const readingDone = sessions.filter((s) => s.type === "R" && isSessionEstimateEligible(s));
 
 	if (listeningDone.length === 0 && readingDone.length === 0) return null;
 
@@ -1374,8 +1387,8 @@ export function getTargetGapAnalysis(
 	mode: "strict" | "potential" = "strict"
 ): TargetGapAnalysis | null {
 	const latest = estimateToeicCombinedScore(
-		[...sessions].reverse().find((s) => s.type === "L" && hasRecordedSessionData(s)),
-		[...sessions].reverse().find((s) => s.type === "R" && hasRecordedSessionData(s)),
+		[...sessions].reverse().find((s) => s.type === "L" && isSessionEstimateEligible(s)),
+		[...sessions].reverse().find((s) => s.type === "R" && isSessionEstimateEligible(s)),
 		mode
 	);
 
@@ -1384,7 +1397,7 @@ export function getTargetGapAnalysis(
 	const achieved = latest.total >= targetTotal;
 	const gap = targetTotal - latest.total;
 
-	const completed = sessions.filter((s) => hasRecordedSessionData(s));
+	const completed = sessions.filter((s) => isSessionEstimateEligible(s));
 	const partSuggestions: TargetGapAnalysis["partSuggestions"] = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
 		const matching = completed.filter((s) => getPartsForType(s.type).includes(part as never));
 		if (matching.length === 0) return { part, currentMistakes: 0, suggestedMistakes: 0, delta: 0 };

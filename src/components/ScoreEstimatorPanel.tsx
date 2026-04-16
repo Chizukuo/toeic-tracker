@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import {
   CartesianGrid,
@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
   ReferenceArea,
+  ReferenceLine,
 } from 'recharts';
 import {
   CircleGauge,
@@ -67,9 +68,12 @@ type ScoreTrendChartPoint = {
   label: string;
   fullDate: string;
   timestamp: number;
+  plotX?: number;
   estimatedScore?: number;
   potentialScore?: number;
   historicalScore?: number;
+  rangeMin?: number;
+  rangeMax?: number;
   active?: boolean;
   listening?: number;
   reading?: number;
@@ -148,12 +152,47 @@ export function ScoreEstimatorPanel() {
     };
   }, [deferredSessions]);
 
+  const setNumbers = useMemo(
+    () => Array.from(new Set(deferredSessions.map((session) => session.setNumber))).sort((left, right) => left - right),
+    [deferredSessions]
+  );
+
+  if (setNumbers.length > 0) {
+    const currentSetNumber = Number(selectedPair);
+    if (!Number.isFinite(currentSetNumber) || !setNumbers.includes(currentSetNumber)) {
+      setSelectedPair(String(setNumbers[0]));
+    }
+  }
+
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  useEffect(() => {
+    const node = chartContainerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width ?? 0;
+      setChartWidth(nextWidth);
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const isCompactTrend = chartWidth > 0 && chartWidth < 640;
+
   const selectedListeningId = `L${selectedPair}`;
   const selectedReadingId = `R${selectedPair}`;
-  const selectedListening = sessionMap.get(selectedListeningId) ?? listeningSessions[0];
-  const selectedReading = sessionMap.get(selectedReadingId) ?? readingSessions[0];
-  const selectedPairListening = sessionMap.get(`L${selectedPair}`) ?? listeningSessions[0];
-  const selectedPairReading = sessionMap.get(`R${selectedPair}`) ?? readingSessions[0];
+  const selectedListening = sessionMap.get(selectedListeningId) ?? listeningSessions.at(-1);
+  const selectedReading = sessionMap.get(selectedReadingId) ?? readingSessions.at(-1);
+  const selectedPairListening = sessionMap.get(`L${selectedPair}`);
+  const selectedPairReading = sessionMap.get(`R${selectedPair}`);
+  const selectedListeningSetLabel = selectedListening?.setNumber ?? Number(selectedPair);
+  const selectedReadingSetLabel = selectedReading?.setNumber ?? Number(selectedPair);
+  const selectedTotalSetLabel = selectedPairListening?.setNumber ?? selectedPairReading?.setNumber ?? Number(selectedPair);
 
   const listeningEstimate = selectedListening ? dualEstimateMap.get(selectedListening.id)?.strict : undefined;
   const readingEstimate = selectedReading ? dualEstimateMap.get(selectedReading.id)?.strict : undefined;
@@ -197,8 +236,8 @@ export function ScoreEstimatorPanel() {
 
   const totalTrend = useMemo(
     () =>
-      Array.from({ length: 10 }, (_, index) => {
-        const pair = `${index + 1}`;
+      setNumbers.map((setNumber) => {
+        const pair = `${setNumber}`;
         const listening = sessionMap.get(`L${pair}`);
         const reading = sessionMap.get(`R${pair}`);
         const estimateCombined = estimateToeicCombinedDualScore(listening, reading);
@@ -213,7 +252,7 @@ export function ScoreEstimatorPanel() {
           active: selectedPair === pair,
         };
       }),
-    [selectedPair, sessionMap]
+    [selectedPair, sessionMap, setNumbers]
   );
 
   const historicalTrend = useMemo<HistoricalTrendPoint[]>(() => {
@@ -287,9 +326,7 @@ export function ScoreEstimatorPanel() {
         .sort((left, right) => left!.timestamp - right!.timestamp) as ScoreTrendChartPoint[];
     }
 
-    const pairCount = Math.max(listeningSessions.length, readingSessions.length);
-    return Array.from({ length: pairCount }, (_, index) => {
-      const setNumber = index + 1;
+    return setNumbers.map((setNumber) => {
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
       const estimateCombined = estimateToeicCombinedDualScore(listening, reading);
@@ -320,9 +357,11 @@ export function ScoreEstimatorPanel() {
     mode,
     readingSessions,
     selectedListeningId,
-    selectedPair,
+
     selectedReadingId,
+    setNumbers,
     sessionMap,
+    selectedPair,
   ]);
 
   const manualTotalPreview = safeNumber(historyListening) + safeNumber(historyReading);
@@ -333,7 +372,7 @@ export function ScoreEstimatorPanel() {
         record: selectedListening,
         estimate: listeningEstimate,
         locale,
-        title: `${copy.scoreListeningLabel} · Set ${selectedPair}`,
+        title: `${copy.scoreListeningLabel} · Set ${selectedListeningSetLabel}`,
         chart: listeningTrend,
         color: '#f59e0b',
         label: copy.scoreListeningLabel,
@@ -345,7 +384,7 @@ export function ScoreEstimatorPanel() {
         record: selectedReading,
         estimate: readingEstimate,
         locale,
-        title: `${copy.scoreReadingLabel} · Set ${selectedPair}`,
+        title: `${copy.scoreReadingLabel} · Set ${selectedReadingSetLabel}`,
         chart: readingTrend,
         color: '#38bdf8',
         label: copy.scoreReadingLabel,
@@ -358,7 +397,7 @@ export function ScoreEstimatorPanel() {
         listeningRecord: selectedPairListening,
         readingRecord: selectedPairReading,
         locale,
-        title: `${locale === 'zh' ? '总成绩' : 'Total Score'} · Set ${selectedPair}`,
+        title: `${locale === 'zh' ? '总成绩' : 'Total Score'} · Set ${selectedTotalSetLabel}`,
         chart: totalTrend,
         color: '#ef4444',
         label: copy.scoreTotalLabel,
@@ -378,15 +417,18 @@ export function ScoreEstimatorPanel() {
     readingEstimate,
     readingTrend,
     selectedListening,
-    selectedPair,
+    selectedListeningSetLabel,
+
     selectedPairListening,
     selectedPairReading,
     selectedReading,
+    selectedReadingSetLabel,
+    selectedTotalSetLabel,
     totalTrend,
   ]);
 
   const scoreTrendData = useMemo<ScoreTrendChartPoint[]>(() => {
-    const historyTrend = historicalTrend
+    const historyPoints = historicalTrend
       .map((point) => {
         const timestamp = dateKeyToTimestamp(point.fullDate);
         if (Number.isNaN(timestamp)) {
@@ -397,6 +439,7 @@ export function ScoreEstimatorPanel() {
           label: point.label,
           fullDate: point.fullDate,
           timestamp,
+          plotX: timestamp,
           historicalScore: mode === 'L' ? point.listening : mode === 'R' ? point.reading : point.total,
           listening: point.listening,
           reading: point.reading,
@@ -406,36 +449,154 @@ export function ScoreEstimatorPanel() {
       })
       .filter((point) => point !== null) as ScoreTrendChartPoint[];
 
-    const mergedByDate = new Map<string, ScoreTrendChartPoint>();
+    const rawPoints = [...estimatedTimeline, ...historyPoints].sort((left, right) => left.timestamp - right.timestamp);
+    if (rawPoints.length === 0) {
+      return [];
+    }
 
-    const upsertPoint = (point: ScoreTrendChartPoint) => {
-      const existing = mergedByDate.get(point.fullDate);
-      if (!existing) {
-        mergedByDate.set(point.fullDate, { ...point });
-        return;
+    const byDate = new Map<string, ScoreTrendChartPoint[]>();
+    for (const point of rawPoints) {
+      const group = byDate.get(point.fullDate);
+      if (group) {
+        group.push(point);
+      } else {
+        byDate.set(point.fullDate, [point]);
+      }
+    }
+
+    if (!isCompactTrend) {
+      const spreadMs = 2 * 60 * 60 * 1000;
+      const expanded: ScoreTrendChartPoint[] = [];
+
+      for (const [fullDate, points] of byDate.entries()) {
+        const centerTimestamp = dateKeyToTimestamp(fullDate);
+        if (Number.isNaN(centerTimestamp)) {
+          continue;
+        }
+
+        const orderedPoints = [...points].sort((left, right) => {
+          const sourceRank = (source?: ScoreTrendChartPoint['source']) => {
+            if (source === 'auto-estimated') return 0;
+            if (source === 'estimated') return 1;
+            if (source === 'manual') return 2;
+            return 3;
+          };
+
+          const rankDelta = sourceRank(left.source) - sourceRank(right.source);
+          if (rankDelta !== 0) {
+            return rankDelta;
+          }
+
+          const leftLabel = left.setLabel ?? '';
+          const rightLabel = right.setLabel ?? '';
+          return leftLabel.localeCompare(rightLabel);
+        });
+
+        const midpoint = (orderedPoints.length - 1) / 2;
+        orderedPoints.forEach((point, index) => {
+          expanded.push({
+            ...point,
+            plotX: centerTimestamp + (index - midpoint) * spreadMs,
+          });
+        });
       }
 
-      mergedByDate.set(point.fullDate, {
-        ...existing,
-        ...point,
-        label: existing.label,
-        fullDate: existing.fullDate,
-        timestamp: existing.timestamp,
-        estimatedScore: point.estimatedScore ?? existing.estimatedScore,
-        potentialScore: point.potentialScore ?? existing.potentialScore,
-        historicalScore: point.historicalScore ?? existing.historicalScore,
-        active: Boolean(existing.active || point.active),
-        listening: point.listening ?? existing.listening,
-        reading: point.reading ?? existing.reading,
-        total: point.total ?? existing.total,
-      });
+      return expanded.sort((left, right) => (left.plotX ?? left.timestamp) - (right.plotX ?? right.timestamp));
+    }
+
+    const average = (values: number[]) => {
+      if (values.length === 0) {
+        return undefined;
+      }
+
+      return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
     };
 
-    estimatedTimeline.forEach(upsertPoint);
-    historyTrend.forEach(upsertPoint);
+    const compact = [...byDate.entries()]
+      .map(([fullDate, points]) => {
+        const timestamp = dateKeyToTimestamp(fullDate);
+        if (Number.isNaN(timestamp)) {
+          return null;
+        }
 
-    return [...mergedByDate.values()].sort((left, right) => left.timestamp - right.timestamp);
-  }, [estimatedTimeline, historicalTrend, mode]);
+        const estimatedValues = points
+          .map((point) => point.estimatedScore)
+          .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+        const potentialValues = points
+          .map((point) => point.potentialScore)
+          .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+        const historicalValues = points
+          .map((point) => point.historicalScore)
+          .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+        const collapsedValues = [...estimatedValues, ...potentialValues, ...historicalValues];
+
+        return {
+          label: formatShortDate(fullDate, locale),
+          fullDate,
+          timestamp,
+          plotX: timestamp,
+          estimatedScore: average(estimatedValues),
+          potentialScore: average(potentialValues),
+          historicalScore: average(historicalValues),
+          active: points.some((point) => point.active),
+          rangeMin: collapsedValues.length > 1 ? Math.min(...collapsedValues) : undefined,
+          rangeMax: collapsedValues.length > 1 ? Math.max(...collapsedValues) : undefined,
+        } as ScoreTrendChartPoint;
+      })
+      .filter((point) => point !== null) as ScoreTrendChartPoint[];
+
+    return compact.sort((left, right) => left.timestamp - right.timestamp);
+  }, [estimatedTimeline, historicalTrend, isCompactTrend, locale, mode]);
+
+  const hasEstimatedTrend = useMemo(
+    () => scoreTrendData.some((point) => typeof point.estimatedScore === 'number'),
+    [scoreTrendData]
+  );
+
+  const hasHistoricalTrend = useMemo(
+    () => scoreTrendData.some((point) => typeof point.historicalScore === 'number'),
+    [scoreTrendData]
+  );
+
+  const trendDateTicks = useMemo(
+    () => Array.from(
+      new Set(
+        scoreTrendData
+          .map((point) => dateKeyToTimestamp(point.fullDate))
+          .filter((value) => !Number.isNaN(value))
+      )
+    ).sort((left, right) => left - right),
+    [scoreTrendData]
+  );
+
+  const trendYDomain = useMemo<[number, number]>(() => {
+    const floor = mode === 'T' ? 10 : 5;
+    const ceiling = mode === 'T' ? 990 : 495;
+    const values: number[] = [];
+
+    scoreTrendData.forEach((point) => {
+      [point.estimatedScore, point.potentialScore, point.historicalScore, point.rangeMin, point.rangeMax].forEach((value) => {
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+          values.push(value);
+        }
+      });
+    });
+
+    if (values.length === 0) {
+      return [floor, ceiling];
+    }
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const paddedMin = Math.max(floor, Math.floor((min - 20) / 5) * 5);
+    const paddedMax = Math.min(ceiling, Math.ceil((max + 20) / 5) * 5);
+
+    if (paddedMin === paddedMax) {
+      return [Math.max(floor, paddedMin - 20), Math.min(ceiling, paddedMax + 20)];
+    }
+
+    return [paddedMin, paddedMax];
+  }, [mode, scoreTrendData]);
 
   const estimatedLineLabel = mode === 'L'
     ? (locale === 'zh' ? '自动估分听力' : 'Auto Estimated Listening')
@@ -507,8 +668,8 @@ export function ScoreEstimatorPanel() {
             onChange={(e) => setSelectedPair(e.target.value)}
             className="h-9 px-3 rounded-[10px] bg-white dark:bg-[#2C2C2E] border border-black/5 dark:border-white/10 text-[14px] font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50 shadow-sm transition-shadow"
           >
-            {Array.from({ length: 10 }, (_, i) => (
-              <option key={i + 1} value={`${i + 1}`}>Set {i + 1}</option>
+            {setNumbers.map((setNumber) => (
+              <option key={setNumber} value={`${setNumber}`}>Set {setNumber}</option>
             ))}
           </select>
         </div>
@@ -665,18 +826,38 @@ export function ScoreEstimatorPanel() {
             </p>
           </div>
           
-          <div className="flex-1 min-h-80">
+          <div ref={chartContainerRef} className="flex-1 min-h-80">
             {scoreTrendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={scoreTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="4 4" stroke="currentColor" opacity={0.04} vertical={false} />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} dy={10} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }} domain={['dataMin - 20', 'dataMax + 20']} dx={-10} />
+                  <XAxis
+                    type="number"
+                    dataKey="plotX"
+                    domain={['dataMin', 'dataMax']}
+                    ticks={trendDateTicks}
+                    tickFormatter={(value) => formatShortDate(timestampToDateKeyLocal(Number(value)), locale)}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }}
+                    dy={10}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 12, fill: 'currentColor', opacity: 0.4 }}
+                    domain={trendYDomain}
+                    dx={-10}
+                  />
                   <Tooltip<number, string>
                     labelFormatter={(_, payload: unknown[]) => {
                       const typedPayload = payload as { payload: ScoreTrendChartPoint }[];
                       const point = typedPayload?.[0]?.payload;
-                      return point?.fullDate ?? '';
+                      if (!point) {
+                        return '';
+                      }
+
+                      return point.setLabel ? `${point.fullDate} · ${point.setLabel}` : point.fullDate;
                     }}
                     formatter={(value: number, name: string, item: unknown) => {
                       const typedItem = item as { payload: ScoreTrendChartPoint };
@@ -716,7 +897,31 @@ export function ScoreEstimatorPanel() {
                     </>
                   )}
 
-                  {estimatedTimeline.length > 0 ? (
+                  {isCompactTrend && scoreTrendData.map((point, index) => {
+                    if (
+                      typeof point.plotX !== 'number' ||
+                      typeof point.rangeMin !== 'number' ||
+                      typeof point.rangeMax !== 'number' ||
+                      point.rangeMax <= point.rangeMin
+                    ) {
+                      return null;
+                    }
+
+                    return (
+                      <ReferenceLine
+                        key={`range-marker-${point.fullDate}-${index}`}
+                        segment={[
+                          { x: point.plotX, y: point.rangeMin },
+                          { x: point.plotX, y: point.rangeMax },
+                        ]}
+                        stroke="#64748b"
+                        strokeOpacity={0.45}
+                        strokeWidth={2}
+                      />
+                    );
+                  })}
+
+                  {hasEstimatedTrend ? (
                     <>
                       <Line
                         key="estimated-score"
@@ -743,7 +948,7 @@ export function ScoreEstimatorPanel() {
                     </>
                   ) : null}
 
-                  {historicalTrend.length > 0 && (
+                  {hasHistoricalTrend && (
                     <Line
                       key="historical-score"
                       type="monotone"
@@ -1117,6 +1322,15 @@ function formatShortDate(value: string, locale: 'zh' | 'en') {
 
 function dateKeyToTimestamp(dateKey: string) {
   return new Date(`${dateKey}T00:00:00`).getTime();
+}
+
+function timestampToDateKeyLocal(value: number) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return getTodayDateLocal();
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function toLocalDateKeyFromInstant(instant: string) {

@@ -331,6 +331,44 @@ describe('useStore snapshot compatibility', () => {
     expect(imported?.sessionIds).toEqual(['R3']);
   });
 
+  it('preserves vocabulary timestamps when AI import reuses an existing word', () => {
+    const state = useStore.getState();
+
+    state.addVocabularyEntry({
+      text: 'board meeting',
+      definition: 'a formal meeting of directors',
+      sessionIds: ['R2'],
+      encounterCount: 2,
+      tags: [],
+    });
+
+    const existing = useStore.getState().vocabularyEntries.find((entry) => entry.text.toLowerCase() === 'board meeting');
+
+    if (!existing) {
+      throw new Error('Missing board meeting fixture');
+    }
+
+    const result = state.importSnapshot([
+      {
+        text: 'board meeting',
+        definition: 'a meeting of company directors',
+        enDefinition: 'a meeting of the board of directors',
+      },
+    ]);
+
+    const imported = useStore
+      .getState()
+      .vocabularyEntries
+      .find((entry) => entry.text.toLowerCase() === 'board meeting');
+
+    expect(result.source).toBe('vocabulary-list');
+    expect(imported).toBeDefined();
+    expect(imported?.definition).toBe('a meeting of company directors');
+    expect(imported?.createdAt).toBe(existing.createdAt);
+    expect(imported?.updatedAt).toBe(existing.updatedAt);
+    expect(imported?.sessionIds).toEqual(['R2']);
+  });
+
   it('falls back to active session provenance when AI import has no matching vocabulary', () => {
     const state = useStore.getState();
     state.selectSession('R6');

@@ -240,6 +240,7 @@ describe('syncLink helpers', () => {
       ],
       targetScore: 850,
       unlockedAchievements: [],
+      achievementUnlocks: {},
     });
 
     const payloadWithoutVocabulary = encodeSnapshotToSyncPayload(snapshot);

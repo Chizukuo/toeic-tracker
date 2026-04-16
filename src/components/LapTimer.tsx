@@ -508,8 +508,8 @@ function ReadingTimer({
   }
 
   function selectActiveLap(index: number) {
-    if (overtimeMode || index === currentLapIndex || (!timerRunning && isRunning)) {
-      if (!isRunning && !overtimeMode) setCurrentLapIndex(index);
+    if (index === currentLapIndex || (!timerRunning && isRunning)) {
+      if (!isRunning) setCurrentLapIndex(index);
       return;
     }
 
@@ -538,6 +538,7 @@ function ReadingTimer({
       status: 'in-progress',
       readingLapTimes: nextLapTimes,
       timerRuntime: {
+        ...session.timerRuntime,
         startedAt: new Date(startedAtRef.current ?? now).toISOString(),
         lapStartedAt: new Date(now).toISOString(),
         currentLapIndex: index,
@@ -550,7 +551,7 @@ function ReadingTimer({
   }
 
   function stopAndFlushLapTime() {
-    if (!lapStartedAtRef.current || !currentSegment || !timerRunning || overtimeMode) {
+    if (!lapStartedAtRef.current || !currentSegment || !timerRunning) {
       return readingLapTimes;
     }
     const elapsed = Math.max(getNow() - lapStartedAtRef.current, 1);
@@ -569,6 +570,7 @@ function ReadingTimer({
       status: 'in-progress',
       readingLapTimes: times,
       timerRuntime: {
+        ...session.timerRuntime,
         startedAt: new Date(startedAtRef.current ?? getNow()).toISOString(),
         lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
         currentLapIndex: currentLapIndex,
@@ -576,7 +578,6 @@ function ReadingTimer({
         unfinishedQuestionsDraft: unfinishedQuestions,
         unfinishedByPartDraft,
         timeLeftMs: Math.max(timeLeft, 0),
-        ...session.timerRuntime,
         ...next,
       },
     });
@@ -767,8 +768,8 @@ function ReadingTimer({
     );
 
     startedAtRef.current = toValidTime(session.timerSummary?.completedAt) ?? now;
-    lapStartedAtRef.current = null;
-    overtimeStartedAtRef.current = now;
+    lapStartedAtRef.current = now;
+      overtimeStartedAtRef.current = now;
 
     setTimeLeft(0);
     setIsRunning(true);
@@ -784,7 +785,7 @@ function ReadingTimer({
       readingLapTimes,
       timerRuntime: {
         startedAt: new Date(startedAtRef.current).toISOString(),
-        lapStartedAt: undefined,
+        lapStartedAt: new Date(now).toISOString(),
         currentLapIndex: currentLapIndex,
         readingLapTimes,
         unfinishedQuestionsDraft: String(effectiveLockedUnfinished),
@@ -862,7 +863,7 @@ function ReadingTimer({
       timerSummary: strictSummary,
       timerRuntime: {
         startedAt: new Date(startedAtRef.current ?? now).toISOString(),
-        lapStartedAt: lapStartedAtRef.current ? new Date(lapStartedAtRef.current).toISOString() : undefined,
+        lapStartedAt: new Date(now).toISOString(),
         currentLapIndex: currentLapIndex,
         readingLapTimes,
         unfinishedQuestionsDraft: String(unresolved.unfinishedCount),
@@ -874,6 +875,7 @@ function ReadingTimer({
       },
     });
 
+    lapStartedAtRef.current = now;
     overtimeStartedAtRef.current = now;
     setIsOvertime(true);
     setIsRunning(true);
@@ -888,8 +890,11 @@ function ReadingTimer({
       ? Math.max(getNow() - overtimeStartedAtRef.current, 0)
       : overtimeElapsedMs;
 
+    const finalLapTimes = stopAndFlushLapTime();
+
     patchSession(session.id, {
       status: 'in-progress',
+      readingLapTimes: finalLapTimes,
       timerSummary: session.timerSummary
         ? {
             ...session.timerSummary,
@@ -1078,7 +1083,7 @@ function ReadingTimer({
                   key={segment.key}
                   id={`segment-btn-${index}`}
                   onClick={() => selectActiveLap(index)}
-                  disabled={overtimeMode}
+
                   className={cn(
                     'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50/50 dark:focus-visible:ring-offset-zinc-900',
                     completed
