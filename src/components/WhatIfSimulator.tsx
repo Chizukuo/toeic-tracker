@@ -35,6 +35,7 @@ export function WhatIfSimulator({
   }, [readingSession]);
 
   const lockedUnfinishedPenalty = Math.max(readingSession?.timerSummary?.unfinishedQuestions ?? 0, 0);
+  const mergedUnfinished = expectedWrongFromBlanks(lockedUnfinishedPenalty);
 
   // Simulated mistakes
   const [simListening, setSimListening] = useState<Record<MistakeKey, number>>(baselineListening);
@@ -110,8 +111,8 @@ export function WhatIfSimulator({
           {lockedUnfinishedPenalty > 0 && (
             <p className="mt-1 text-[12px] font-medium text-rose-500">
               {locale === 'zh'
-                ? `已将 ${lockedUnfinishedPenalty} 题未完成题并入阅读错题基线。`
-                : `${lockedUnfinishedPenalty} unfinished items are merged into the reading mistake baseline.`}
+                ? `${lockedUnfinishedPenalty} 题没做，按蒙对 1/4 计，约 ${mergedUnfinished} 题已并入阅读错题。`
+                : `${lockedUnfinishedPenalty} blanks, guessed at 1 in 4, add about ${mergedUnfinished} to the reading mistakes.`}
             </p>
           )}
         </div>
@@ -152,6 +153,10 @@ function getStrictFullMistakeMap(type: 'L' | 'R') {
   return Object.fromEntries(parts.map((part) => [part, PART_QUESTION_COUNTS[part]])) as Record<MistakeKey, number>;
 }
 
+function expectedWrongFromBlanks(unanswered: number) {
+  return Math.round(Math.max(unanswered, 0) * 0.75);
+}
+
 function buildBaselineMistakeMap(session: SessionRecord | undefined, type: 'L' | 'R') {
   if (!session || session.status === 'not-started') {
     return getStrictFullMistakeMap(type);
@@ -161,7 +166,8 @@ function buildBaselineMistakeMap(session: SessionRecord | undefined, type: 'L' |
   const base = Object.fromEntries(parts.map((part) => [part, session.mistakes[part] ?? 0])) as Record<MistakeKey, number>;
 
   if (type === 'R') {
-    return mergeUnfinishedIntoReadingMistakes(base, session.timerSummary?.unfinishedQuestions ?? 0);
+    // Blanks would be guessed on test day (about 1 in 4 right), matching the main estimate.
+    return mergeUnfinishedIntoReadingMistakes(base, expectedWrongFromBlanks(session.timerSummary?.unfinishedQuestions ?? 0));
   }
 
   return base;

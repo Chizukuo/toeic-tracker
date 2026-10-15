@@ -233,8 +233,8 @@ export function DebugForm({
         {unfinishedCount > 0 && (
           <div className="rounded-[20px] border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-[13px] leading-6 text-amber-900 dark:text-amber-100">
             {locale === 'zh'
-              ? `有 ${unfinishedCount} 题没来得及做，已经按错题算进分数了。下面只填你做了但做错的题。`
-              : `${unfinishedCount} questions were left unanswered and already count as wrong. Below, enter only the ones you answered incorrectly.`}
+              ? `有 ${unfinishedCount} 题没来得及做，估分时按随手涂满算（约蒙对 1/4）。下面只填你做了但做错的题。`
+              : `${unfinishedCount} questions were left unanswered; the estimate assumes you would guess them (about 1 in 4 right). Below, enter only the ones you answered incorrectly.`}
             {unresolvedBacklog && !overtimeDone && (
               <span className="block text-amber-800/80 dark:text-amber-200/80">
                 {locale === 'zh'

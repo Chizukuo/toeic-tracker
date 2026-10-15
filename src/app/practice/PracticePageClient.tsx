@@ -105,7 +105,7 @@ function PracticeFlow() {
   const resultData = useMemo(() => {
     if (activeSession.status !== 'debugged') return null;
     const estimate = estimateToeicSessionScore(activeSession, 'strict');
-    // Unanswered reading questions count as wrong, matching the score estimate above.
+    // Unanswered reading questions are not answers, so they count as wrong here; the score adds expected guess credit.
     const totalMistakes = getIncorrectAnswers(activeSession, 'strict');
     const unanswered = activeSession.type === 'R' ? activeSession.timerSummary?.unfinishedQuestions ?? 0 : 0;
 

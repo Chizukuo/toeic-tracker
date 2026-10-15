@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
 import { getNextStepRecommendation, getWeakestPart } from '@/lib/nextStep';
-import { estimateToeicCombinedScore, isSessionEstimateEligible, type SessionRecord } from '@/lib/toeic';
+import { estimateCurrentLevel } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -67,17 +67,29 @@ function MissionControl() {
     (session) => session.status !== 'not-started' || Boolean(session.timerSummary || session.timerRuntime)
   );
 
-  const scoreEstimate = useMemo(() => {
-    const latestOf = (type: SessionRecord['type']) =>
-      sessions
-        .filter((s) => s.type === type && isSessionEstimateEligible(s))
-        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))[0];
-    const latestL = latestOf('L');
-    const latestR = latestOf('R');
-    if (!latestL && !latestR) return null;
-    const combined = estimateToeicCombinedScore(latestL, latestR, 'strict');
-    return combined.available ? combined : null;
-  }, [sessions]);
+  // Recency-weighted level over the last few sets, so one off day does not swing the headline score.
+  const level = useMemo(() => estimateCurrentLevel(sessions), [sessions]);
+  const levelSummary = useMemo(() => {
+    const zh = locale === 'zh';
+    if (level.total && level.listening && level.reading) {
+      const sets = Math.max(level.listening.setsUsed, level.reading.setsUsed);
+      return {
+        value: `${level.total.scaled}`,
+        detail: `${level.total.interval.min}–${level.total.interval.max} · ${level.total.cefr}`,
+        basis: sets > 1 ? (zh ? `近 ${sets} 套综合` : `Last ${sets} sets`) : (zh ? '根据 1 套' : 'From 1 set'),
+      };
+    }
+    const section = level.listening ?? level.reading;
+    if (!section) return null;
+    const isListening = section.type === 'L';
+    return {
+      value: `${section.scaled}`,
+      detail: zh
+        ? `${isListening ? '听力' : '阅读'} ${section.interval.min}–${section.interval.max} · 再做一套${isListening ? '阅读' : '听力'}可看总分`
+        : `${isListening ? 'Listening' : 'Reading'} ${section.interval.min}–${section.interval.max} · do a ${isListening ? 'reading' : 'listening'} set for a total`,
+      basis: zh ? (isListening ? '仅听力' : '仅阅读') : (isListening ? 'Listening only' : 'Reading only'),
+    };
+  }, [level, locale]);
 
   const weakestPart = useMemo(() => getWeakestPart(sessions), [sessions]);
 
@@ -256,11 +268,14 @@ function MissionControl() {
                   </span>
                 </div>
                 <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-                  {scoreEstimate ? scoreEstimate.total : '—'}
+                  {levelSummary ? levelSummary.value : '—'}
+                  {levelSummary && (
+                    <span className="ml-2 align-middle text-xs font-medium text-[var(--label-tertiary)]">{levelSummary.basis}</span>
+                  )}
                 </div>
                 <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
-                  {scoreEstimate
-                    ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
+                  {levelSummary
+                    ? levelSummary.detail
                     : locale === 'zh' ? '做完一套并对完答案后显示' : 'Shows after you check one set'}
                 </div>
               </div>

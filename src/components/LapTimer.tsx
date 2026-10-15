@@ -1418,8 +1418,8 @@ function ReadingTimer({
                     ? '做完点「做完了」，再填补做的题错了几题。这段时间不影响按考试规则算的分数。'
                     : 'Tap "Done" when finished, then enter how many of them were wrong. This does not change your score under real test rules.')
                   : (locale === 'zh'
-                    ? '按考试规则，它们已经算作错题。想知道时间够的话能拿几分，可以继续做完（单独计时）；不想补也可以跳过。'
-                    : 'Under real test rules they already count as wrong. To see your score with enough time, finish them on a separate clock — or just skip.')}
+                    ? '估分已按考场上随手涂满来算（约蒙对 1/4）。想知道时间够的话能拿几分，可以继续做完（单独计时）；不想补也可以跳过。'
+                    : 'The estimate already assumes you would guess them on test day (about 1 in 4 right). To see your score with enough time, finish them on a separate clock — or just skip.')}
               </p>
             </div>
           </div>
