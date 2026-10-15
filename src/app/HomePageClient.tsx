@@ -75,7 +75,10 @@ function MissionControl() {
       const sets = Math.max(level.listening.setsUsed, level.reading.setsUsed);
       return {
         value: `${level.total.scaled}`,
-        detail: `${level.total.interval.min}–${level.total.interval.max} · ${level.total.cefr}`,
+        // CEFR is defined per section by ETS, so show both rather than one blended level.
+        detail: zh
+          ? `${level.total.interval.min}–${level.total.interval.max} · 听力 ${level.listening.cefr} / 阅读 ${level.reading.cefr}`
+          : `${level.total.interval.min}–${level.total.interval.max} · L ${level.listening.cefr} / R ${level.reading.cefr}`,
         basis: sets > 1 ? (zh ? `近 ${sets} 套综合` : `Last ${sets} sets`) : (zh ? '根据 1 套' : 'From 1 set'),
       };
     }

@@ -26,6 +26,7 @@ import {
   getAnalyticsDataConfidence,
   getSessionPartLossMap,
   hasRecordedSessionData,
+  isSessionEstimateEligible,
   LISTENING_PARTS,
   type AnalyticsConfidence,
   type MistakeKey,
@@ -41,6 +42,7 @@ type LossTrendPoint = {
   Listening?: number;
   Reading?: number;
   Total?: number;
+  PairedTotal?: number;
   paired: boolean;
   [key: string]: string | number | boolean | undefined;
 };
@@ -60,6 +62,8 @@ type LossTrendSummary = {
 type RadarPoint = {
   partKey: MistakeKey;
   part: string;
+  /** Short axis label that fits around the radar on a phone; the full name is in `part`. */
+  axisLabel: string;
   group: 'Listening' | 'Reading';
   errorRate: number;
   lossShare: number;
@@ -89,12 +93,6 @@ export function AnalyticsDashboard() {
     const partMistakes = new Map<string, number>();
     const partAttempts = new Map<string, number>();
     const reasonCounts = new Map<string, number>();
-    const fullListeningLossMap = Object.fromEntries(
-      LISTENING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
-    ) as Partial<Record<MistakeKey, number>>;
-    const fullReadingLossMap = Object.fromEntries(
-      READING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
-    ) as Partial<Record<MistakeKey, number>>;
     let totalTrackedLoss = 0;
     let recordedSessions = 0;
 
@@ -114,20 +112,13 @@ export function AnalyticsDashboard() {
       const setNumber = index + 1;
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
-      const listeningRecorded = listening ? hasRecordedSessionData(listening) : false;
-      const readingRecorded = reading ? hasRecordedSessionData(reading) : false;
-      const pairHasData = listeningRecorded || readingRecorded;
+      // Only scored sections count: an attempt that hasn't been reviewed has no real mistake
+      // count yet, and a section that wasn't done is missing data, not 100% wrong.
+      const listeningScored = listening ? isSessionEstimateEligible(listening) : false;
+      const readingScored = reading ? isSessionEstimateEligible(reading) : false;
 
-      const listeningLossMap = listeningRecorded && listening
-        ? getSessionPartLossMap(listening)
-        : pairHasData && listening
-          ? fullListeningLossMap
-          : undefined;
-      const readingLossMap = readingRecorded && reading
-        ? getSessionPartLossMap(reading)
-        : pairHasData && reading
-          ? fullReadingLossMap
-          : undefined;
+      const listeningLossMap = listeningScored && listening ? getSessionPartLossMap(listening) : undefined;
+      const readingLossMap = readingScored && reading ? getSessionPartLossMap(reading) : undefined;
 
       const listeningLoss = listeningLossMap
         ? LISTENING_PARTS.reduce((sum, part) => sum + (listeningLossMap[part] ?? 0), 0)
@@ -167,6 +158,8 @@ export function AnalyticsDashboard() {
         Listening: listeningLoss,
         Reading: readingLoss,
         Total: hasAnyData ? (listeningLoss ?? 0) + (readingLoss ?? 0) : undefined,
+        // The total line only joins full sets, so a half-done set can't look like a big drop.
+        PairedTotal: listeningLoss !== undefined && readingLoss !== undefined ? listeningLoss + readingLoss : undefined,
         paired: listeningLoss !== undefined && readingLoss !== undefined,
         ...listeningMistakes,
         ...readingMistakes,
@@ -184,6 +177,7 @@ export function AnalyticsDashboard() {
       return {
         partKey: part,
         part: translatePart(locale, part),
+        axisLabel: (locale === 'zh' ? RADAR_AXIS_LABELS_ZH : RADAR_AXIS_LABELS_EN)[part],
         group: LISTENING_PARTS.includes(part as (typeof LISTENING_PARTS)[number]) ? 'Listening' : 'Reading',
         errorRate,
         lossShare,
@@ -221,7 +215,8 @@ export function AnalyticsDashboard() {
       trendData,
       analyticsConfidence: getAnalyticsDataConfidence(deferredSessions),
       lossSummary: summarizeLossTrend(trendData),
-      radarData,
+      // Untested Parts would sit at 0% and read as "strong"; leave them off the radar entirely.
+      radarData: radarData.filter((item) => item.attempts > 0),
       radarSummary: {
         recordedSessions,
         totalTrackedLoss,
@@ -252,7 +247,7 @@ export function AnalyticsDashboard() {
           </div>
           {lossSummary.latest?.Total !== undefined && (
             <div className="flex flex-col items-end">
-              <span className="text-[12px] font-medium text-zinc-400 uppercase tracking-widest">{locale === 'zh' ? '最新错题' : 'Latest Loss'}</span>
+              <span className="text-[12px] font-medium text-zinc-400 uppercase tracking-widest">{lossSummary.latest.paired ? (locale === 'zh' ? '最近一整套错题' : 'Latest full set') : (locale === 'zh' ? '最新错题' : 'Latest Loss')}</span>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{lossSummary.latest.Total}</span>
                 <TrendIndicator delta={lossSummary.latest.Total - (lossSummary.previous?.Total ?? lossSummary.latest.Total)} />
@@ -262,6 +257,7 @@ export function AnalyticsDashboard() {
         </div>
 
         {lossSummary.availableCount > 0 ? (
+          <>
           <div className="h-70 w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -290,7 +286,7 @@ export function AnalyticsDashboard() {
                 <Line
                   key="total-line"
                   type="monotone"
-                  dataKey="Total"
+                  dataKey="PairedTotal"
                   name="Total"
                   stroke="#ef4444"
                   strokeWidth={2.5}
@@ -301,6 +297,12 @@ export function AnalyticsDashboard() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-sky-400" />{locale === 'zh' ? '听力错题' : 'Listening'}</span>
+            <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-amber-400" />{locale === 'zh' ? '阅读错题' : 'Reading'}</span>
+            <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded-full bg-red-500" />{locale === 'zh' ? '整套总错题（两项都做了才连线）' : 'Full-set total (only sets with both sections)'}</span>
+          </div>
+          </>
         ) : (
           <EmptyState message={locale === 'zh' ? '完成一套练习以查看趋势' : 'Complete a set to view trends'} />
         )}
@@ -331,9 +333,9 @@ export function AnalyticsDashboard() {
                       <div className="flex flex-col">
                         <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">{item.part}</span>
                         <div className="flex items-center gap-1.5 text-[12px] font-medium text-zinc-500">
-                          <span>{item.errorRate.toFixed(0)}% err</span>
+                          <span className="whitespace-nowrap">{locale === 'zh' ? `错误率 ${item.errorRate.toFixed(0)}%` : `${item.errorRate.toFixed(0)}% wrong`}</span>
                           <span>·</span>
-                          <span>{item.lossShare.toFixed(0)}% share</span>
+                          <span className="whitespace-nowrap">{locale === 'zh' ? `占失分 ${item.lossShare.toFixed(0)}%` : `${item.lossShare.toFixed(0)}% of lost points`}</span>
                         </div>
                       </div>
                     </div>
@@ -362,7 +364,7 @@ export function AnalyticsDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData} outerRadius="70%">
                   <PolarGrid stroke="currentColor" opacity={0.05} />
-                  <PolarAngleAxis dataKey="part" tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 11 }} />
+                  <PolarAngleAxis dataKey="axisLabel" tick={{ fill: 'currentColor', opacity: 0.55, fontSize: 11 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 'auto']} axisLine={false} tick={false} />
                   <Radar
                     name={locale === 'zh' ? '错误率' : 'Error rate'}
@@ -392,6 +394,8 @@ export function AnalyticsDashboard() {
                       padding: '8px 12px'
                     }}
                     itemStyle={{ color: '#18181b', fontWeight: 500 }}
+                    labelFormatter={(_, payload) => (payload?.[0]?.payload as RadarPoint | undefined)?.part ?? ''}
+                    formatter={(value) => `${value}%`}
                   />
                 </RadarChart>
               </ResponsiveContainer>
@@ -399,6 +403,18 @@ export function AnalyticsDashboard() {
                <EmptyState message={locale === 'zh' ? '完成测试以生成雷达图' : 'Complete a test for radar chart'} />
             )}
           </div>
+          {radarData.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-red-500" />{locale === 'zh' ? '错误率' : 'Error rate'}</span>
+              <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-500" />{locale === 'zh' ? '占总失分' : 'Share of lost points'}</span>
+              {radarData.every((item) => item.group === 'Listening') && (
+                <span>{locale === 'zh' ? '阅读还没有记录，暂只显示听力' : 'No reading yet; listening only'}</span>
+              )}
+              {radarData.every((item) => item.group === 'Reading') && (
+                <span>{locale === 'zh' ? '听力还没有记录，暂只显示阅读' : 'No listening yet; reading only'}</span>
+              )}
+            </div>
+          )}
         </WidgetCard>
 
         {/* Hotspot Convergence Chart */}
@@ -432,7 +448,7 @@ export function AnalyticsDashboard() {
                     }}
                     itemStyle={{ color: '#18181b', fontWeight: 600 }}
                     labelStyle={{ color: '#71717a', marginBottom: '4px', fontWeight: 500 }}
-                    formatter={(value: number, name: string) => [`${value} err`, name]}
+                    formatter={(value: number, name: string) => [locale === 'zh' ? `错 ${value} 题` : `${value} wrong`, name]}
                   />
                   {radarSummary.hotspots.map((h, i) => {
                     const colors = ['#ef4444', '#f59e0b', '#38bdf8'];
@@ -456,6 +472,16 @@ export function AnalyticsDashboard() {
               <EmptyState message={locale === 'zh' ? '需要更多历史记录生成趋势' : 'More history needed for convergence chart'} />
             )}
           </div>
+          {radarSummary.hotspots.length > 0 && lossSummary.availableCount > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {radarSummary.hotspots.map((h, i) => (
+                <span key={h.partKey} className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-3 rounded-full" style={{ background: ['#ef4444', '#f59e0b', '#38bdf8'][i % 3] }} />
+                  {h.part}
+                </span>
+              ))}
+            </div>
+          )}
         </WidgetCard>
       </motion.div>
 
@@ -520,20 +546,20 @@ function HeaderInsight({ locale, confidence, summary, radarSummary }: { locale: 
         </p>
       </div>
 
-      <div className="flex items-center gap-3 text-[13px] shrink-0 bg-white dark:bg-[#2C2C2E] px-3 py-1.5 rounded-full border border-black/5 dark:border-white/5 shadow-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 self-start whitespace-nowrap text-[13px] bg-white dark:bg-[#2C2C2E] px-3 py-1.5 rounded-[14px] md:rounded-full md:shrink-0 border border-black/5 dark:border-white/5 shadow-sm">
         <span className={cn(
           "font-medium",
           isHigh ? "text-emerald-600 dark:text-emerald-400" : isMedium ? "text-amber-600 dark:text-amber-400" : "text-zinc-500"
         )}>
           {isHigh ? (locale === 'zh' ? '高可信度' : 'Stable Data') : isMedium ? (locale === 'zh' ? '中等可信度' : 'Usable Data') : (locale === 'zh' ? '数据不足' : 'Sparse Data')}
         </span>
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <span className="hidden text-zinc-300 md:inline dark:text-zinc-700">|</span>
         <span className="text-zinc-500 dark:text-zinc-400 font-medium">
           {confidence.recordedSessions} <span className="font-normal">{locale === 'zh' ? '套测验' : 'sets'}</span>
         </span>
         {riskLabel && (
           <>
-            <span className="text-zinc-300 dark:text-zinc-700">|</span>
+            <span className="hidden text-zinc-300 md:inline dark:text-zinc-700">|</span>
             <span className="flex items-center gap-1 text-red-500 font-medium">
               <AlertCircle className="size-3.5" />
               {riskLabel}
@@ -598,6 +624,28 @@ function formatConfidenceIssue(locale: 'zh' | 'en', issue: AnalyticsConfidence['
   }
 }
 
+const RADAR_AXIS_LABELS_ZH: Record<MistakeKey, string> = {
+  'Part 1': 'P1 看图',
+  'Part 2': 'P2 应答',
+  'Part 3': 'P3 对话',
+  'Part 4': 'P4 独白',
+  'Part 5': 'P5 语法',
+  'Part 6': 'P6 填空',
+  'Part 7 Single': 'P7 单篇',
+  'Part 7 Multiple': 'P7 多篇',
+};
+
+const RADAR_AXIS_LABELS_EN: Record<MistakeKey, string> = {
+  'Part 1': 'P1 Photos',
+  'Part 2': 'P2 Q&A',
+  'Part 3': 'P3 Conv.',
+  'Part 4': 'P4 Talks',
+  'Part 5': 'P5 Grammar',
+  'Part 6': 'P6 Text',
+  'Part 7 Single': 'P7 Single',
+  'Part 7 Multiple': 'P7 Multi',
+};
+
 function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
   const available = data.filter((point) => point.Total !== undefined);
   const pairedCount = data.filter((point) => point.paired).length;
@@ -607,14 +655,18 @@ function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
     return { availableCount: 0, pairedCount, partialCount };
   }
 
-  const latest = available[available.length - 1];
-  const previous = available.length > 1 ? available[available.length - 2] : undefined;
-  const recent = available.slice(-3);
+  // Compare like with like: a set with only one section done would look like a huge improvement
+  // next to a full set. Use sets with both sections once any exist.
+  const paired = available.filter((point) => point.paired);
+  const basis = paired.length > 0 ? paired : available;
+  const latest = basis[basis.length - 1];
+  const previous = basis.length > 1 ? basis[basis.length - 2] : undefined;
+  const recent = basis.slice(-3);
   const recentTotals = recent.map((point) => point.Total ?? 0);
   const recentAverage = recentTotals.reduce((sum, value) => sum + value, 0) / recentTotals.length;
   const recentRange = recentTotals.length > 1 ? Math.max(...recentTotals) - Math.min(...recentTotals) : 0;
-  const best = available.reduce((lowest, point) => ((point.Total ?? Infinity) < (lowest.Total ?? Infinity) ? point : lowest), available[0]);
-  const worst = available.reduce((highest, point) => ((point.Total ?? -Infinity) > (highest.Total ?? -Infinity) ? point : highest), available[0]);
+  const best = basis.reduce((lowest, point) => ((point.Total ?? Infinity) < (lowest.Total ?? Infinity) ? point : lowest), basis[0]);
+  const worst = basis.reduce((highest, point) => ((point.Total ?? -Infinity) > (highest.Total ?? -Infinity) ? point : highest), basis[0]);
 
   return { availableCount: available.length, pairedCount, partialCount, latest, previous, best, worst, recentAverage: Number(recentAverage.toFixed(1)), recentRange };
 }
@@ -673,14 +725,22 @@ function buildLossInsight({ locale, summary }: { locale: 'zh' | 'en'; summary: L
       : 'Trend analysis will appear here after more data is recorded.';
   }
 
+  const stability = summary.recentRange !== undefined && summary.pairedCount >= 3
+      ? (locale === 'zh' ? `近三套波动范围在 ${summary.recentRange} 题左右。` : `Recent variation is around ${summary.recentRange} questions.`)
+      : '';
+
+  // With only one section recorded there is nothing to compare, so don't name a "dominant" side.
+  if (!summary.latest.paired) {
+    const onlyListening = summary.latest.Listening !== undefined;
+    return locale === 'zh'
+      ? `目前只有${onlyListening ? '听力' : '阅读'}的记录，做完同一套的${onlyListening ? '阅读' : '听力'}后才能比较两边。`
+      : `Only ${onlyListening ? 'listening' : 'reading'} is recorded so far; finish the matching ${onlyListening ? 'reading' : 'listening'} set to compare.`;
+  }
+
   const listening = summary.latest.Listening ?? 0;
   const reading = summary.latest.Reading ?? 0;
   
   const dominant = listening > reading ? (locale === 'zh' ? '听力' : 'Listening') : reading > listening ? (locale === 'zh' ? '阅读' : 'Reading') : (locale === 'zh' ? '听力与阅读' : 'Listening and Reading');
-
-  const stability = summary.recentRange !== undefined && summary.availableCount >= 3
-      ? (locale === 'zh' ? `近三套波动范围在 ${summary.recentRange} 题左右。` : `Recent variation is around ${summary.recentRange} questions.`)
-      : '';
 
   return locale === 'zh'
     ? `当前失分主要集中在${dominant}部分。${stability}`

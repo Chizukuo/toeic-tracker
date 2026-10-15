@@ -29,6 +29,7 @@ import {
   estimateCurrentLevel,
   estimateToeicCombinedDualScore,
   estimateToeicSessionDualScore,
+  isSessionEstimateEligible,
   planCorrectAnswersForTarget,
   getCombinedDataConfidence,
   getCombinedEstimateBand,
@@ -133,7 +134,8 @@ export function ScoreEstimatorPanel() {
   const copy = getCopy(locale);
 
   const [mode, setMode] = useState<ScoreMode>('T');
-  const [selectedPair, setSelectedPair] = useState('1');
+  // Open on the newest set where both sections can be scored, falling back to any scored set.
+  const [selectedPair, setSelectedPair] = useState(() => pickDefaultSetNumber(sessions));
   const [historyDate, setHistoryDate] = useState('');
   const [historyListening, setHistoryListening] = useState('350');
   const [historyReading, setHistoryReading] = useState('330');
@@ -762,7 +764,7 @@ export function ScoreEstimatorPanel() {
             </div>
           </div>
 
-          <div className="relative z-10 grid grid-cols-4 gap-2 w-full md:w-auto md:flex-1 max-w-lg">
+          <div className="relative z-10 grid grid-cols-2 gap-2 w-full sm:grid-cols-4 md:w-auto md:flex-1 max-w-lg">
             <MetricBox label={copy.scoreRawCorrect} value={`${activeSummary.rawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
             <MetricBox label={locale === 'zh' ? '折算答对' : 'Effective'} value={`${activeSummary.adjustedRawCorrect}`} />
             <MetricBox label={copy.scoreMistakes} value={`${activeSummary.mistakes}`} />
@@ -815,9 +817,11 @@ export function ScoreEstimatorPanel() {
                   index !== activeSummary.partBreakdown.length - 1 && "border-b border-black/4 dark:border-white/4"
                 )}>
                   <div className="flex-1">
-                    <div className="flex justify-between text-[14px] mb-2">
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">{item.label}</span>
-                      <span className="font-medium text-zinc-500">{(item.rate * 100).toFixed(0)}% err</span>
+                    <div className="flex justify-between gap-3 text-[14px] mb-2">
+                      <span className="min-w-0 font-semibold text-zinc-900 dark:text-zinc-50">{item.label}</span>
+                      <span className="shrink-0 whitespace-nowrap font-medium text-zinc-500">
+                        {locale === 'zh' ? `错 ${(item.rate * 100).toFixed(0)}%` : `${(item.rate * 100).toFixed(0)}% wrong`}
+                      </span>
                     </div>
                     <div className="h-1.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
                       <div className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full" style={{ width: `${Math.max(item.rate * 100, 3)}%` }} />
@@ -1060,7 +1064,7 @@ export function ScoreEstimatorPanel() {
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400" 
                             : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
                         )}>
-                          {item.source === 'estimated' ? 'EST' : 'MAN'}
+                          {item.source === 'estimated' ? (locale === 'zh' ? '估分' : 'Est.') : (locale === 'zh' ? '实测' : 'Actual')}
                         </span>
                       </div>
                       <div className="text-[13px] text-zinc-500 mt-1 font-medium flex gap-2">
@@ -1107,9 +1111,9 @@ function SegmentButton({ active, label, icon, onClick }: { active: boolean; labe
 
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col items-center p-3 rounded-[16px] bg-zinc-50 dark:bg-[#2C2C2E]">
-      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">{label}</span>
-      <span className="text-[20px] font-bold text-zinc-900 dark:text-zinc-50 mt-1">{value}</span>
+    <div className="flex min-w-0 flex-col items-center p-3 rounded-[16px] bg-zinc-50 dark:bg-[#2C2C2E]">
+      <span className="whitespace-nowrap text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">{label}</span>
+      <span className="whitespace-nowrap text-[20px] font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">{value}</span>
     </div>
   );
 }
@@ -1211,7 +1215,7 @@ function buildTotalSummary({
     accuracy: estimate.accuracy,
     band: getCombinedEstimateBand(estimate.total),
     interval: formatInterval(estimate.interval.min, estimate.interval.max),
-    cefr: formatCefr(estimate.cefr),
+    cefr: formatSectionCefrPair(estimate, locale),
     available: estimate.available,
     chart,
     color,
@@ -1236,7 +1240,7 @@ function buildTotalSummary({
         label: locale === 'zh' ? '总分' : 'Total',
         score: estimate.total,
         interval: formatInterval(estimate.interval.min, estimate.interval.max),
-        cefr: formatCefr(estimate.cefr),
+        cefr: formatSectionCefrPair(estimate, locale),
       },
     ],
   };
@@ -1313,6 +1317,13 @@ function getPartWeaknessNarrative(part: ToeicSectionEstimate['weakestPart'], loc
 
 function formatInterval(min: number, max: number) { return `${min}-${max}`; }
 function formatCefr(level: ToeicCefrLevel) { return level === 'Below A1' ? '<A1' : level; }
+// ETS maps CEFR per section; a single blended level for the total would hide which side lags.
+function formatSectionCefrPair(estimate: ToeicCombinedEstimate, locale: 'zh' | 'en') {
+  if (!estimate.listening || !estimate.reading) return formatCefr(estimate.cefr);
+  const listening = formatCefr(estimate.listening.cefr);
+  const reading = formatCefr(estimate.reading.cefr);
+  return locale === 'zh' ? `听 ${listening} / 读 ${reading}` : `L ${listening} / R ${reading}`;
+}
 
 function buildConfidenceSummary(confidence: DataConfidence, locale: 'zh' | 'en'): ConfidenceSummary {
   if (confidence.level === 'high') {
@@ -1441,4 +1452,14 @@ function TargetScoreInput({ value, onCommit }: { value: number; onCommit: (score
       className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
     />
   );
+}
+
+function pickDefaultSetNumber(sessions: SessionRecord[]) {
+  const eligibleSets = (type: SessionRecord['type']) =>
+    new Set(sessions.filter((session) => session.type === type && isSessionEstimateEligible(session)).map((session) => session.setNumber));
+  const listening = eligibleSets('L');
+  const reading = eligibleSets('R');
+  const complete = [...listening].filter((setNumber) => reading.has(setNumber));
+  const candidates = complete.length > 0 ? complete : [...listening, ...reading];
+  return String(candidates.length > 0 ? Math.max(...candidates) : 1);
 }

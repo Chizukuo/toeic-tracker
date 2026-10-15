@@ -158,7 +158,7 @@ function PracticeFlow() {
                 <div key={s.key} className="flex items-center gap-1">
                   {idx > 0 && (
                     <div className={cn(
-                      'mx-0.5 h-px w-3 sm:mx-1 sm:w-10 transition-colors',
+                      'mx-0.5 hidden h-px w-3 min-[360px]:block sm:mx-1 sm:w-10 transition-colors',
                       isDone ? 'bg-emerald-500' : 'bg-[var(--separator-opaque)]'
                     )} />
                   )}
@@ -179,7 +179,8 @@ function PracticeFlow() {
                       isAvailable ? 'cursor-pointer hover:bg-[var(--surface-grouped)]' : !isActive && 'cursor-default opacity-60'
                     )}
                   >
-                    <Icon className="size-3.5" />
+                    {/* Very narrow phones keep the words and drop the icons. */}
+                    <Icon className="hidden size-3.5 min-[360px]:block" />
                     <span>{s.label}</span>
                   </button>
                 </div>

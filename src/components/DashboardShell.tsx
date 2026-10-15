@@ -160,7 +160,11 @@ export function DashboardShell({
       <LiveTimerPill
         sessions={sessions}
         locale={locale}
-        hidden={pathname === '/practice' && sessions.find((session) => session.timerRuntime)?.id === activeSession.id}
+        // Home already leads with this attempt, and Practice shows it when it's the selected set.
+        hidden={
+          pathname === '/' ||
+          (pathname === '/practice' && sessions.find((session) => session.timerRuntime)?.id === activeSession.id)
+        }
       />
       <main
         data-layout-variant={variant}

@@ -17,8 +17,14 @@ export function TimeAnalyticsPanel() {
   const sessions = useStore((state) => state.sessions);
   const locale = useStore((state) => state.locale);
   
-  const readingSessions = useMemo(() => sessions.filter(s => s.type === 'R'), [sessions]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(readingSessions[0]?.id ?? null);
+  // Only sets that were actually timed have anything to show; untouched sets would read as "0.0m".
+  const readingSessions = useMemo(
+    () => sessions.filter((s) => s.type === 'R' && (s.timerSummary || Object.keys(s.readingLapTimes).length > 0)),
+    [sessions]
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    () => [...readingSessions].reverse().find((s) => Object.keys(s.readingLapTimes).length > 0)?.id ?? readingSessions.at(-1)?.id ?? null
+  );
   
   const selectedSession = useMemo(
     () => readingSessions.find((s) => s.id === selectedSessionId) ?? readingSessions[0],
@@ -93,7 +99,7 @@ export function TimeAnalyticsPanel() {
                         {isOvertime && (
                           <>
                             <span className="text-zinc-300 dark:text-zinc-700">&middot;</span>
-                            <span className="text-red-500 font-medium">Overtime</span>
+                            <span className="text-red-500 font-medium">{locale === 'zh' ? '超时' : 'Overtime'}</span>
                           </>
                         )}
                       </div>
@@ -132,7 +138,7 @@ export function TimeAnalyticsPanel() {
                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                    className="flex h-full min-h-[400px] items-center justify-center rounded-[24px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#1C1C1E]/50"
                   >
-                   <p className="text-sm font-medium text-zinc-400">Select a session to view analysis.</p>
+                   <p className="text-sm font-medium text-zinc-400">{locale === 'zh' ? '选一套阅读查看用时' : 'Pick a reading set to see its timing.'}</p>
                  </motion.div>
                )}
              </AnimatePresence>
@@ -142,10 +148,10 @@ export function TimeAnalyticsPanel() {
         <div className="flex h-[400px] w-full flex-col items-center justify-center rounded-[24px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-[#1C1C1E]/50">
           <Activity className="size-10 text-zinc-300 dark:text-zinc-700 mb-4" />
           <p className="text-sm font-medium text-zinc-500 mb-1">
-            {locale === 'zh' ? '暂无阅读测验数据' : 'No reading sessions data'}
+            {locale === 'zh' ? '还没有计时做过的阅读' : 'No timed reading sets yet'}
           </p>
           <p className="text-xs text-zinc-400">
-            {locale === 'zh' ? '完成一次带分段计时的阅读模拟考以查看分析' : 'Complete a reading simulation with lap timer to view insights'}
+            {locale === 'zh' ? '在「练习」里用计时做一套阅读，并在换 Part 时点一下卡片，这里就会显示每个 Part 的用时。' : 'Time a reading set in Practice and tap the Part cards as you move on; time per Part shows up here.'}
           </p>
         </div>
       )}

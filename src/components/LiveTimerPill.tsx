@@ -31,6 +31,10 @@ function describeLiveClock(session: SessionRecord, now: number) {
   }
 
   const remaining = Math.max(getTargetDurationMs('R') - (now - startedAt), 0);
+  // Past the limit the clock is meaningless; what's left is entering the unfinished count.
+  if (remaining === 0) {
+    return { text: null, urgent: true };
+  }
   return { text: formatClock(remaining), urgent: remaining <= 5 * 60 * 1000 };
 }
 
@@ -63,14 +67,18 @@ export function LiveTimerPill({ sessions, locale, hidden }: { sessions: SessionR
           <Link
             href="/practice"
             onClick={() => selectSession(liveSession.id)}
-            className="flex items-center gap-2.5 rounded-full border border-(--glass-border) bg-(--glass-bg) py-2 pl-3 pr-4 text-sm font-semibold text-(--label-primary) shadow-(--shadow-elevated) backdrop-blur-2xl transition-transform hover:scale-[1.02] active:scale-[0.97]"
+            className="flex items-center gap-2.5 whitespace-nowrap rounded-full border border-(--glass-border) bg-(--glass-bg) py-2 pl-3 pr-4 text-sm font-semibold text-(--label-primary) shadow-(--shadow-elevated) backdrop-blur-2xl transition-transform hover:scale-[1.02] active:scale-[0.97]"
           >
             <span className={clock.urgent ? 'size-2 rounded-full bg-red-500 animate-pulse' : 'size-2 rounded-full bg-emerald-500 animate-pulse'} />
             <span>{liveSession.label}</span>
             <span className={clock.urgent ? 'font-mono tabular-nums text-red-500' : 'font-mono tabular-nums'}>
-              {clock.text ?? (locale === 'zh' ? '待交卷' : 'Submit pending')}
+              {clock.text ?? (locale === 'zh' ? '时间到' : "Time's up")}
             </span>
-            <span className="text-xs font-medium text-(--label-tertiary)">{locale === 'zh' ? '返回计时' : 'Back to timer'}</span>
+            <span className="text-xs font-medium text-(--label-tertiary)">
+              {clock.text
+                ? (locale === 'zh' ? '返回计时' : 'Back to timer')
+                : (locale === 'zh' ? '去交卷' : 'Submit it')}
+            </span>
           </Link>
         </motion.div>
       )}
