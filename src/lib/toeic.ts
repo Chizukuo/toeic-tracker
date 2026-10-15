@@ -636,10 +636,11 @@ export function getAnalyticsDataConfidence(sessions: SessionRecord[]): Analytics
 		issues.add("unfinished-backlog");
 	}
 
+	// A sparse history can't be "high" confidence, however clean it is.
 	const level: DataConfidenceLevel =
 		recordedSessions < 2 || inProgressSessions > 0
 			? "low"
-			: unfinishedSessions > 0 || reviewedSessions < recordedSessions
+			: unfinishedSessions > 0 || reviewedSessions < recordedSessions || issues.has("sparse-history")
 				? "medium"
 				: "high";
 

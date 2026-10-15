@@ -67,7 +67,7 @@ export function LiveTimerPill({ sessions, locale, hidden }: { sessions: SessionR
           <Link
             href="/practice"
             onClick={() => selectSession(liveSession.id)}
-            className="flex items-center gap-2.5 rounded-full border border-(--glass-border) bg-(--glass-bg) py-2 pl-3 pr-4 text-sm font-semibold text-(--label-primary) shadow-(--shadow-elevated) backdrop-blur-2xl transition-transform hover:scale-[1.02] active:scale-[0.97]"
+            className="flex items-center gap-2.5 whitespace-nowrap rounded-full border border-(--glass-border) bg-(--glass-bg) py-2 pl-3 pr-4 text-sm font-semibold text-(--label-primary) shadow-(--shadow-elevated) backdrop-blur-2xl transition-transform hover:scale-[1.02] active:scale-[0.97]"
           >
             <span className={clock.urgent ? 'size-2 rounded-full bg-red-500 animate-pulse' : 'size-2 rounded-full bg-emerald-500 animate-pulse'} />
             <span>{liveSession.label}</span>
