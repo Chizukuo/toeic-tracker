@@ -157,3 +157,39 @@ describe('weakest part', () => {
     expect(getWeakestPart(sessions)).toBe('Part 3');
   });
 });
+
+describe('live attempts', () => {
+  it('resumes a running attempt even when another set is selected', () => {
+    const sessions = createInitialSessions();
+    const live = sessions.find((session) => session.id === 'R4');
+    const backlog = sessions.find((session) => session.id === 'R2');
+    if (!live || !backlog) throw new Error('Missing fixture sessions');
+
+    live.status = 'in-progress';
+    live.timerRuntime = {
+      startedAt: '2026-03-11T09:00:00.000Z',
+      currentLapIndex: 1,
+      readingLapTimes: {},
+    };
+    backlog.status = 'debugged';
+    backlog.timerSummary = {
+      totalElapsedMs: 75 * 60 * 1000,
+      forcedSubmit: true,
+      timedOut: true,
+      unfinishedQuestions: 4,
+      resolvedUnfinished: false,
+      completedAt: '2026-03-10T09:00:00.000Z',
+    };
+
+    const recommendation = getNextStepRecommendation({
+      locale: 'en',
+      sessions,
+      activeSessionId: 'L1',
+      historicalScoreCount: 0,
+    });
+
+    expect(recommendation.kind).toBe('resume-active');
+    expect(recommendation.targetSessionId).toBe('R4');
+    expect(recommendation.href).toBe('/practice');
+  });
+});

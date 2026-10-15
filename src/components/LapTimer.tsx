@@ -71,6 +71,49 @@ function useDocumentTitleClock(label: string | null) {
   }, [label]);
 }
 
+/** Keeps a phone screen awake while a timed attempt runs; re-acquired when the tab becomes visible again. */
+function useScreenWakeLock(active: boolean) {
+  useEffect(() => {
+    if (!active || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const next = await navigator.wakeLock.request('screen');
+        if (cancelled) {
+          void next.release();
+          return;
+        }
+        sentinel = next;
+      } catch {
+        // Denied (battery saver, unsupported context) — the timer still works without it.
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && (!sentinel || sentinel.released)) {
+        void acquire();
+      }
+    };
+
+    void acquire();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void sentinel?.release().catch(() => {});
+    };
+  }, [active]);
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
 /** Two-step confirm for destructive taps: first call arms it, second call within the window runs it. */
 function useArmedConfirm(timeoutMs = 3000) {
   const [armed, setArmed] = useState(false);
@@ -274,6 +317,7 @@ function ListeningFlow({
 
   const elapsedFormatted = formatClock(elapsedMs);
   useDocumentTitleClock(isActive ? elapsedFormatted : null);
+  useScreenWakeLock(isActive);
   const hasPrevious = Boolean(session.timerSummary);
   const previousTime = hasPrevious ? session.timerSummary!.totalElapsedMs : 0;
 
@@ -416,6 +460,10 @@ function ReadingTimer({
   const [isOvertime, setIsOvertime] = useState(initialState.isOvertime);
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(initialState.showTimeoutDialog);
+  // Time spent in the active part since it was last entered; refreshed by the 1s tick.
+  const [currentLapLiveMs, setCurrentLapLiveMs] = useState(() =>
+    initialState.isRunning && initialState.lapStartedAtMs ? Math.max(Date.now() - initialState.lapStartedAtMs, 0) : 0
+  );
 
   const startedAtRef = useRef<number | null>(initialState.startedAtMs);
   const lapStartedAtRef = useRef<number | null>(initialState.lapStartedAtMs);
@@ -430,32 +478,12 @@ function ReadingTimer({
   const timerRunning = isRunning && (!isOvertime || overtimeMode);
   const currentSegment = READING_LAP_SEGMENTS[currentLapIndex];
 
-  useEffect(() => {
-    if (timerRunning && !overtimeMode && currentLapIndex !== undefined && !isListening) {
-      // Use requestAnimationFrame or setTimeout to let React and default click behaviors finish
-      const frame = requestAnimationFrame(() => {
-        if (currentLapIndex < READING_LAP_SEGMENTS.length - 1) {
-          const nextButton = document.getElementById(`segment-btn-${currentLapIndex + 1}`);
-          if (nextButton) {
-            nextButton.focus({ preventScroll: true });
-          }
-        } else if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
-          const submitBtn = document.getElementById('submit-test-btn');
-          if (submitBtn) {
-            submitBtn.focus({ preventScroll: true });
-          }
-        }
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [timerRunning, currentLapIndex, overtimeMode, isListening]);
-
-
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
   const restartConfirm = useArmedConfirm();
   useDocumentTitleClock(
     timerRunning ? (overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)) : null
   );
+  useScreenWakeLock(timerRunning);
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
   const unfinishedByPartTotal = useMemo(() => sumReadingPartDistribution(unfinishedByPartDraft), [unfinishedByPartDraft]);
@@ -578,6 +606,7 @@ function ReadingTimer({
     }
     
     lapStartedAtRef.current = now;
+    setCurrentLapLiveMs(0);
     setCurrentLapIndex(index);
 
     patchSession(session.id, {
@@ -607,6 +636,7 @@ function ReadingTimer({
     };
     setReadingLapTimes(nextTimes);
     lapStartedAtRef.current = getNow();
+    setCurrentLapLiveMs(0);
     return nextTimes;
   }
 
@@ -692,6 +722,7 @@ function ReadingTimer({
 
     const finalTimes = stopAndFlushLapTime();
     const nextPending = { forcedSubmit: true, timedOut: true } satisfies PendingSubmit;
+    navigator.vibrate?.([200, 120, 200]);
     setIsRunning(false);
     setPendingSubmit(nextPending);
     setShowTimeoutDialog(true);
@@ -734,8 +765,10 @@ function ReadingTimer({
         return;
       }
 
-      const remaining = Math.max(totalDurationMs - (getNow() - startedAtRef.current), 0);
+      const now = getNow();
+      const remaining = Math.max(totalDurationMs - (now - startedAtRef.current), 0);
       setTimeLeft(remaining);
+      setCurrentLapLiveMs(lapStartedAtRef.current ? Math.max(now - lapStartedAtRef.current, 0) : 0);
 
       if (remaining === 0) {
         window.clearInterval(intervalId);
@@ -774,6 +807,7 @@ function ReadingTimer({
     lapStartedAtRef.current = now;
     overtimeStartedAtRef.current = null;
     setTimeLeft(totalDurationMs);
+    setCurrentLapLiveMs(0);
     setIsRunning(true);
     setReadingLapTimes({});
     setPendingSubmit(null);
@@ -961,6 +995,33 @@ function ReadingTimer({
     trackUXEvent('overtime_stopped', session.id);
   };
 
+  const handleLapShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
+
+    const lastIndex = READING_LAP_SEGMENTS.length - 1;
+    let targetIndex: number | null = null;
+    if (event.key === ' ' || event.key === 'ArrowRight') {
+      targetIndex = Math.min(currentLapIndex + 1, lastIndex);
+    } else if (event.key === 'ArrowLeft') {
+      targetIndex = Math.max(currentLapIndex - 1, 0);
+    } else if (/^[1-4]$/.test(event.key)) {
+      targetIndex = Number(event.key) - 1;
+    }
+
+    if (targetIndex === null) return;
+    event.preventDefault();
+    if (targetIndex !== currentLapIndex) {
+      selectActiveLap(targetIndex);
+    }
+  });
+
+  useEffect(() => {
+    if (!timerRunning || overtimeMode) return;
+    const onKeyDown = (event: KeyboardEvent) => handleLapShortcut(event);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [overtimeMode, timerRunning]);
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -1118,10 +1179,10 @@ function ReadingTimer({
           <div className="mt-2.5 text-[12px] text-zinc-500 dark:text-zinc-400 mb-5">
             {locale === 'zh'
               ? timerRunning
-                ? '点击卡片无缝切换题型，系统自动累计耗时；完成后点击上方“交卷”。'
+                ? '点击卡片或按 空格 / → 切到下一题型，1–4 直接跳转；系统自动累计耗时，完成后点“交卷”。'
                 : '先点击这里选择起点，再点击上方按钮开始计时。'
               : timerRunning
-                ? 'Tap cards to switch active parts seamlessly. Tap Submit when finished test.'
+                ? 'Tap a card or press Space / → for the next part, 1–4 to jump. Time accrues automatically; tap Submit when done.'
                 : 'Select your starting point, then start the timer above.'}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -1130,13 +1191,19 @@ function ReadingTimer({
               const active = timerRunning && !overtimeMode && currentLapIndex === index;
               const preselected = !timerRunning && !overtimeMode && currentLapIndex === index;
               const stored = session.readingLapTimes[segment.key];
+              const liveLapMs = (readingLapTimes[segment.key] ?? 0) + (active ? currentLapLiveMs : 0);
 
               return (
                                 <button
                   type="button"
                   key={segment.key}
                   id={`segment-btn-${index}`}
-                  onClick={() => selectActiveLap(index)}
+                  onClick={(event) => {
+                    selectActiveLap(index);
+                    // Hand focus back to the page so Space advances via the shortcut, not by re-clicking this card.
+                    if (timerRunning) event.currentTarget.blur();
+                  }}
+                  aria-pressed={active || preselected}
 
                   className={cn(
                     'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50/50 dark:focus-visible:ring-offset-zinc-900',
@@ -1170,8 +1237,17 @@ function ReadingTimer({
                     </div>
                   </div>
                   <div className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
-                  <div className={cn('mt-3 font-mono text-[11px] font-medium', completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500')}>
-                    {completed
+                  <div className={cn(
+                    'mt-3 font-mono text-[11px] font-medium',
+                    active
+                      ? liveLapMs > segment.baselineMinutes * 60_000
+                        ? 'text-red-500 dark:text-red-400'
+                        : 'text-amber-700 dark:text-amber-300'
+                      : completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500'
+                  )}>
+                    {active
+                      ? `${formatClock(liveLapMs)} / ${segment.baselineMinutes}:00`
+                      : completed
                       ? copy.thisRun(formatMinutes(readingLapTimes[segment.key]))
                       : stored !== undefined
                         ? copy.lastRun(formatMinutes(stored))

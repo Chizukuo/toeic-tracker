@@ -4,10 +4,11 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 import { DebugForm } from '@/components/DebugForm';
+import { SessionVocabCard } from '@/components/SessionVocabCard';
 import { DashboardShell, DeferredPanelPlaceholder, useDashboardContext } from '@/components/DashboardShell';
 import { LapTimer } from '@/components/LapTimer';
-import { formatSessionTitle, translateStatus } from '@/lib/i18n';
-import { estimateToeicSessionScore, sumMistakes } from '@/lib/toeic';
+import { formatSessionTitle, translatePart, translateStatus } from '@/lib/i18n';
+import { estimateToeicSessionScore, getPartsForType, PART_QUESTION_COUNTS, sumMistakes } from '@/lib/toeic';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -106,8 +107,32 @@ function PracticeFlow() {
     if (activeSession.status !== 'debugged') return null;
     const estimate = estimateToeicSessionScore(activeSession, 'strict');
     const totalMistakes = Math.min(sumMistakes(activeSession), 100);
-    return { estimate, totalMistakes, accuracy: Math.round(100 - totalMistakes) };
-  }, [activeSession]);
+
+    // Compare against the closest earlier reviewed set of the same section.
+    const previous = sessions
+      .filter(
+        (s) =>
+          s.type === activeSession.type &&
+          s.status === 'debugged' &&
+          s.setNumber < activeSession.setNumber
+      )
+      .sort((a, b) => b.setNumber - a.setNumber)[0];
+    const comparison = previous
+      ? { label: previous.label, delta: estimate.scaled - estimateToeicSessionScore(previous, 'strict').scaled }
+      : null;
+
+    // The part that cost the most this time, as a concrete thing to drill next.
+    let biggestLoss: { part: ReturnType<typeof getPartsForType>[number]; mistakes: number; rate: number } | null = null;
+    for (const part of getPartsForType(activeSession.type)) {
+      const mistakes = Math.min(activeSession.mistakes[part] ?? 0, PART_QUESTION_COUNTS[part]);
+      const rate = mistakes / PART_QUESTION_COUNTS[part];
+      if (mistakes > 0 && (!biggestLoss || rate > biggestLoss.rate)) {
+        biggestLoss = { part, mistakes, rate };
+      }
+    }
+
+    return { estimate, totalMistakes, accuracy: Math.round(100 - totalMistakes), comparison, biggestLoss };
+  }, [activeSession, sessions]);
 
   const steps: { key: PracticeStep; label: string; icon: typeof Clock }[] = [
     { key: 'timer', label: locale === 'zh' ? '计时' : 'Timer', icon: Clock },
@@ -221,6 +246,12 @@ function PracticeFlow() {
             </div>
           )}
 
+          {step === 'review' && (
+            <div className="mt-6">
+              <SessionVocabCard session={activeSession} locale={locale} />
+            </div>
+          )}
+
           {step === 'result' && (
             <div className="space-y-6">
               <div className="relative cheese-card overflow-hidden p-8 sm:p-10 text-center">
@@ -260,6 +291,22 @@ function PracticeFlow() {
                       <div className="mt-1 text-xs text-[var(--label-secondary)]">
                         {resultData.estimate.interval.min}–{resultData.estimate.interval.max} · {resultData.estimate.cefr}
                       </div>
+                      {resultData.comparison && (
+                        <div
+                          className={cn(
+                            'mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            resultData.comparison.delta > 0
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : resultData.comparison.delta < 0
+                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                : 'bg-[var(--surface-grouped)] text-[var(--label-secondary)]'
+                          )}
+                        >
+                          {locale === 'zh' ? `较 ${resultData.comparison.label} ` : `vs ${resultData.comparison.label} `}
+                          {resultData.comparison.delta > 0 ? '+' : ''}
+                          {resultData.comparison.delta}
+                        </div>
+                      )}
                     </motion.div>
 
                     <motion.div
@@ -279,6 +326,19 @@ function PracticeFlow() {
                       </div>
                     </motion.div>
                   </div>
+                )}
+
+                {resultData?.biggestLoss && (
+                  <p className="mx-auto mt-4 max-w-md text-sm text-[var(--label-secondary)]">
+                    {locale === 'zh' ? '本套最大失分：' : 'Biggest loss this set: '}
+                    <span className="font-semibold text-[var(--label-primary)]">
+                      {translatePart(locale, resultData.biggestLoss.part)}
+                    </span>
+                    {' · '}
+                    {locale === 'zh'
+                      ? `错 ${resultData.biggestLoss.mistakes}/${PART_QUESTION_COUNTS[resultData.biggestLoss.part]}`
+                      : `${resultData.biggestLoss.mistakes}/${PART_QUESTION_COUNTS[resultData.biggestLoss.part]} wrong`}
+                  </p>
                 )}
 
                 <motion.div
@@ -313,6 +373,8 @@ function PracticeFlow() {
                   </Link>
                 </motion.div>
               </div>
+
+              <SessionVocabCard session={activeSession} locale={locale} />
 
               <TimeWaterfallChart session={activeSession} />
             </div>

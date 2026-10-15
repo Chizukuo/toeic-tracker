@@ -211,7 +211,8 @@ export function DebugForm({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!((event.ctrlKey || event.metaKey) && event.key === 'Enter')) {
+      // Skip keys another field already handled (e.g. Enter in the vocab capture box).
+      if (event.defaultPrevented || !((event.ctrlKey || event.metaKey) && event.key === 'Enter')) {
         return;
       }
 

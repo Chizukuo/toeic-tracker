@@ -30,8 +30,10 @@ export function getNextStepRecommendation({
   activeSessionId: string;
   historicalScoreCount: number;
 }): NextStepRecommendation {
-  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
-  const backlogSession = getBacklogSession(sessions);
+  const selectedSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+  // A clock that is still running outranks everything else, even if another set is selected.
+  const activeSession = sessions.find((session) => session.timerRuntime) ?? selectedSession;
+  const backlogSession = activeSession?.timerRuntime ? undefined : getBacklogSession(sessions);
 
   if (backlogSession) {
     return {
