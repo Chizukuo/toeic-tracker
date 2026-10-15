@@ -79,10 +79,17 @@ export function DataVaultPanel() {
 	const [autoBackups, setAutoBackups] = useState<AutoBackupEntry[]>([]);
 	const [includeVocabularyInSync, setIncludeVocabularyInSync] = useState(true);
 
-	useEffect(() => {
-		if (typeof window !== 'undefined') {
+	const refreshAutoBackups = () => {
+		if (typeof window === 'undefined') return;
+		try {
 			setAutoBackups(getAutoBackups(window.localStorage));
+		} catch {
+			setAutoBackups([]);
 		}
+	};
+
+	useEffect(() => {
+		refreshAutoBackups();
 	}, []);
 
 	const recordedSessions = sessions.filter((session) => session.status !== 'not-started').length;
@@ -440,6 +447,7 @@ export function DataVaultPanel() {
 		}
 
 		const result = importSnapshot(pendingFileImport.payload);
+		refreshAutoBackups();
 		setImportOpen(false);
 		setPendingFileImport(null);
 		pushFeedback('success', formatImportFeedback(locale, copy.importSuccess, result));
@@ -480,6 +488,7 @@ export function DataVaultPanel() {
 		}
 
 		const result = importSnapshot(pendingSyncImport.snapshot);
+		refreshAutoBackups();
 		pushFeedback('success', formatImportFeedback(locale, copy.importSuccess, result));
 		setPendingSyncImport(null);
 		setSyncImportOpen(false);
@@ -514,6 +523,7 @@ export function DataVaultPanel() {
 
 	const handleReset = () => {
 		resetProgress();
+		refreshAutoBackups();
 		setResetOpen(false);
 		pushFeedback('info', copy.resetSuccess);
 	};
@@ -577,7 +587,7 @@ export function DataVaultPanel() {
 			</AnimatePresence>
 
 			<motion.div 
-				className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 px-2"
+				className="grid grid-cols-2 gap-3 xl:grid-cols-4 px-2"
 				variants={{
 					hidden: { opacity: 0 },
 					show: { opacity: 1, transition: { staggerChildren: 0.08 } }
@@ -586,10 +596,10 @@ export function DataVaultPanel() {
 				animate="show"
 			>
 				{[
-					{ label: locale === 'zh' ? '已录入套题' : 'Recorded Sets', value: `${recordedSessions}/${sessions.length}`, helper: locale === 'zh' ? '已保存计时或复盘数据' : 'Sets with saved timer or review' },
-					{ label: locale === 'zh' ? '已完成复盘' : 'Reviewed', value: `${reviewedSessions}/${sessions.length}`, helper: locale === 'zh' ? '已标记 debugged 的节点' : 'Sessions marked as reviewed' },
-					{ label: locale === 'zh' ? '历史成绩' : 'History Records', value: `${historicalScores.length}`, helper: locale === 'zh' ? '手动录入与估分记录' : 'Manual and estimated scores' },
-					{ label: locale === 'zh' ? '当前定位' : 'Active Session', value: activeSessionLabel, helper: examDate || (locale === 'zh' ? '考试日期未定' : 'No exam date') }
+					{ label: locale === 'zh' ? '做过的套题' : 'Sets started', value: `${recordedSessions}/${sessions.length}`, helper: locale === 'zh' ? '计时或复盘过' : 'Timed or reviewed' },
+					{ label: locale === 'zh' ? '已对完答案' : 'Reviewed', value: `${reviewedSessions}/${sessions.length}`, helper: locale === 'zh' ? '填过错题数' : 'Mistakes entered' },
+					{ label: locale === 'zh' ? '历史成绩' : 'History Records', value: `${historicalScores.length}`, helper: locale === 'zh' ? '模考或真考成绩' : 'Mock or real test scores' },
+					{ label: locale === 'zh' ? '当前套题' : 'Current set', value: activeSessionLabel, helper: examDate || (locale === 'zh' ? '考试日期未定' : 'No exam date') }
 				].map((item, i) => (
 					<motion.div key={i} variants={{ hidden: { opacity: 0, scale: 0.96 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', bounce: 0 } } }}>
 						<SummaryTile {...item} />
@@ -651,7 +661,7 @@ export function DataVaultPanel() {
 					</motion.div>
 				)}
 
-				<SettingsGroup title={locale === 'zh' ? '云端同步' : 'Cloud Sync'}>
+				<SettingsGroup title={locale === 'zh' ? '换设备' : 'Move to another device'}>
 					<SettingsRow 
 						icon={<Link2 />} 
 						title={copy.syncTitle} 
@@ -669,26 +679,26 @@ export function DataVaultPanel() {
 					/>
 				</SettingsGroup>
 
-				<SettingsGroup title={locale === 'zh' ? '导入与导出' : 'Import & Export'}>
+				<SettingsGroup title={locale === 'zh' ? '备份文件' : 'Backup file'}>
 					<SettingsRow icon={<Download />} title={copy.exportTitle} description={copy.exportBody} actionLabel={copy.exportAction} onClick={handleExport} />
 					<SettingsRow icon={<Upload />} title={copy.importTitle} description={copy.importBody} actionLabel={copy.importAction} onClick={handleImportClick} />
-					<SettingsRow icon={<Copy />} title={locale === 'zh' ? '从剪贴板导入' : 'Import From Clipboard'} description={locale === 'zh' ? '自动检测剪贴板内的快照或词表数据' : 'Detect snapshot or vocabulary JSON from clipboard'} actionLabel={locale === 'zh' ? '读取剪贴板' : 'Read Clipboard'} onClick={() => { void handleImportFromClipboard(); }} />
+					<SettingsRow icon={<Copy />} title={locale === 'zh' ? '从剪贴板导入' : 'Import From Clipboard'} description={locale === 'zh' ? '复制了备份内容或 AI 回复后，点这里直接粘贴导入' : 'Paste a copied backup or AI reply to import it'} actionLabel={locale === 'zh' ? '读取剪贴板' : 'Read Clipboard'} onClick={() => { void handleImportFromClipboard(); }} />
 				</SettingsGroup>
 
-				<SettingsGroup title={locale === 'zh' ? '词表与 AI 分析' : 'Vocabulary & AI Analysis'}>
+				<SettingsGroup title={locale === 'zh' ? '生词' : 'Vocabulary'}>
 					<SettingsRow icon={<Bot className="text-amber-600 dark:text-amber-500" />} title={copy.copyAiPromptTitle} description={copy.copyAiPromptBody} actionLabel={copy.copyAiPromptAction} onClick={() => { void handleGenerateAIPrompt(); }} />
 					<SettingsRow icon={<Download />} title={copy.exportVocabularyTitle} description={copy.exportVocabularyBody} actionLabel={copy.exportVocabularyAction} onClick={handleExportVocabularyList} />
 				</SettingsGroup>
 
 				{autoBackups.length > 0 && (
-					<SettingsGroup title={locale === 'zh' ? '自动备份 (防灾恢复)' : 'Auto-Backups (Disaster Recovery)'}>
+					<SettingsGroup title={locale === 'zh' ? '自动备份（误删可在这里找回）' : 'Auto-backups (undo accidental changes)'}>
 						{autoBackups.map((bk) => (
 							<SettingsRow 
 								key={bk.key} 
 								icon={<RotateCcw className="text-indigo-500" />} 
 								title={formatExportedAt(bk.exportedAt)} 
-								description={`${bk.sessionCount} ${locale === 'zh' ? '组记录' : 'records'}, ${bk.debuggedCount} ${locale === 'zh' ? '已知晓' : 'reviewed'}`}
-								actionLabel={locale === 'zh' ? '加载' : 'Load'}
+								description={locale === 'zh' ? `其中 ${bk.debuggedCount} 套已对完答案` : `${bk.debuggedCount} sets reviewed`}
+								actionLabel={locale === 'zh' ? '恢复' : 'Restore'}
 								onClick={() => handleRestoreBackup(bk.key)} 
 							/>
 						))}

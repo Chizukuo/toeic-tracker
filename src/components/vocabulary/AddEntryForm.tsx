@@ -17,7 +17,9 @@ export function AddEntryForm({
   const [text, setText] = useState('');
   const [manualDefinition, setManualDefinition] = useState('');
   const [manualExampleSentence, setManualExampleSentence] = useState('');
-  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  // Keyed by the text it was fetched for, so a slow lookup never attaches to a different word.
+  const [lookup, setLookup] = useState<{ query: string; result: LookupResult | null } | null>(null);
+  const lookupResult = lookup && lookup.query === text.trim().toLowerCase() ? lookup.result : null;
   const [isLooking, startLookup] = useTransition();
   const [justAdded, setJustAdded] = useState(false);
   const [showManual, setShowManual] = useState(false);
@@ -25,11 +27,12 @@ export function AddEntryForm({
 
   // Auto-lookup on text change (debounced)
   useEffect(() => {
-    if (!text.trim() || text.trim().length < 2) return;
+    const query = text.trim().toLowerCase();
+    if (query.length < 2 || query.includes('\n') || query.includes(',')) return;
     const t = window.setTimeout(() => {
       startLookup(async () => {
-        const result = await lookupWord(text);
-        setLookupResult(result);
+        const result = await lookupWord(query);
+        setLookup({ query, result });
       });
     }, 600);
     return () => window.clearTimeout(t);
@@ -74,7 +77,7 @@ export function AddEntryForm({
       setText('');
       setManualDefinition('');
       setManualExampleSentence('');
-      setLookupResult(null);
+      setLookup(null);
       setShowManual(false);
       setJustAdded(true);
       window.setTimeout(() => setJustAdded(false), 1200);
@@ -86,7 +89,7 @@ export function AddEntryForm({
     const bumpedId = bumpVocabularyEncounter(trimmed, activeSessionId);
     if (bumpedId) {
       setText('');
-      setLookupResult(null);
+      setLookup(null);
       setManualExampleSentence('');
       setShowManual(false);
       setJustAdded(true);
@@ -95,32 +98,45 @@ export function AddEntryForm({
       return;
     }
 
-    // Create new entry
-    const result = lookupResult;
-    addVocabularyEntry({
-      text: trimmed,
-      definition: manualDefinition || result?.definition,
-      enDefinition: result?.enDefinition,
-      partOfSpeech: result?.partOfSpeech,
-      reading: result?.reading,
-      exampleSentence: manualExampleSentence || result?.exampleSentence,
-      sessionIds: [activeSessionId],
-      encounterCount: 1,
-      tags: [],
-    });
+    // Create new entry; if Enter beat the debounced lookup, fetch the definition first.
+    const addWith = (result: LookupResult | null) =>
+      addVocabularyEntry({
+        text: trimmed,
+        definition: manualDefinition || result?.definition,
+        enDefinition: result?.enDefinition,
+        partOfSpeech: result?.partOfSpeech,
+        reading: result?.reading,
+        exampleSentence: manualExampleSentence || result?.exampleSentence,
+        sessionIds: [activeSessionId],
+        encounterCount: 1,
+        tags: [],
+      });
+
+    const hasFreshLookup = lookup !== null && lookup.query === trimmed.toLowerCase();
+    if (hasFreshLookup) {
+      addWith(lookupResult);
+    } else {
+      startLookup(async () => {
+        addWith(await lookupWord(trimmed));
+      });
+    }
 
     setText('');
     setManualDefinition('');
     setManualExampleSentence('');
-    setLookupResult(null);
+    setLookup(null);
     setShowManual(false);
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
     inputRef.current?.focus();
-  }, [text, lookupResult, manualDefinition, manualExampleSentence, processInput, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
+  }, [text, lookup, lookupResult, manualDefinition, manualExampleSentence, processInput, addVocabularyEntry, bumpVocabularyEncounter, activeSessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
+      if (e.ctrlKey || e.metaKey) {
+        // Leave Ctrl/Cmd+Enter to the surrounding page (e.g. "save review" on the practice page).
+        return;
+      }
       if (e.shiftKey) {
         // Shift+Enter allows newline naturally, do nothing
       } else {
@@ -143,7 +159,7 @@ export function AddEntryForm({
               setText(nextText);
               setJustAdded(false);
               if (!nextText.trim() || nextText.trim().length < 2) {
-                setLookupResult(null);
+                setLookup(null);
               }
             }}
             onKeyDown={handleKeyDown}

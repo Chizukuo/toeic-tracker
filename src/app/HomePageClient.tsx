@@ -1,18 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
-import { getNextStepRecommendation } from '@/lib/nextStep';
-import { estimateToeicCombinedScore, isSessionEstimateEligible, type MistakeKey } from '@/lib/toeic';
+import { getNextStepRecommendation, getWeakestPart } from '@/lib/nextStep';
+import { estimateCurrentLevel } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 import { MissionConfigDialog } from '@/components/MissionConfigDialog';
+import { WelcomeGuide } from '@/components/WelcomeGuide';
 
 const ActivityCalendar = dynamic(() => import('@/components/ActivityCalendar').then(mod => mod.ActivityCalendar));
 const WeeklyReport = dynamic(() => import('@/components/WeeklyReport').then(mod => mod.WeeklyReport));
@@ -29,7 +31,9 @@ export default function HomePageClient() {
 function MissionControl() {
   const { locale, activeSession, sessions, homeMetrics } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const router = useRouter();
   const examDate = useStore((state) => state.examDate);
+  const setCount = useStore((state) => Math.max(state.sprintConfig.listeningCount, state.sprintConfig.readingCount));
   const historicalScoreCount = useStore((state) => state.historicalScores.length);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
@@ -50,43 +54,44 @@ function MissionControl() {
     [activeSession.id, historicalScoreCount, locale, sessions]
   );
 
-  const nextStepHref = nextStep.href === '/timer' ? '/practice' :
-                       nextStep.href === '/analytics' ? '/insights' :
-                       nextStep.href === '/scores' ? '/insights' :
-                       nextStep.href === '/unfinished' ? '/insights' : nextStep.href;
-
-  const daysUntilExam = useMemo(() => {
-    const target = new Date(`${examDate}T09:00:00`);
-    const diff = target.getTime() - nowTs;
-    return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
+  // Calendar days (local midnight to local midnight) so "tomorrow" always reads as 1; negative once the date has passed.
+  const examDayOffset = useMemo(() => {
+    const [year, month, day] = examDate.split('-').map(Number);
+    const examDay = new Date(year, month - 1, day).getTime();
+    const now = new Date(nowTs);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return Math.round((examDay - today) / (24 * 60 * 60 * 1000));
   }, [examDate, nowTs]);
+  const examDateIsSet = Number.isFinite(examDayOffset) && examDayOffset >= 0;
+  const hasProgress = sessions.some(
+    (session) => session.status !== 'not-started' || Boolean(session.timerSummary || session.timerRuntime)
+  );
 
-  const scoreEstimate = useMemo(() => {
-    const latestL = [...sessions].reverse().find((s) => s.type === 'L' && isSessionEstimateEligible(s));
-    const latestR = [...sessions].reverse().find((s) => s.type === 'R' && isSessionEstimateEligible(s));
-    if (!latestL && !latestR) return null;
-    const combined = estimateToeicCombinedScore(latestL, latestR, 'strict');
-    return combined.available ? combined : null;
-  }, [sessions]);
-
-  const weakestPart = useMemo(() => {
-    const completed = sessions.filter((s) => s.status !== 'not-started');
-    if (completed.length === 0) return null;
-    let worst: MistakeKey | null = null;
-    let worstRate = -1;
-    for (const s of completed) {
-      const parts: MistakeKey[] = s.type === 'L'
-        ? ['Part 1', 'Part 2', 'Part 3', 'Part 4']
-        : ['Part 5', 'Part 6', 'Part 7 Single', 'Part 7 Multiple'];
-      for (const p of parts) {
-        const mistakes = (s.mistakes as Record<string, number>)[p] ?? 0;
-        const total = ({ 'Part 1': 6, 'Part 2': 25, 'Part 3': 39, 'Part 4': 30, 'Part 5': 30, 'Part 6': 16, 'Part 7 Single': 29, 'Part 7 Multiple': 25 } as Record<string, number>)[p] ?? 1;
-        const rate = mistakes / total;
-        if (rate > worstRate) { worstRate = rate; worst = p; }
-      }
+  // Recency-weighted level over the last few sets, so one off day does not swing the headline score.
+  const level = useMemo(() => estimateCurrentLevel(sessions), [sessions]);
+  const levelSummary = useMemo(() => {
+    const zh = locale === 'zh';
+    if (level.total && level.listening && level.reading) {
+      const sets = Math.max(level.listening.setsUsed, level.reading.setsUsed);
+      return {
+        value: `${level.total.scaled}`,
+        detail: `${level.total.interval.min}–${level.total.interval.max} · ${level.total.cefr}`,
+        basis: sets > 1 ? (zh ? `近 ${sets} 套综合` : `Last ${sets} sets`) : (zh ? '根据 1 套' : 'From 1 set'),
+      };
     }
-    return worst;
-  }, [sessions]);
+    const section = level.listening ?? level.reading;
+    if (!section) return null;
+    const isListening = section.type === 'L';
+    return {
+      value: `${section.scaled}`,
+      detail: zh
+        ? `${isListening ? '听力' : '阅读'} ${section.interval.min}–${section.interval.max} · 再做一套${isListening ? '阅读' : '听力'}可看总分`
+        : `${isListening ? 'Listening' : 'Reading'} ${section.interval.min}–${section.interval.max} · do a ${isListening ? 'reading' : 'listening'} set for a total`,
+      basis: zh ? (isListening ? '仅听力' : '仅阅读') : (isListening ? 'Listening only' : 'Reading only'),
+    };
+  }, [level, locale]);
+
+  const weakestPart = useMemo(() => getWeakestPart(sessions), [sessions]);
 
   const stageLabel = nextStep.kind === 'start-active' ? (locale === 'zh' ? '准备开始' : 'Ready') :
     nextStep.kind === 'resume-active' ? (locale === 'zh' ? '进行中' : 'In Progress') :
@@ -95,6 +100,8 @@ function MissionControl() {
 
   return (
     <div className="space-y-8">
+      <WelcomeGuide locale={locale} hasProgress={hasProgress} examDateIsSet={examDateIsSet} />
+
       {/* ─── Main Task Card (Premium CTA) ─── */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -123,7 +130,7 @@ function MissionControl() {
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <motion.div whileTap={{ scale: 0.97 }} className="inline-block">
                 <Link
-                  href={nextStepHref}
+                  href={nextStep.href}
                   onClick={() => { if (nextStep.targetSessionId) selectSession(nextStep.targetSessionId); }}
                   className="inline-flex items-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-7 py-3.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
                 >
@@ -132,9 +139,7 @@ function MissionControl() {
                 </Link>
               </motion.div>
 
-              {nextStep.targetSessionId && (
-                <span className="cheese-pill">{nextStep.targetSessionId}</span>
-              )}
+              <span className="text-xs text-[var(--label-tertiary)]">{nextStep.helper}</span>
             </div>
           </div>
         </div>
@@ -167,9 +172,11 @@ function MissionControl() {
           </div>
 
           {/* Dynamic dot grid */}
-          <div 
-            className="grid gap-1.5 sm:gap-2.5" 
-            style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(sessions.length / 2))}, minmax(0, 1fr))` }}
+          {/* Phones wrap the sets into as many rows as fit; wider screens keep the two-row (L / R) layout. */}
+          <div className="no-scrollbar -mx-1 overflow-x-auto px-1 pb-1">
+          <div
+            className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5 sm:gap-2.5 md:grid-cols-[repeat(var(--session-columns),minmax(2.25rem,1fr))]"
+            style={{ '--session-columns': Math.max(1, Math.ceil(sessions.length / 2)) } as CSSProperties}
           >
             {sessions.map((session) => {
               const isActive = session.id === activeSession.id;
@@ -180,8 +187,15 @@ function MissionControl() {
                 <button
                   key={session.id}
                   type="button"
-                  onClick={() => selectSession(session.id)}
+                  onClick={() => {
+                    if (isActive) {
+                      router.push('/practice');
+                      return;
+                    }
+                    selectSession(session.id);
+                  }}
                   title={`${session.label} — ${session.title}`}
+                  aria-pressed={isActive}
                   className={cn(
                     'relative group flex flex-col items-center justify-center gap-1.5 rounded-[10px] p-1.5 transition-colors sm:p-2',
                     isActive
@@ -221,6 +235,16 @@ function MissionControl() {
               );
             })}
           </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[var(--label-tertiary)]">
+            <span>{locale === 'zh' ? 'L = 听力　R = 阅读' : 'L = Listening　R = Reading'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-[var(--label-tertiary)]" />{locale === 'zh' ? '未开始' : 'Not started'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-[var(--cheese-gold)]" />{locale === 'zh' ? '进行中' : 'In progress'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" />{locale === 'zh' ? '已对完答案' : 'Reviewed'}</span>
+          </div>
+          <p className="mt-1.5 text-[11px] text-[var(--label-tertiary)]">
+            {locale === 'zh' ? '点一下选中套题，再点一次开始练习。' : 'Tap a set to select it; tap it again to start practicing.'}
+          </p>
         </div>
       </motion.div>
 
@@ -244,12 +268,15 @@ function MissionControl() {
                   </span>
                 </div>
                 <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-                  {scoreEstimate ? scoreEstimate.total : '—'}
+                  {levelSummary ? levelSummary.value : '—'}
+                  {levelSummary && (
+                    <span className="ml-2 align-middle text-xs font-medium text-[var(--label-tertiary)]">{levelSummary.basis}</span>
+                  )}
                 </div>
                 <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
-                  {scoreEstimate
-                    ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
-                    : locale === 'zh' ? '完成至少一套后可估分' : 'Complete a set to estimate'}
+                  {levelSummary
+                    ? levelSummary.detail
+                    : locale === 'zh' ? '做完一套并对完答案后显示' : 'Shows after you check one set'}
                 </div>
               </div>
             </Link>
@@ -272,8 +299,8 @@ function MissionControl() {
                 </div>
                 <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
                   {weakestPart
-                    ? locale === 'zh' ? '当前最大失分源' : 'Highest loss source'
-                    : locale === 'zh' ? '暂无数据' : 'No data yet'}
+                    ? locale === 'zh' ? '目前错得最多的题型' : 'Where you miss the most'
+                    : locale === 'zh' ? '填过错题数后显示' : 'Shows after you enter mistakes'}
                 </div>
               </div>
             </Link>
@@ -291,19 +318,25 @@ function MissionControl() {
                   <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
                 </div>
                 <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '目标配置' : 'Mission Goal'}
+                  {locale === 'zh' ? '距离考试' : 'Until exam'}
                 </span>
               </div>
-              <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-                {daysUntilExam}
-                <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '天' : 'days'}
-                </span>
-              </div>
+              {examDateIsSet ? (
+                <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
+                  {examDayOffset}
+                  <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
+                    {locale === 'zh' ? '天' : 'days'}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
+                  {locale === 'zh' ? '设置考试日期' : 'Set your exam date'}
+                </div>
+              )}
               <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
-                <span className="font-medium">{examDate}</span>
+                <span className="font-medium">{examDateIsSet ? examDate : (locale === 'zh' ? '点这里修改日期和题量' : 'Tap to change date and plan')}</span>
                 <span className="opacity-50">·</span>
-                <span>{locale === 'zh' ? `设为 ${sessions.length / 2} 套` : `${sessions.length / 2} Sets`}</span>
+                <span>{locale === 'zh' ? `共 ${setCount} 套` : `${setCount} Sets`}</span>
               </div>
             </button>
           </motion.div>

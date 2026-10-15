@@ -10,7 +10,7 @@ import {
 
 export type NextStepRecommendation = {
   kind: 'resolve-backlog' | 'resume-active' | 'start-active' | 'reinforce-weakness' | 'record-score' | 'review-analytics';
-  href: '/unfinished' | '/timer' | '/scores' | '/analytics' | '/practice' | '/insights';
+  href: '/practice' | '/insights';
   targetSessionId?: string;
   tone: 'coral' | 'amber' | 'cyan' | 'slate';
   title: string;
@@ -30,62 +30,68 @@ export function getNextStepRecommendation({
   activeSessionId: string;
   historicalScoreCount: number;
 }): NextStepRecommendation {
-  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
-  const backlogSession = getBacklogSession(sessions);
+  const selectedSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
+  // A clock that is still running outranks everything else, even if another set is selected.
+  const activeSession = sessions.find((session) => session.timerRuntime) ?? selectedSession;
+  const backlogSession = activeSession?.timerRuntime ? undefined : getBacklogSession(sessions);
 
   if (backlogSession) {
     return {
       kind: 'resolve-backlog',
-      href: '/unfinished',
+      href: '/practice',
       targetSessionId: backlogSession.id,
       tone: 'coral',
       title:
         locale === 'zh'
-          ? `先处理 ${backlogSession.label} 的未完成题`
+          ? `${backlogSession.label} 还有没做完的题`
           : `Resolve ${backlogSession.label} backlog first`,
       body:
         locale === 'zh'
-          ? `${backlogSession.label} 仍有 ${backlogSession.timerSummary?.unfinishedQuestions ?? 0} 题未完成，这会持续放大阅读失分并污染分析。`
-          : `${backlogSession.label} still has ${backlogSession.timerSummary?.unfinishedQuestions ?? 0} unfinished items, which keeps inflating reading loss and distorting analytics.`,
+          ? `${backlogSession.label} 有 ${backlogSession.timerSummary?.unfinishedQuestions ?? 0} 题没来得及做。可以把它们补做完看看实力，也可以直接跳过。`
+          : `${backlogSession.label} has ${backlogSession.timerSummary?.unfinishedQuestions ?? 0} questions you didn't get to. Finish them to see your full ability, or skip them.`,
       helper:
         locale === 'zh'
-          ? '先把 backlog 清掉，再看估分和趋势才更可信。'
-          : 'Clear the backlog before trusting projections and trends.',
-      cta: locale === 'zh' ? '打开未完成页' : 'Open Unfinished',
+          ? '处理完后，估分会更准。'
+          : 'Your estimate gets more accurate once this is settled.',
+      cta: locale === 'zh' ? '去处理' : 'Handle them',
     };
   }
 
   if (activeSession?.status === 'in-progress' || activeSession?.timerRuntime) {
     return {
       kind: 'resume-active',
-      href: '/timer',
+      href: '/practice',
       targetSessionId: activeSession.id,
       tone: 'amber',
       title: locale === 'zh' ? `继续 ${activeSession.label}` : `Resume ${activeSession.label}`,
       body:
         locale === 'zh'
-          ? `${formatSessionTitle(locale, activeSession)} 还在进行中，优先把严格计时或复盘闭环做完。`
-          : `${formatSessionTitle(locale, activeSession)} is still in progress. Close the loop on timing and review before switching context.`,
+          ? `${formatSessionTitle(locale, activeSession)} 还没做完，接着上次的进度继续。`
+          : `${formatSessionTitle(locale, activeSession)} isn't finished yet. Pick up where you left off.`,
       helper:
-        locale === 'zh' ? '不要同时摊开多个 session。' : 'Do not spread focus across multiple sessions.',
-      cta: locale === 'zh' ? '回到计时页' : 'Open Timer',
+        locale === 'zh' ? '一次专心做完一套。' : 'Finish one set at a time.',
+      cta: locale === 'zh' ? '继续训练' : 'Resume Practice',
     };
   }
 
   if (activeSession?.status === 'not-started') {
     return {
       kind: 'start-active',
-      href: '/timer',
+      href: '/practice',
       targetSessionId: activeSession.id,
       tone: 'cyan',
-      title: locale === 'zh' ? `开始 ${activeSession.label}` : `Start ${activeSession.label}`,
+      title: locale === 'zh' ? `开始 ${formatSessionTitle(locale, activeSession)}` : `Start ${activeSession.title}`,
       body:
         locale === 'zh'
-          ? `当前活跃套题还是未开始状态，直接进入 ${formatSessionTitle(locale, activeSession)} 会比继续看总览更有效。`
-          : `The active set is still untouched, so going straight into ${formatSessionTitle(locale, activeSession)} is more useful than staying on the overview.`,
+          ? activeSession.type === 'L'
+            ? '准备好题本和听力音频，点下面的按钮开始。'
+            : '准备好题本，点下面的按钮开始，限时 75 分钟。'
+          : activeSession.type === 'L'
+            ? 'Get your test book and the audio ready, then tap the button below.'
+            : 'Get your test book ready, then tap the button below. You have 75 minutes.',
       helper:
-        locale === 'zh' ? '优先推进当前节点，而不是继续切页。' : 'Advance the current node before browsing around.',
-      cta: locale === 'zh' ? '开始当前套题' : 'Start Current Set',
+        locale === 'zh' ? '做完后对答案，就能看到估分。' : 'Check your answers afterwards to get a score estimate.',
+      cta: locale === 'zh' ? '开始做题' : 'Start',
     };
   }
 
@@ -94,34 +100,51 @@ export function getNextStepRecommendation({
     return weaknessPlan;
   }
 
+  const nextOpenSession = sessions.find((session) => session.status !== 'debugged');
+  if (nextOpenSession) {
+    return {
+      kind: 'start-active',
+      href: '/practice',
+      targetSessionId: nextOpenSession.id,
+      tone: 'cyan',
+      title: locale === 'zh' ? `下一套：${formatSessionTitle(locale, nextOpenSession)}` : `Next: ${nextOpenSession.title}`,
+      body:
+        locale === 'zh'
+          ? '保持节奏，继续做下一套。'
+          : 'Keep the momentum going with the next set.',
+      helper: locale === 'zh' ? '做完后对答案，就能看到估分。' : 'Check your answers afterwards to get a score estimate.',
+      cta: locale === 'zh' ? '开始做题' : 'Start',
+    };
+  }
+
   if (historicalScoreCount === 0) {
     return {
       kind: 'record-score',
-      href: '/scores',
+      href: '/insights',
       tone: 'amber',
-      title: locale === 'zh' ? '补一条历史成绩' : 'Add a score record',
+      title: locale === 'zh' ? '记一下你的模考或真考成绩' : 'Record a mock or real test score',
       body:
         locale === 'zh'
-          ? '当前训练闭环已经形成，下一步应该把模考或估分写入历史曲线，开始看趋势。'
-          : 'The training loop is in place. The next useful move is to write a mock or projected score into history and start tracking trends.',
+          ? '计划里的套题都做完了。记下成绩，就能看到分数变化曲线。'
+          : 'Every planned set is done. Record a score to start a progress chart.',
       helper:
-        locale === 'zh' ? '没有历史曲线时，总分变化很难校准。' : 'Without score history, total-score movement is hard to calibrate.',
-      cta: locale === 'zh' ? '打开估分页' : 'Open Scores',
+        locale === 'zh' ? '在「分析」页的「预测」里添加。' : 'Add it under Forecast on the Insights page.',
+      cta: locale === 'zh' ? '去记录成绩' : 'Record a Score',
     };
   }
 
   return {
     kind: 'review-analytics',
-    href: '/analytics',
+    href: '/insights',
     tone: 'slate',
-    title: locale === 'zh' ? '回看趋势与热点' : 'Review trend and hotspots',
+    title: locale === 'zh' ? '看看自己进步了多少' : 'See how far you have come',
     body:
       locale === 'zh'
-        ? '当前没有明显的流程阻塞点，适合回到分析页检查最近薄弱项是否正在收敛。'
-        : 'There is no obvious workflow blocker right now, so this is a good time to inspect whether weak spots are starting to converge.',
+        ? '计划里的套题都做完了，去「分析」页看看弱项有没有改善。'
+        : 'Every planned set is done. Check Insights to see whether your weak spots improved.',
     helper:
-      locale === 'zh' ? '优先验证训练有没有真正改变失分结构。' : 'Verify whether training is actually changing the loss structure.',
-    cta: locale === 'zh' ? '查看分析页' : 'Open Analytics',
+      locale === 'zh' ? '也可以在首页加大计划题量，继续练。' : 'You can also add more sets from the Home page.',
+    cta: locale === 'zh' ? '查看分析' : 'Open Insights',
   };
 }
 
@@ -160,7 +183,7 @@ function getWeaknessPlan(locale: Locale, sessions: SessionRecord[]): NextStepRec
 
   return {
     kind: 'reinforce-weakness',
-    href: '/timer',
+    href: '/practice',
     targetSessionId: candidate.id,
     tone: targetType === 'L' ? 'cyan' : 'amber',
     title:
@@ -169,34 +192,44 @@ function getWeaknessPlan(locale: Locale, sessions: SessionRecord[]): NextStepRec
         : `Reinforce ${translatePart(locale, weakestPart)} next`,
     body:
       locale === 'zh'
-        ? `${translatePart(locale, weakestPart)} 是当前最稳定的失分源，下一步切到 ${candidate.label} 会更有针对性。`
-        : `${translatePart(locale, weakestPart)} is the most stable loss source right now, so moving into ${candidate.label} is the most targeted next step.`,
+        ? `目前 ${translatePart(locale, weakestPart)} 错得最多，下一套建议做 ${formatSessionTitle(locale, candidate)}。`
+        : `You're losing the most points in ${translatePart(locale, weakestPart)}, so ${candidate.title} is a good next set.`,
     helper:
       locale === 'zh'
         ? `${candidate.label} 对应 ${formatSessionTitle(locale, candidate)}。`
         : `${candidate.label} maps to ${formatSessionTitle(locale, candidate)}.`,
-    cta: locale === 'zh' ? '切到目标套题' : 'Switch to Target Set',
+    cta: locale === 'zh' ? `做 ${candidate.label}` : `Do ${candidate.label}`,
   };
 }
 
-function getWeakestPart(sessions: SessionRecord[]): MistakeKey | null {
-  const completed = sessions.filter((session) => session.status !== 'not-started');
-  if (completed.length === 0) {
-    return null;
+/**
+ * Part with the highest aggregate error rate across every started session of its type.
+ * Returns null until at least one mistake has been logged, so a clean record has no "weak spot".
+ */
+export function getWeakestPart(sessions: SessionRecord[]): MistakeKey | null {
+  const totals = new Map<MistakeKey, { mistakes: number; questions: number }>();
+
+  for (const session of sessions) {
+    if (session.status === 'not-started') {
+      continue;
+    }
+
+    for (const part of getPartsForType(session.type)) {
+      const entry = totals.get(part) ?? { mistakes: 0, questions: 0 };
+      entry.mistakes += Math.min(Math.max(session.mistakes[part] ?? 0, 0), PART_QUESTION_COUNTS[part]);
+      entry.questions += PART_QUESTION_COUNTS[part];
+      totals.set(part, entry);
+    }
   }
 
   let weakestPart: MistakeKey | null = null;
-  let weakestRate = -1;
+  let weakestRate = 0;
 
-  for (const session of completed) {
-    for (const part of getPartsForType(session.type)) {
-      const mistakes = session.mistakes[part] ?? 0;
-      const rate = PART_QUESTION_COUNTS[part] > 0 ? mistakes / PART_QUESTION_COUNTS[part] : 0;
-
-      if (rate > weakestRate) {
-        weakestRate = rate;
-        weakestPart = part;
-      }
+  for (const [part, { mistakes, questions }] of totals) {
+    const rate = questions > 0 ? mistakes / questions : 0;
+    if (rate > weakestRate) {
+      weakestRate = rate;
+      weakestPart = part;
     }
   }
 

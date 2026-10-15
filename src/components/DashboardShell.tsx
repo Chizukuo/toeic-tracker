@@ -3,16 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import type { ComponentType, ReactNode } from 'react';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { BarChart2, BookOpen, Clock, Database, Home, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { LocaleToggle } from '@/components/LocaleToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AchievementToast } from '@/components/AchievementToast';
+import { LiveTimerPill } from '@/components/LiveTimerPill';
 import { BrandIconSvg } from '@/lib/brandIcon';
-import { formatHotspot, formatWorstPart, getCopy, translateStatus, type Locale } from '@/lib/i18n';
+import { getCopy, type Locale } from '@/lib/i18n';
 import { getIncorrectAnswers, type SessionRecord } from '@/lib/toeic';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -33,18 +34,6 @@ type DashboardContextValue = {
     completionPct: number;
     totalSessions: number;
   };
-  focusSignals: Array<{
-    label: string;
-    value: string;
-    helper: string;
-  }>;
-  overviewSignals: Array<{
-    label: string;
-    value: string;
-    detail: string;
-    tone: 'amber' | 'slate' | 'coral' | 'cyan';
-  }>;
-  timedOutFlag: boolean;
 };
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -73,10 +62,26 @@ export function DashboardShell({
   const copy = getCopy(locale);
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [menuPathname, setMenuPathname] = useState(pathname);
+
+  // Close the mobile menu whenever the route changes (e.g. browser back).
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
+    setIsMobileMenuOpen(false);
+  }
 
   useEffect(() => {
     ensureInitialized();
   }, [ensureInitialized]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
@@ -132,84 +137,13 @@ export function DashboardShell({
   }
 
   const activeSession = homeMetrics.activeSession;
-  const timedOutFlag = Boolean(activeSession.timerSummary?.timedOut);
-
-  const focusSignals = [
-    {
-      label: copy.status,
-      value: translateStatus(locale, activeSession.status),
-      helper:
-        activeSession.type === 'L'
-          ? locale === 'zh'
-            ? '45 分钟整套听力计时'
-            : '45-minute full listening timer'
-          : locale === 'zh'
-            ? '75 分钟阅读分段计时'
-            : '75-minute segmented reading timer',
-    },
-    {
-      label: locale === 'zh' ? '目标时长' : 'Target',
-      value: `${activeSession.targetMinutes}m`,
-      helper:
-        activeSession.type === 'L'
-          ? locale === 'zh'
-            ? '按完整套题连续完成'
-            : 'Run the listening set in one pass'
-          : locale === 'zh'
-            ? '按 Part 5 / 6 / 7 记录'
-            : 'Capture Part 5 / 6 / 7 checkpoints',
-    },
-    {
-      label: copy.unfinishedTrackerTitle,
-      value: copy.unfinished(homeMetrics.unfinishedTotal),
-      helper:
-        locale === 'zh'
-          ? `涉及 ${homeMetrics.unfinishedSessionsCount} 个 session`
-          : `${homeMetrics.unfinishedSessionsCount} sessions affected`,
-    },
-    {
-      label: copy.hotRootCause,
-      value: formatHotspot(locale, sessions),
-      helper:
-        locale === 'zh'
-          ? `薄弱项 ${formatWorstPart(locale, sessions)}`
-          : `Weak spot ${formatWorstPart(locale, sessions)}`,
-    },
-  ];
-
-  const overviewSignals = [
-    {
-      label: copy.summaryDebugged,
-      value: `${homeMetrics.debuggedCount}/${homeMetrics.totalSessions}`,
-      detail: copy.summaryDebuggedHelper,
-      tone: 'amber' as const,
-    },
-    {
-      label: copy.summaryInProgress,
-      value: `${homeMetrics.liveCount}`,
-      detail: copy.summaryInProgressHelper,
-      tone: 'slate' as const,
-    },
-    {
-      label: copy.summaryTimeout,
-      value: `${homeMetrics.overtimeCount}`,
-      detail: copy.summaryTimeoutHelper,
-      tone: 'coral' as const,
-    },
-    {
-      label: copy.summaryMistakes,
-      value: `${homeMetrics.totalMistakeLoad}`,
-      detail: copy.summaryMistakesHelper,
-      tone: 'cyan' as const,
-    },
-  ];
 
   const navigationItems = [
-    { href: '/', label: locale === 'zh' ? '任务台' : 'Mission', icon: Home },
-    { href: '/practice', label: locale === 'zh' ? '训练场' : 'Practice', icon: Clock },
-    { href: '/insights', label: locale === 'zh' ? '参考台' : 'Insights', icon: BarChart2 },
+    { href: '/', label: locale === 'zh' ? '首页' : 'Home', icon: Home },
+    { href: '/practice', label: locale === 'zh' ? '练习' : 'Practice', icon: Clock },
+    { href: '/insights', label: locale === 'zh' ? '分析' : 'Insights', icon: BarChart2 },
     { href: '/vocab', label: locale === 'zh' ? '生词本' : 'Vocab', icon: BookOpen },
-    { href: '/vault', label: locale === 'zh' ? '数据' : 'Data', icon: Database },
+    { href: '/vault', label: locale === 'zh' ? '备份' : 'Backup', icon: Database },
   ];
 
   return (
@@ -220,12 +154,14 @@ export function DashboardShell({
         copy,
         activeSession,
         homeMetrics,
-        focusSignals,
-        overviewSignals,
-        timedOutFlag,
       }}
     >
       <AchievementToast />
+      <LiveTimerPill
+        sessions={sessions}
+        locale={locale}
+        hidden={pathname === '/practice' && sessions.find((session) => session.timerRuntime)?.id === activeSession.id}
+      />
       <main
         data-layout-variant={variant}
         className="relative min-h-screen overflow-x-hidden px-4 text-(--label-primary) sm:px-6 lg:px-8"
@@ -242,13 +178,14 @@ export function DashboardShell({
 
           
           
-          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
+          <nav aria-label={locale === 'zh' ? '主导航' : 'Main navigation'} className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
             {navigationItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     "relative flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2.5 py-2 text-[13px] font-medium transition-colors md:px-3 lg:px-4 lg:py-2 lg:text-sm",
                     isActive ? "text-zinc-900 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -277,6 +214,7 @@ export function DashboardShell({
                 type="button"
                 aria-label={locale === 'zh' ? '切换导航菜单' : 'Toggle navigation menu'}
                 aria-expanded={isMobileMenuOpen}
+                aria-controls="mobile-nav"
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                 className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-(--separator) bg-(--surface-elevated) text-(--label-primary) shadow-(--shadow-soft) transition-colors"
               >
@@ -309,6 +247,8 @@ export function DashboardShell({
               />
 
               <motion.nav
+                id="mobile-nav"
+                aria-label={locale === 'zh' ? '主导航' : 'Main navigation'}
                 className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[24px] border border-(--separator) bg-(--surface-elevated) p-2.5 shadow-(--shadow-elevated) backdrop-blur-xl md:hidden"
                 style={{ top: 'calc(5.3rem + env(safe-area-inset-top))' }}
                 initial={{ opacity: 0, y: -16, scale: 0.96 }}
@@ -335,6 +275,7 @@ export function DashboardShell({
                       >
                         <Link
                           href={item.href}
+                          aria-current={isActive ? 'page' : undefined}
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={cn(
                             'group relative flex items-center justify-between rounded-2xl border px-3.5 py-3 text-sm transition-colors',
@@ -410,33 +351,6 @@ export function SectionShell({
   );
 }
 
-export function DeferredSection({ component: Component }: { component: ComponentType }) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    if (isVisible || !hostRef.current) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '240px 0px' }
-    );
-
-    observer.observe(hostRef.current);
-
-    return () => observer.disconnect();
-  }, [isVisible]);
-
-  return <div ref={hostRef}>{isVisible ? <Component /> : <DeferredPanelPlaceholder />}</div>;
-}
-
 export function DeferredPanelPlaceholder() {
   return (
     <div className="overflow-hidden rounded-[24px] border border-(--separator) bg-(--surface-elevated)">
@@ -445,15 +359,6 @@ export function DeferredPanelPlaceholder() {
         <div className="h-24 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
         <div className="h-56 animate-pulse rounded-[16px] bg-(--surface-grouped)" />
       </div>
-    </div>
-  );
-}
-
-export function ProtocolRow({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-[16px] border border-(--separator) bg-(--surface-grouped) px-5 py-4">
-      <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">{title}</div>
-      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{body}</p>
     </div>
   );
 }

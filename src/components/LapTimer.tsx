@@ -56,6 +56,86 @@ type InitialTimerState = {
 
 const getNow = () => Date.now();
 
+/** Mirrors the running clock into the tab title so it stays visible while the user is in the test PDF. */
+function useDocumentTitleClock(label: string | null) {
+  useEffect(() => {
+    if (!label) return;
+    const prefix = `${label} · `;
+    document.title = `${prefix}${document.title}`;
+    return () => {
+      // Strip only our prefix so a title set by a route change in the meantime survives.
+      if (document.title.startsWith(prefix)) {
+        document.title = document.title.slice(prefix.length);
+      }
+    };
+  }, [label]);
+}
+
+/** Keeps a phone screen awake while a timed attempt runs; re-acquired when the tab becomes visible again. */
+function useScreenWakeLock(active: boolean) {
+  useEffect(() => {
+    if (!active || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const next = await navigator.wakeLock.request('screen');
+        if (cancelled) {
+          void next.release();
+          return;
+        }
+        sentinel = next;
+      } catch {
+        // Denied (battery saver, unsupported context) — the timer still works without it.
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && (!sentinel || sentinel.released)) {
+        void acquire();
+      }
+    };
+
+    void acquire();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void sentinel?.release().catch(() => {});
+    };
+  }, [active]);
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+/** Two-step confirm for destructive taps: first call arms it, second call within the window runs it. */
+function useArmedConfirm(timeoutMs = 3000) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), timeoutMs);
+    return () => window.clearTimeout(id);
+  }, [armed, timeoutMs]);
+
+  const trigger = (action: () => void) => {
+    if (armed) {
+      setArmed(false);
+      action();
+      return;
+    }
+    setArmed(true);
+  };
+
+  return { armed, trigger };
+}
+
 function toValidTime(value?: string) {
   if (!value) {
     return null;
@@ -221,6 +301,10 @@ function ListeningFlow({
     onStrictAttemptSaved?.(session.id);
   }, [session.id, elapsedMs, patchSession, onStrictAttemptSaved]);
 
+  const handleContinueToReview = useCallback(() => {
+    onStrictAttemptSaved?.(session.id);
+  }, [session.id, onStrictAttemptSaved]);
+
   // Tick
   useEffect(() => {
     if (!isActive) return;
@@ -232,6 +316,8 @@ function ListeningFlow({
   }, [isActive]);
 
   const elapsedFormatted = formatClock(elapsedMs);
+  useDocumentTitleClock(isActive ? elapsedFormatted : null);
+  useScreenWakeLock(isActive);
   const hasPrevious = Boolean(session.timerSummary);
   const previousTime = hasPrevious ? session.timerSummary!.totalElapsedMs : 0;
 
@@ -246,8 +332,8 @@ function ListeningFlow({
           )} />
           <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-(--label-secondary)">
             {isActive
-              ? (locale === 'zh' ? '跟着音频走' : 'Follow the audio')
-              : (locale === 'zh' ? '听力模式' : 'Listening Mode')}
+              ? (locale === 'zh' ? '正在计时' : 'Timing')
+              : (locale === 'zh' ? '听力 · 约 45 分钟' : 'Listening · about 45 min')}
           </span>
         </div>
         {hasPrevious && (
@@ -270,8 +356,8 @@ function ListeningFlow({
         </motion.div>
         <p className="mt-4 text-sm text-(--label-tertiary) text-center max-w-xs leading-relaxed">
           {locale === 'zh'
-            ? '以音频为节奏，不需要严格计时。完成后点击下方按钮进入复盘。'
-            : 'Let the audio set the pace. No strict timing needed. Tap below when done.'}
+            ? '播放听力音频时点「开始计时」，做完点「做完了」去对答案。计时只是记录用时，不会自动停止。'
+            : 'Start the timer with the audio, and tap "Done" when you finish to check answers. It only records time; it never stops you.'}
         </p>
       </div>
 
@@ -297,20 +383,20 @@ function ListeningFlow({
           className="flex w-full items-center justify-center gap-2.5 rounded-full bg-emerald-500 px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(16,185,129,0.40)] hover:brightness-110 disabled:opacity-60"
         >
           <CheckCircle2 className="size-4" />
-          {locale === 'zh' ? '标记完成，进入复盘' : 'Mark Complete — Go to Review'}
+          {locale === 'zh' ? '做完了，去对答案' : 'Done — check answers'}
         </motion.button>
       )}
 
       {!isActive && hasPrevious && (
         <motion.button
           type="button"
-          onClick={handleComplete}
+          onClick={handleContinueToReview}
           disabled={isSubmitting}
           whileTap={{ scale: 0.97 }}
           className="flex w-full items-center justify-center gap-2.5 rounded-full bg-emerald-500 px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(16,185,129,0.40)] hover:brightness-110 disabled:opacity-60"
         >
           <CheckCircle2 className="size-4" />
-          {locale === 'zh' ? '继续进入复盘' : 'Continue to Review'}
+          {locale === 'zh' ? '去对答案' : 'Check answers'}
         </motion.button>
       )}
 
@@ -321,7 +407,7 @@ function ListeningFlow({
             onClick={handleComplete}
             className="text-xs text-(--label-tertiary) underline-offset-2 hover:underline hover:text-(--label-secondary) transition-colors"
           >
-            {locale === 'zh' ? '跳过计时，直接进入复盘' : 'Skip stopwatch and go to review'}
+            {locale === 'zh' ? '已经做完了？直接去对答案' : 'Already done? Go straight to checking answers'}
           </button>
         </div>
       )}
@@ -335,29 +421,42 @@ export function LapTimer({
   session,
   onFocusModeChange,
   onStrictAttemptSaved,
+  onBacklogSkipped,
 }: {
   session: SessionRecord;
   onFocusModeChange?: (enabled: boolean) => void;
   onStrictAttemptSaved?: (sessionId: string) => void;
+  /** Called when the user chooses not to finish leftover reading questions. */
+  onBacklogSkipped?: (sessionId: string) => void;
 }) {
   // Route listening sessions to the simplified flow
   if (session.type === 'L') {
     return <ListeningFlow session={session} onStrictAttemptSaved={onStrictAttemptSaved} />;
   }
 
-  return <ReadingTimer session={session} onFocusModeChange={onFocusModeChange} onStrictAttemptSaved={onStrictAttemptSaved} />;
+  return (
+    <ReadingTimer
+      session={session}
+      onFocusModeChange={onFocusModeChange}
+      onStrictAttemptSaved={onStrictAttemptSaved}
+      onBacklogSkipped={onBacklogSkipped}
+    />
+  );
 }
 
 function ReadingTimer({
   session,
   onFocusModeChange,
   onStrictAttemptSaved,
+  onBacklogSkipped,
 }: {
   session: SessionRecord;
   onFocusModeChange?: (enabled: boolean) => void;
   onStrictAttemptSaved?: (sessionId: string) => void;
+  onBacklogSkipped?: (sessionId: string) => void;
 }) {
   const patchSession = useStore((state) => state.patchSession);
+  const saveOvertimeDiagnostics = useStore((state) => state.saveOvertimeDiagnostics);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const isListening = session.type === 'L';
@@ -374,6 +473,10 @@ function ReadingTimer({
   const [isOvertime, setIsOvertime] = useState(initialState.isOvertime);
   const [overtimeElapsedMs, setOvertimeElapsedMs] = useState(initialState.overtimeElapsedMs);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(initialState.showTimeoutDialog);
+  // Time spent in the active part since it was last entered; refreshed by the 1s tick.
+  const [currentLapLiveMs, setCurrentLapLiveMs] = useState(() =>
+    initialState.isRunning && initialState.lapStartedAtMs ? Math.max(Date.now() - initialState.lapStartedAtMs, 0) : 0
+  );
 
   const startedAtRef = useRef<number | null>(initialState.startedAtMs);
   const lapStartedAtRef = useRef<number | null>(initialState.lapStartedAtMs);
@@ -388,28 +491,14 @@ function ReadingTimer({
   const timerRunning = isRunning && (!isOvertime || overtimeMode);
   const currentSegment = READING_LAP_SEGMENTS[currentLapIndex];
 
-  useEffect(() => {
-    if (timerRunning && !overtimeMode && currentLapIndex !== undefined && !isListening) {
-      // Use requestAnimationFrame or setTimeout to let React and default click behaviors finish
-      const frame = requestAnimationFrame(() => {
-        if (currentLapIndex < READING_LAP_SEGMENTS.length - 1) {
-          const nextButton = document.getElementById(`segment-btn-${currentLapIndex + 1}`);
-          if (nextButton) {
-            nextButton.focus({ preventScroll: true });
-          }
-        } else if (currentLapIndex === READING_LAP_SEGMENTS.length - 1) {
-          const submitBtn = document.getElementById('submit-test-btn');
-          if (submitBtn) {
-            submitBtn.focus({ preventScroll: true });
-          }
-        }
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [timerRunning, currentLapIndex, overtimeMode, isListening]);
-
-
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
+  const restartConfirm = useArmedConfirm();
+  const [showByPart, setShowByPart] = useState(() => sumReadingPartDistribution(initialState.unfinishedByPartDraft) > 0);
+  const backlogCount = session.timerSummary?.unfinishedQuestions ?? 0;
+  useDocumentTitleClock(
+    timerRunning ? (overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)) : null
+  );
+  useScreenWakeLock(timerRunning);
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
   const unfinishedByPartTotal = useMemo(() => sumReadingPartDistribution(unfinishedByPartDraft), [unfinishedByPartDraft]);
@@ -532,6 +621,7 @@ function ReadingTimer({
     }
     
     lapStartedAtRef.current = now;
+    setCurrentLapLiveMs(0);
     setCurrentLapIndex(index);
 
     patchSession(session.id, {
@@ -561,6 +651,7 @@ function ReadingTimer({
     };
     setReadingLapTimes(nextTimes);
     lapStartedAtRef.current = getNow();
+    setCurrentLapLiveMs(0);
     return nextTimes;
   }
 
@@ -646,6 +737,7 @@ function ReadingTimer({
 
     const finalTimes = stopAndFlushLapTime();
     const nextPending = { forcedSubmit: true, timedOut: true } satisfies PendingSubmit;
+    navigator.vibrate?.([200, 120, 200]);
     setIsRunning(false);
     setPendingSubmit(nextPending);
     setShowTimeoutDialog(true);
@@ -688,8 +780,10 @@ function ReadingTimer({
         return;
       }
 
-      const remaining = Math.max(totalDurationMs - (getNow() - startedAtRef.current), 0);
+      const now = getNow();
+      const remaining = Math.max(totalDurationMs - (now - startedAtRef.current), 0);
       setTimeLeft(remaining);
+      setCurrentLapLiveMs(lapStartedAtRef.current ? Math.max(now - lapStartedAtRef.current, 0) : 0);
 
       if (remaining === 0) {
         window.clearInterval(intervalId);
@@ -728,6 +822,7 @@ function ReadingTimer({
     lapStartedAtRef.current = now;
     overtimeStartedAtRef.current = null;
     setTimeLeft(totalDurationMs);
+    setCurrentLapLiveMs(0);
     setIsRunning(true);
     setReadingLapTimes({});
     setPendingSubmit(null);
@@ -885,6 +980,23 @@ function ReadingTimer({
     setOvertimeElapsedMs(0);
   };
 
+  // Not finishing the leftovers: count them as wrong in the "with enough time" score as well, so it stays honest.
+  const skipBacklog = () => {
+    const summaryDistribution = normalizeReadingPartDistribution(session.timerSummary?.unfinishedByPart);
+    const leftovers = sumReadingPartDistribution(summaryDistribution) > 0
+      ? summaryDistribution
+      : normalizeReadingPartDistribution(inferReadingUnfinishedDistribution(session, backlogCount).distribution);
+
+    saveOvertimeDiagnostics(session.id, {
+      overtimeMistakes: leftovers,
+      resolvedUnfinished: true,
+      overtimeElapsedMs: 0,
+      status: 'debugged',
+    });
+    trackUXEvent('overtime_skipped', session.id);
+    onBacklogSkipped?.(session.id);
+  };
+
   const stopOvertimeTimer = () => {
     const finalElapsed = overtimeStartedAtRef.current
       ? Math.max(getNow() - overtimeStartedAtRef.current, 0)
@@ -914,6 +1026,84 @@ function ReadingTimer({
     onStrictAttemptSaved?.(session.id);
     trackUXEvent('overtime_stopped', session.id);
   };
+
+  // Optional per-Part breakdown of unanswered questions; collapsed by default since most people skip it.
+  const renderUnfinishedByPart = (scope: 'pending' | 'dialog') => {
+    if (!showByPart) {
+      return (
+        <button
+          type="button"
+          onClick={() => setShowByPart(true)}
+          className="text-xs text-zinc-500 underline-offset-2 transition-colors hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100"
+        >
+          {locale === 'zh' ? '知道没做的题分别在哪个 Part？点这里细分（可选）' : 'Know which Parts they were in? Break it down (optional)'}
+        </button>
+      );
+    }
+
+    return (
+      <div className="rounded-2xl border border-zinc-200/80 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+            {locale === 'zh' ? '没做的题在哪个 Part（不填会自动估算）' : 'Which Parts were unanswered (estimated if blank)'}
+          </div>
+          <button
+            type="button"
+            onClick={() => applySmartUnfinishedDistribution()}
+            className="rounded-full border border-zinc-200/80 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+          >
+            {locale === 'zh' ? '自动估算' : 'Estimate'}
+          </button>
+        </div>
+        <div className={cn('grid grid-cols-2 gap-2', scope === 'pending' && 'sm:grid-cols-4')}>
+          {READING_PARTS.map((part) => (
+            <label key={`${scope}-${part}`} className="rounded-xl border border-zinc-200/80 bg-white/90 px-2.5 py-2 dark:border-zinc-800 dark:bg-zinc-900/90">
+              <div className="mb-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{translatePart(locale, part)}</div>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={unfinishedByPartDraft[part] ?? ''}
+                onChange={(event) => updateUnfinishedByPart(part, event.target.value)}
+                className="h-9 border-zinc-200/80 bg-white/80 text-center text-base font-semibold dark:border-zinc-700 dark:bg-zinc-950/80"
+                placeholder="0"
+              />
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          {locale === 'zh' ? `合计 ${unfinishedByPartTotal} 题` : `${unfinishedByPartTotal} in total`}
+        </p>
+      </div>
+    );
+  };
+
+  const handleLapShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
+
+    const lastIndex = READING_LAP_SEGMENTS.length - 1;
+    let targetIndex: number | null = null;
+    if (event.key === ' ' || event.key === 'ArrowRight') {
+      targetIndex = Math.min(currentLapIndex + 1, lastIndex);
+    } else if (event.key === 'ArrowLeft') {
+      targetIndex = Math.max(currentLapIndex - 1, 0);
+    } else if (/^[1-4]$/.test(event.key)) {
+      targetIndex = Number(event.key) - 1;
+    }
+
+    if (targetIndex === null) return;
+    event.preventDefault();
+    if (targetIndex !== currentLapIndex) {
+      selectActiveLap(targetIndex);
+    }
+  });
+
+  useEffect(() => {
+    if (!timerRunning || overtimeMode) return;
+    const onKeyDown = (event: KeyboardEvent) => handleLapShortcut(event);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [overtimeMode, timerRunning]);
 
   return (
     <div className="space-y-6">
@@ -947,7 +1137,7 @@ function ReadingTimer({
             <span className="font-mono text-[11px] font-medium uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
               {overtimeMode
                 ? locale === 'zh'
-                  ? '阅读加时赛'
+                  ? '补做没做完的题'
                   : 'Reading Overtime'
                 : isListening
                   ? copy.strictListeningMode
@@ -966,13 +1156,15 @@ function ReadingTimer({
                     ? 'border-red-200 bg-red-100 text-red-600 dark:border-red-900/50 dark:bg-red-900/50 dark:text-red-400'
                     : 'border-emerald-200 bg-emerald-100 text-emerald-600 dark:border-emerald-900/50 dark:bg-emerald-900/50 dark:text-emerald-400'
                 )}>
-                {overtimeMode ? (locale === 'zh' ? '补录中' : 'Resolving') : copy.runningNow}
+                {overtimeMode ? (locale === 'zh' ? '补做中' : 'Finishing') : copy.runningNow}
               </motion.span>
             )}
           </div>
         </div>
 
-        <motion.div 
+        {/* With leftovers waiting for a decision, a frozen red 00:00 only reads as an error, so hide it. */}
+        {!(unresolvedBacklog && !timerRunning) && (
+        <motion.div
           layout
           className={cn(
             'mt-6 font-mono text-[5.5rem] font-bold tracking-tighter tabular-nums leading-none text-center',
@@ -985,17 +1177,24 @@ function ReadingTimer({
         >
           {overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)}
         </motion.div>
+        )}
 
         <div className="mt-8 flex flex-col items-center gap-4 relative z-10">
           {!timerRunning && !pendingSubmit && !overtimeMode && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <Button
-                onClick={unresolvedBacklog ? startBacklogResolutionTimer : startTimer}
+                onClick={
+                  unresolvedBacklog
+                    ? startBacklogResolutionTimer
+                    : session.timerSummary
+                      ? () => restartConfirm.trigger(startTimer)
+                      : startTimer
+                }
                 size="lg"
                 className={cn(
                   'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
                   unresolvedBacklog
-                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    ? 'bg-amber-500 text-white hover:bg-amber-600 dark:text-zinc-950'
                     : isListening
                     ? 'bg-red-500 text-white hover:bg-red-600'
                     : 'bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
@@ -1003,11 +1202,22 @@ function ReadingTimer({
               >
                 {unresolvedBacklog ? <Clock3 className="mr-2 size-5" /> : <Play className="mr-2 size-5 fill-current" />}
                 {unresolvedBacklog
-                  ? (locale === 'zh' ? '开始补录计时' : 'Start Overtime Timer')
+                  ? (locale === 'zh' ? `继续做完这 ${backlogCount} 题` : `Finish these ${backlogCount}`)
                   : session.timerSummary
-                    ? copy.restartStrictAttempt
+                    ? restartConfirm.armed
+                      ? (locale === 'zh' ? '再点一次：覆盖上次计时' : 'Tap again to overwrite last run')
+                      : copy.restartStrictAttempt
                     : copy.startStrictAttempt}
               </Button>
+              {unresolvedBacklog && (
+                <button
+                  type="button"
+                  onClick={skipBacklog}
+                  className="mt-3 block w-full text-center text-sm text-zinc-500 underline-offset-2 transition-colors hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  {locale === 'zh' ? '跳过，不补做了' : 'Skip, I won\'t finish them'}
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -1020,8 +1230,8 @@ function ReadingTimer({
                  onClick={submitForced}
                  className="h-16 px-10 rounded-full border-red-200 bg-white/70 text-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.15)] backdrop-blur-md hover:bg-white dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
                >
-                 <CheckCircle2 className="size-5 sm:mr-2" />
-                 <span className="hidden sm:inline font-bold text-lg tracking-wide">{locale === 'zh' ? '交卷' : 'Submit Test'}</span>
+                 <CheckCircle2 className="mr-2 size-5" />
+                 <span className="font-bold text-lg tracking-wide">{locale === 'zh' ? '交卷' : 'Submit Test'}</span>
                </Button>
             </motion.div>
           )}
@@ -1034,7 +1244,7 @@ function ReadingTimer({
                 className="h-14 rounded-full bg-red-500 text-white hover:bg-red-600 px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
               >
                 <CheckCircle2 className="mr-2 size-5" />
-                {locale === 'zh' ? '结束补录计时' : 'Stop Overtime Timer'}
+                {locale === 'zh' ? '做完了' : 'Done'}
               </Button>
             </motion.div>
           )}
@@ -1051,7 +1261,7 @@ function ReadingTimer({
         )}
       </motion.div>
 
-      {!isListening && (
+      {!isListening && !unresolvedBacklog && !overtimeMode && (
         <div className="rounded-[32px] border border-zinc-200/50 bg-white/40 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/40">
           <div className="flex items-start justify-between gap-3">
             <div className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-500 dark:text-zinc-400">
@@ -1064,25 +1274,35 @@ function ReadingTimer({
           <div className="mt-2.5 text-[12px] text-zinc-500 dark:text-zinc-400 mb-5">
             {locale === 'zh'
               ? timerRunning
-                ? '点击卡片无缝切换题型，系统自动累计耗时；完成后点击上方“交卷”。'
-                : '先点击这里选择起点，再点击上方按钮开始计时。'
+                ? '点击卡片或按 空格 / → 切到下一题型，1–4 直接跳转；系统自动累计耗时，完成后点“交卷”。'
+                : pendingSubmit
+                  ? '各 Part 的用时已记录。'
+                  : '一般从 Part 5 开始。习惯先做别的 Part？先点那张卡片，再点「开始计时」。'
               : timerRunning
-                ? 'Tap cards to switch active parts seamlessly. Tap Submit when finished test.'
-                : 'Select your starting point, then start the timer above.'}
+                ? 'Tap a card or press Space / → for the next part, 1–4 to jump. Time accrues automatically; tap Submit when done.'
+                : pendingSubmit
+                  ? 'Time per Part has been recorded.'
+                  : 'Most people start with Part 5. Prefer another order? Tap that card first, then Start.'}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {READING_LAP_SEGMENTS.map((segment, index) => {
               const completed = readingLapTimes[segment.key] !== undefined;
               const active = timerRunning && !overtimeMode && currentLapIndex === index;
-              const preselected = !timerRunning && !overtimeMode && currentLapIndex === index;
+              const preselected = !timerRunning && !overtimeMode && !pendingSubmit && currentLapIndex === index;
               const stored = session.readingLapTimes[segment.key];
+              const liveLapMs = (readingLapTimes[segment.key] ?? 0) + (active ? currentLapLiveMs : 0);
 
               return (
                                 <button
                   type="button"
                   key={segment.key}
                   id={`segment-btn-${index}`}
-                  onClick={() => selectActiveLap(index)}
+                  onClick={(event) => {
+                    selectActiveLap(index);
+                    // Hand focus back to the page so Space advances via the shortcut, not by re-clicking this card.
+                    if (timerRunning) event.currentTarget.blur();
+                  }}
+                  aria-pressed={active || preselected}
 
                   className={cn(
                     'relative overflow-hidden rounded-[24px] border p-4 transition-all duration-300 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50/50 dark:focus-visible:ring-offset-zinc-900',
@@ -1116,8 +1336,17 @@ function ReadingTimer({
                     </div>
                   </div>
                   <div className="mt-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">{translatePart(locale, segment.key)}</div>
-                  <div className={cn('mt-3 font-mono text-[11px] font-medium', completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500')}>
-                    {completed
+                  <div className={cn(
+                    'mt-3 font-mono text-[11px] font-medium',
+                    active
+                      ? liveLapMs > segment.baselineMinutes * 60_000
+                        ? 'text-red-500 dark:text-red-400'
+                        : 'text-amber-700 dark:text-amber-300'
+                      : completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500'
+                  )}>
+                    {active
+                      ? `${formatClock(liveLapMs)} / ${segment.baselineMinutes}:00`
+                      : completed
                       ? copy.thisRun(formatMinutes(readingLapTimes[segment.key]))
                       : stored !== undefined
                         ? copy.lastRun(formatMinutes(stored))
@@ -1148,8 +1377,16 @@ function ReadingTimer({
               <Input
                 type="number"
                 min="0"
+                inputMode="numeric"
+                aria-label={locale === 'zh' ? '未完题数' : 'Unfinished count'}
                 value={unfinishedQuestions}
                 onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    strictSubmitFromPending();
+                  }
+                }}
                 className="h-11 w-24 border-0 bg-transparent text-center text-lg font-semibold focus-visible:ring-0"
                 placeholder={copy.unfinishedPlaceholder}
               />
@@ -1159,57 +1396,30 @@ function ReadingTimer({
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-red-200/80 bg-white/70 p-3 dark:border-red-900/30 dark:bg-zinc-950/60">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold tracking-wide text-zinc-600 dark:text-zinc-300">
-                {locale === 'zh' ? '按题型填写（适配乱序做题）' : 'By Part (for non-linear solving order)'}
-              </div>
-              <button
-                type="button"
-                onClick={() => applySmartUnfinishedDistribution()}
-                className="rounded-full border border-zinc-200/80 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
-              >
-                {locale === 'zh' ? '智能分配' : 'Smart fill'}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {READING_PARTS.map((part) => (
-                <label key={`pending-${part}`} className="rounded-xl border border-zinc-200/80 bg-white/90 px-2.5 py-2 dark:border-zinc-800 dark:bg-zinc-900/90">
-                  <div className="mb-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{translatePart(locale, part)}</div>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={unfinishedByPartDraft[part] ?? ''}
-                    onChange={(event) => updateUnfinishedByPart(part, event.target.value)}
-                    className="h-9 border-zinc-200/80 bg-white/80 text-center text-base font-semibold dark:border-zinc-700 dark:bg-zinc-950/80"
-                    placeholder="0"
-                  />
-                </label>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-              {locale === 'zh'
-                ? `题型合计 ${unfinishedByPartTotal} 题，未完成总数 ${unfinishedQuestions || '0'} 题。`
-                : `${unfinishedByPartTotal} by-part, ${unfinishedQuestions || '0'} total.`}
-            </p>
-          </div>
+          <div className="mt-4">{renderUnfinishedByPart('pending')}</div>
         </motion.div>
       )}
 
       {(overtimeMode || unresolvedBacklog) && (
-        <div className="rounded-[32px] border border-red-200 bg-red-50/50 p-6 backdrop-blur-sm dark:border-red-900/30 dark:bg-red-900/10">
+        <div className="rounded-[32px] border border-amber-300/50 bg-amber-50/60 p-6 backdrop-blur-sm dark:border-amber-900/40 dark:bg-amber-900/10">
           <div className="flex items-start gap-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
               <Clock3 className="size-5" />
             </div>
             <div>
-              <div className="text-base font-semibold text-red-800 dark:text-red-300">
-                {locale === 'zh' ? '未完成补录模式已开启' : 'Overtime resolution mode is active'}
+              <div className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                {overtimeMode
+                  ? (locale === 'zh' ? `正在补做剩下的 ${backlogCount} 题` : `Finishing the remaining ${backlogCount}`)
+                  : (locale === 'zh' ? `还有 ${backlogCount} 题没做完` : `${backlogCount} questions left unanswered`)}
               </div>
-              <p className="mt-1 text-sm leading-relaxed text-red-600/80 dark:text-red-400/80">
-                {locale === 'zh'
-                  ? '严格分已经按照未完成题锁定。继续补做只会影响潜力分，不再反向污染严格模考分。'
-                  : 'The strict score is already locked from the unfinished count. Any continued work now only affects the potential score, not the strict mock score.'}
+              <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+                {overtimeMode
+                  ? (locale === 'zh'
+                    ? '做完点「做完了」，再填补做的题错了几题。这段时间不影响按考试规则算的分数。'
+                    : 'Tap "Done" when finished, then enter how many of them were wrong. This does not change your score under real test rules.')
+                  : (locale === 'zh'
+                    ? '估分已按考场上随手涂满来算（约蒙对 1/4）。想知道时间够的话能拿几分，可以继续做完（单独计时）；不想补也可以跳过。'
+                    : 'The estimate already assumes you would guess them on test day (about 1 in 4 right). To see your score with enough time, finish them on a separate clock — or just skip.')}
               </p>
             </div>
           </div>
@@ -1223,12 +1433,12 @@ function ReadingTimer({
               <AlertTriangle className="size-8" />
             </div>
             <DialogTitle className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {locale === 'zh' ? '时间到' : 'Time is up'}
+              {locale === 'zh' ? '时间到！' : 'Time is up!'}
             </DialogTitle>
             <DialogDescription className="mt-3 text-base text-zinc-500 dark:text-zinc-400">
               {locale === 'zh'
-                ? '严格模考分已锁定。你还有几题没有做完？'
-                : 'Strict mock score locked. How many items are unfinished?'}
+                ? '还有几题没来得及做？全部做完就填 0。'
+                : 'How many questions did you not get to? Enter 0 if you finished.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1237,8 +1447,16 @@ function ReadingTimer({
                <Input
                  type="number"
                  min="0"
+                 inputMode="numeric"
+                 aria-label={locale === 'zh' ? '未完题数' : 'Unfinished count'}
                  value={unfinishedQuestions}
                  onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
+                 onKeyDown={(event) => {
+                   if (event.key === 'Enter') {
+                     event.preventDefault();
+                     strictSubmitFromPending();
+                   }
+                 }}
                  className="h-16 text-center text-3xl font-semibold bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl border-zinc-200 dark:border-zinc-800"
                  placeholder="0"
                  autoFocus
@@ -1246,54 +1464,23 @@ function ReadingTimer({
                <span className="mt-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">{locale === 'zh' ? '未完题数' : 'Unfinished Count'}</span>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-zinc-200/70 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                  {locale === 'zh' ? '按题型填写（推荐）' : 'By Part (recommended)'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => applySmartUnfinishedDistribution()}
-                  className="rounded-full border border-zinc-200/80 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
-                >
-                  {locale === 'zh' ? '智能分配' : 'Smart fill'}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {READING_PARTS.map((part) => (
-                  <label key={`dialog-${part}`} className="rounded-xl border border-zinc-200/80 bg-white/90 px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-900/90">
-                    <div className="mb-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{translatePart(locale, part)}</div>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={unfinishedByPartDraft[part] ?? ''}
-                      onChange={(event) => updateUnfinishedByPart(part, event.target.value)}
-                      className="h-9 border-zinc-200/80 bg-white/80 text-center text-base font-semibold dark:border-zinc-700 dark:bg-zinc-950/80"
-                      placeholder="0"
-                    />
-                  </label>
-                ))}
-              </div>
-              <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh'
-                  ? `题型合计 ${unfinishedByPartTotal} 题。`
-                  : `${unfinishedByPartTotal} by-part total.`}
-              </p>
-            </div>
+            <div className="mt-5">{renderUnfinishedByPart('dialog')}</div>
           </div>
 
           <div className="grid grid-cols-2 gap-px bg-zinc-200/50 dark:bg-zinc-800/50 border-t border-zinc-200/50 dark:border-zinc-800/50">
-            <button 
-              onClick={strictSubmitFromPending} 
+            <button
+              type="button"
+              onClick={strictSubmitFromPending}
               className="bg-white/80 py-5 text-base font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
-              {locale === 'zh' ? '直接交卷' : 'Submit Now'}
+              {locale === 'zh' ? '交卷' : 'Submit'}
             </button>
-            <button 
-              onClick={startOvertime} 
+            <button
+              type="button"
+              onClick={startOvertime}
               className="bg-white/80 py-5 text-base font-semibold text-red-600 transition-colors hover:bg-red-50 dark:bg-zinc-900/80 dark:text-red-400 dark:hover:bg-red-900/20"
             >
-              {locale === 'zh' ? '开启加时赛' : 'Start Overtime'}
+              {locale === 'zh' ? '继续做完（单独计时）' : 'Keep going (timed separately)'}
             </button>
           </div>
         </DialogContent>

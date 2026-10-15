@@ -16,6 +16,7 @@ import {
 } from '@/lib/toeic';
 import type { Locale as AppLocale } from '@/lib/i18n';
 import {
+  AUTO_BACKUP_MIN_INTERVAL_MS,
   EXAM_DATE_PATTERN,
   STORAGE_VERSION,
   type HistoricalScoreRecord,
@@ -36,6 +37,22 @@ import {
 import { evaluateAchievements } from '@/lib/achievements';
 
 const storage = createJSONStorage(getPersistStorage);
+
+function backupBeforeChange(state: Parameters<typeof createAutoBackup>[0], throttled = false) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    createAutoBackup(state, window.localStorage, throttled ? { minIntervalMs: AUTO_BACKUP_MIN_INTERVAL_MS } : {});
+  } catch {
+    // best-effort
+  }
+}
+
+function hasSessionProgress(session: SessionRecord) {
+  return session.status !== 'not-started' || Boolean(session.timerSummary || session.timerRuntime);
+}
 
 function sameStringArray(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -242,11 +259,19 @@ export const useStore = create<AppState>()(
           examDate: EXAM_DATE_PATTERN.test(examDate) ? examDate : state.examDate,
         })),
 
-      setTargetScore: (targetScore) => set({ targetScore }),
+      setTargetScore: (targetScore) =>
+        set((state) => ({
+          targetScore: Number.isFinite(targetScore) ? clampScore(targetScore, 10, 990) : state.targetScore,
+        })),
 
       setSprintConfig: (config) =>
         set((state) => {
           const newSessions = createInitialSessions(config);
+          const nextIds = new Set(newSessions.map((session) => session.id));
+          // Shrinking the sprint drops sessions; keep a restore point if any of them hold progress.
+          if (state.sessions.some((session) => !nextIds.has(session.id) && hasSessionProgress(session))) {
+            backupBeforeChange(state);
+          }
           // Preserve existing session data by merging
           const mergedSessions = newSessions.map((newSession) => {
             const existing = state.sessions.find((s) => s.id === newSession.id);
@@ -334,18 +359,9 @@ export const useStore = create<AppState>()(
 
           if (!changed) return state;
 
-          // Trigger auto-backup on meaningful session changes
-          const currentState = get();
-          if (typeof window !== 'undefined') {
-            try {
-              createAutoBackup(
-                { ...currentState, sessions },
-                window.localStorage
-              );
-            } catch {
-              // best-effort
-            }
-          }
+          // Keep a periodic restore point of the pre-change state; throttled so a running
+          // timer's frequent patches don't evict older backups.
+          backupBeforeChange(state, true);
 
           return { sessions };
         }),
@@ -512,8 +528,8 @@ export const useStore = create<AppState>()(
       },
 
       importSnapshot: (snapshot) => {
-        createAutoBackup(get(), getPersistStorage() as Storage);
         const next = parseImportSnapshot(snapshot, get());
+        backupBeforeChange(get());
         const importedAchievements =
           next.result.source === 'snapshot' || next.result.source === 'vocabulary-list'
             ? next.unlockedAchievements
@@ -526,6 +542,7 @@ export const useStore = create<AppState>()(
           historicalScores: next.historicalScores,
           sprintConfig: next.sprintConfig,
           vocabularyEntries: next.vocabularyEntries,
+          targetScore: next.targetScore ?? get().targetScore,
           unlockedAchievements: importedAchievements,
           achievementUnlocks:
             next.result.source === 'snapshot' || next.result.source === 'vocabulary-list'
@@ -536,7 +553,7 @@ export const useStore = create<AppState>()(
       },
 
       resetProgress: () => {
-        createAutoBackup(get(), getPersistStorage() as Storage);
+        backupBeforeChange(get());
         set((state) => ({
           sessions: createInitialSessions(state.sprintConfig),
           activeSessionId: 'L1',
@@ -559,6 +576,7 @@ export const useStore = create<AppState>()(
         historicalScores: state.historicalScores,
         sprintConfig: state.sprintConfig,
         vocabularyEntries: state.vocabularyEntries,
+        targetScore: state.targetScore,
         unlockedAchievements: state.unlockedAchievements,
         achievementUnlocks: state.achievementUnlocks,
       }),

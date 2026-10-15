@@ -144,6 +144,11 @@ type SectionPartStat<TPart extends MistakeKey> = {
 	shareOfLoss: number;
 };
 
+/**
+ * Answer-pattern diagnostics. TOEIC is number-right scoring, so the pattern never moves the
+ * point estimate; an unusual pattern (more slips on easy items than on hard ones) only widens
+ * the uncertainty interval. `deltaRaw` / `penaltyRaw` stay for compatibility and are always 0.
+ */
 type SectionBiasProfile = {
 	alpha: number;
 	basicErrorRate: number;
@@ -169,6 +174,8 @@ export type ToeicSectionEstimate = {
 	strongestPart?: MistakeKey;
 	weakestPart?: MistakeKey;
 	unfinishedPenalty: number;
+	/** Expected correct answers from filling unanswered 4-option items at random (strict mode only). */
+	guessCredit: number;
 	resolvedUnfinished: boolean;
 	overtimeElapsedMs?: number;
 	responsePattern: "normal" | "aberrant";
@@ -296,6 +303,16 @@ const PEASEA_SECTION_CONFIG = {
 		sem: 25,
 	},
 } as const;
+
+/** Every Reading item (Parts 5–7) has four options, so a blind guess is right 1 time in 4. */
+const READING_GUESS_RATE = 0.25;
+/** Easy-vs-hard error-rate gap (percentage points / 100) treated as an unusual answer pattern. */
+const ABERRANT_GAP_THRESHOLD = 0.1;
+/** Extra uncertainty, in scaled points, when the answer pattern is unusual. */
+const ABERRANT_SEM_WIDENING = 10;
+/** Recent sets used for the current-level estimate, and the recency half-life in sets. */
+const LEVEL_WINDOW = 5;
+const LEVEL_HALF_LIFE_SETS = 2;
 
 const CEFR_THRESHOLDS: Array<{
 	level: Exclude<ToeicCefrLevel, "Below A1">;
@@ -982,6 +999,11 @@ export function getSessionPartLossMapByMode(
 }
 
 function interpolateScaledScore(rawCorrect: number, anchors: readonly ScoreCheckpoint[]) {
+	return roundToNearestFive(interpolateScaledExact(rawCorrect, anchors), 5, 495);
+}
+
+/** The conversion curve without the 5-point rounding, for comparing small raw changes. */
+function interpolateScaledExact(rawCorrect: number, anchors: readonly ScoreCheckpoint[]) {
 	if (rawCorrect <= anchors[0].raw) {
 		return anchors[0].scaled;
 	}
@@ -997,8 +1019,7 @@ function interpolateScaledScore(rawCorrect: number, anchors: readonly ScoreCheck
 			}
 
 			const progress = (rawCorrect - previous.raw) / span;
-			const scaled = previous.scaled + progress * (current.scaled - previous.scaled);
-			return roundToNearestFive(scaled, 5, 495);
+			return previous.scaled + progress * (current.scaled - previous.scaled);
 		}
 	}
 
@@ -1078,12 +1099,15 @@ export function estimateToeicSessionScore(
 	const basicErrorRate = basicQuestionCount > 0 ? basicMistakes / basicQuestionCount : 0;
 	const advancedErrorRate = advancedQuestionCount > 0 ? advancedMistakes / advancedQuestionCount : 0;
 	const anomalyGap = Math.max(0, basicErrorRate - advancedErrorRate);
-	const deltaRaw = Number(
-		(config.alpha * Math.min(0, advancedErrorRate - basicErrorRate) * 100).toFixed(2)
-	);
-	const penaltyRaw = Number(Math.abs(deltaRaw).toFixed(1));
-	const adjustedRawCorrect = clampRawScore(rawCorrect + deltaRaw, record.type);
+	const anomalyDetected = anomalyGap >= ABERRANT_GAP_THRESHOLD;
+	// No penalty for wrong answers on TOEIC, so on test day every blank gets bubbled in.
+	const unanswered = record.type === "R" && mode === "strict"
+		? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0)
+		: 0;
+	const guessCredit = Number((Math.min(unanswered, totalMistakes) * READING_GUESS_RATE).toFixed(2));
+	const adjustedRawCorrect = clampRawScore(rawCorrect + guessCredit, record.type);
 	const scaled = interpolateScaledScore(adjustedRawCorrect, config.anchors);
+	const sem = config.sem + (anomalyDetected ? ABERRANT_SEM_WIDENING : 0);
 	const partStats = parts
 		.map((part) => {
 			const mistakes = Math.min(PART_QUESTION_COUNTS[part], partMistakes[part]);
@@ -1102,8 +1126,8 @@ export function estimateToeicSessionScore(
 	const strongestPart = [...partStats].sort((left, right) => left.errorRate - right.errorRate)[0]?.part;
 	const available = isSessionEstimateEligible(record);
 	const interval = {
-		min: roundToNearestFive(scaled - config.sem, 5, 495),
-		max: roundToNearestFive(scaled + config.sem, 5, 495),
+		min: roundToNearestFive(scaled - sem, 5, 495),
+		max: roundToNearestFive(scaled + sem, 5, 495),
 	};
 
 	return {
@@ -1115,26 +1139,24 @@ export function estimateToeicSessionScore(
 		scaled,
 		interval,
 		cefr: getSectionCefrLevel(scaled),
-		sem: config.sem,
+		sem,
 		bias: {
 			alpha: config.alpha,
 			basicErrorRate,
 			advancedErrorRate,
 			anomalyGap,
-			deltaRaw,
-			penaltyRaw,
-			anomalyDetected: deltaRaw < 0,
+			deltaRaw: 0,
+			penaltyRaw: 0,
+			anomalyDetected,
 		},
 		partStats,
 		strongestPart,
 		weakestPart,
-		unfinishedPenalty:
-			record.type === "R" && mode === "strict"
-				? Math.max(record.timerSummary?.unfinishedQuestions ?? 0, 0)
-				: 0,
+		unfinishedPenalty: unanswered,
+		guessCredit,
 		resolvedUnfinished: hasResolvedUnfinished(record),
 		overtimeElapsedMs: record.timerSummary?.overtimeElapsedMs,
-		responsePattern: deltaRaw < 0 ? "aberrant" : "normal",
+		responsePattern: anomalyDetected ? "aberrant" : "normal",
 	};
 }
 
@@ -1332,81 +1354,181 @@ export function mergeSessionWithDefaults(
  * Aggregate multiple (L, R) session pairs into a single combined estimate.
  * Uses simple average across available pairs.
  */
-export function estimateAggregatedScore(
-	sessions: SessionRecord[],
-	mode: "strict" | "potential" = "strict"
-): ToeicCombinedEstimate | null {
-	const listeningDone = sessions.filter((s) => s.type === "L" && isSessionEstimateEligible(s));
-	const readingDone = sessions.filter((s) => s.type === "R" && isSessionEstimateEligible(s));
+// ─── Current level (multi-set) ───────────────────────────────────────────────
 
-	if (listeningDone.length === 0 && readingDone.length === 0) return null;
-
-	// Average across pairs by set number
-	const setPairs = new Map<number, { l?: SessionRecord; r?: SessionRecord }>();
-	for (const s of listeningDone) {
-		const pair = setPairs.get(s.setNumber) ?? {};
-		pair.l = s;
-		setPairs.set(s.setNumber, pair);
-	}
-	for (const s of readingDone) {
-		const pair = setPairs.get(s.setNumber) ?? {};
-		pair.r = s;
-		setPairs.set(s.setNumber, pair);
-	}
-
-	const estimates = [...setPairs.values()]
-		.map(({ l, r }) => estimateToeicCombinedScore(l, r, mode))
-		.filter((e) => e.available);
-
-	if (estimates.length === 0) return estimateToeicCombinedScore(
-		listeningDone[listeningDone.length - 1],
-		readingDone[readingDone.length - 1],
-		mode
-	);
-
-	const avgTotal = Math.round(estimates.reduce((sum, e) => sum + e.total, 0) / estimates.length);
-	// Take the last estimate as the reference for metadata, override total
-	const ref = estimates[estimates.length - 1];
-	return { ...ref, total: avgTotal };
-}
-
-// ─── Target Gap Analysis ──────────────────────────────────────────────────────
-
-export type TargetGapAnalysis = {
-	targetTotal: number;
-	currentTotal: number;
-	gap: number;
-	achieved: boolean;
-	/** Per-part how many fewer mistakes needed if we assume equal distribution */
-	partSuggestions: Array<{ part: MistakeKey; currentMistakes: number; suggestedMistakes: number; delta: number }>;
+export type ToeicSectionLevel = {
+	type: SessionType;
+	scaled: number;
+	interval: ScoreInterval;
+	/** Effective correct answers behind the level (guess credit included), for target planning. */
+	rawCorrect: number;
+	setsUsed: number;
+	/** Least-squares slope over the sets used, in scaled points per set (oldest → newest). */
+	trendPerSet: number;
+	latest: ToeicSectionEstimate;
 };
 
-export function getTargetGapAnalysis(
+export type ToeicLevelEstimate = {
+	listening?: ToeicSectionLevel;
+	reading?: ToeicSectionLevel;
+	/** Present only when both sections have at least one usable set. */
+	total?: {
+		scaled: number;
+		interval: ScoreInterval;
+		cefr: ToeicCefrLevel;
+	};
+};
+
+function getSessionRecency(record: SessionRecord) {
+	const stamp = record.timerSummary?.completedAt ?? record.updatedAt;
+	const parsed = stamp ? new Date(stamp).getTime() : NaN;
+	return Number.isFinite(parsed) ? parsed : record.setNumber;
+}
+
+/**
+ * Current ability per section from the most recent sets, weighted toward the newest
+ * (half-life of two sets). One practice set carries roughly ±25 points of measurement error;
+ * averaging several shrinks that by √(effective set count), unless the sets themselves
+ * disagree more than that, in which case the observed spread is used instead.
+ */
+export function estimateSectionLevel(
 	sessions: SessionRecord[],
-	targetTotal: number,
+	type: SessionType,
 	mode: "strict" | "potential" = "strict"
-): TargetGapAnalysis | null {
-	const latest = estimateToeicCombinedScore(
-		[...sessions].reverse().find((s) => s.type === "L" && isSessionEstimateEligible(s)),
-		[...sessions].reverse().find((s) => s.type === "R" && isSessionEstimateEligible(s)),
-		mode
+): ToeicSectionLevel | undefined {
+	const recent = sessions
+		.filter((session) => session.type === type && isSessionEstimateEligible(session))
+		.sort((left, right) => getSessionRecency(right) - getSessionRecency(left))
+		.slice(0, LEVEL_WINDOW);
+
+	if (recent.length === 0) {
+		return undefined;
+	}
+
+	const estimates = recent.map((session) => estimateToeicSessionScore(session, mode));
+	const weights = estimates.map((_, index) => Math.pow(0.5, index / LEVEL_HALF_LIFE_SETS));
+	const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+	const weightedMean = (values: number[]) =>
+		values.reduce((sum, value, index) => sum + value * weights[index], 0) / weightSum;
+
+	const meanScaled = weightedMean(estimates.map((estimate) => estimate.scaled));
+	const meanRaw = weightedMean(estimates.map((estimate) => estimate.adjustedRawCorrect));
+	const effectiveSets = (weightSum * weightSum) / weights.reduce((sum, weight) => sum + weight * weight, 0);
+	const measurementError = weightedMean(estimates.map((estimate) => estimate.sem));
+	const spread = estimates.length > 1
+		? Math.sqrt(weightedMean(estimates.map((estimate) => Math.pow(estimate.scaled - meanScaled, 2))))
+		: 0;
+	const halfWidth = Math.max(measurementError, spread) / Math.sqrt(effectiveSets);
+	const scaled = roundToNearestFive(meanScaled, 5, 495);
+
+	// Slope across the window in chronological order; only meaningful with three or more sets.
+	let trendPerSet = 0;
+	if (estimates.length >= 3) {
+		const chronological = [...estimates].reverse().map((estimate) => estimate.scaled);
+		const n = chronological.length;
+		const meanX = (n - 1) / 2;
+		const meanY = chronological.reduce((sum, value) => sum + value, 0) / n;
+		let numerator = 0;
+		let denominator = 0;
+		chronological.forEach((value, index) => {
+			numerator += (index - meanX) * (value - meanY);
+			denominator += Math.pow(index - meanX, 2);
+		});
+		trendPerSet = denominator > 0 ? Math.round(numerator / denominator) : 0;
+	}
+
+	return {
+		type,
+		scaled,
+		interval: {
+			min: roundToNearestFive(meanScaled - halfWidth, 5, 495),
+			max: roundToNearestFive(meanScaled + halfWidth, 5, 495),
+		},
+		rawCorrect: Number(meanRaw.toFixed(1)),
+		setsUsed: estimates.length,
+		trendPerSet,
+		latest: estimates[0],
+	};
+}
+
+export function estimateCurrentLevel(
+	sessions: SessionRecord[],
+	mode: "strict" | "potential" = "strict"
+): ToeicLevelEstimate {
+	const listening = estimateSectionLevel(sessions, "L", mode);
+	const reading = estimateSectionLevel(sessions, "R", mode);
+
+	if (!listening || !reading) {
+		return { listening, reading };
+	}
+
+	const scaled = listening.scaled + reading.scaled;
+	const halfWidth = Math.sqrt(
+		Math.pow((listening.interval.max - listening.interval.min) / 2, 2) +
+		Math.pow((reading.interval.max - reading.interval.min) / 2, 2)
 	);
 
-	if (!latest.available) return null;
+	return {
+		listening,
+		reading,
+		total: {
+			scaled,
+			interval: {
+				min: roundToNearestFive(scaled - halfWidth, 10, 990),
+				max: roundToNearestFive(scaled + halfWidth, 10, 990),
+			},
+			cefr: getCefrLevelFromScores(listening.scaled, reading.scaled, scaled),
+		},
+	};
+}
 
-	const achieved = latest.total >= targetTotal;
-	const gap = targetTotal - latest.total;
+// ─── Target planning ──────────────────────────────────────────────────────────
 
-	const completed = sessions.filter((s) => isSessionEstimateEligible(s));
-	const partSuggestions: TargetGapAnalysis["partSuggestions"] = [...LISTENING_PARTS, ...READING_PARTS].map((part) => {
-		const matching = completed.filter((s) => getPartsForType(s.type).includes(part as never));
-		if (matching.length === 0) return { part, currentMistakes: 0, suggestedMistakes: 0, delta: 0 };
-		const avgMistakes = matching.reduce((sum, s) => sum + (s.mistakes[part] ?? 0), 0) / matching.length;
-		// Very rough suggestion: reduce by ~10% per 50-point gap
-		const reductionFactor = Math.max(0, Math.min(1, gap / 200));
-		const suggested = Math.max(0, Math.round(avgMistakes * (1 - reductionFactor)));
-		return { part, currentMistakes: Math.round(avgMistakes), suggestedMistakes: suggested, delta: Math.round(avgMistakes) - suggested };
-	}).filter((s) => s.currentMistakes > 0 || s.delta !== 0);
+export type TargetCorrectPlan = {
+	/** Additional correct answers needed per section (0 when already on target). */
+	listening: number;
+	reading: number;
+	total: number;
+	reachable: boolean;
+};
 
-	return { targetTotal, currentTotal: latest.total, gap, achieved, partSuggestions };
+/**
+ * Fewest extra correct answers that lift the estimated total to `targetTotal`, adding one
+ * answer at a time to whichever section converts it into more scaled points.
+ */
+export function planCorrectAnswersForTarget(
+	listeningRaw: number,
+	readingRaw: number,
+	targetTotal: number
+): TargetCorrectPlan {
+	let listening = clampRawScore(listeningRaw, "L");
+	let reading = clampRawScore(readingRaw, "R");
+	const startListening = listening;
+	const startReading = reading;
+	const exact = (raw: number, type: SessionType) =>
+		interpolateScaledExact(clampRawScore(raw, type), PEASEA_SECTION_CONFIG[type].anchors);
+	// Reported totals are rounded to 5, so stop once the rounded total reaches the target.
+	const totalFor = (l: number, r: number) =>
+		estimateToeicScaledScore(l, "L") + estimateToeicScaledScore(r, "R");
+
+	while (totalFor(listening, reading) < targetTotal && (listening < 100 || reading < 100)) {
+		const listeningGain = listening < 100 ? exact(listening + 1, "L") - exact(listening, "L") : -1;
+		const readingGain = reading < 100 ? exact(reading + 1, "R") - exact(reading, "R") : -1;
+
+		if (readingGain > listeningGain) {
+			reading = Math.min(reading + 1, 100);
+		} else {
+			listening = Math.min(listening + 1, 100);
+		}
+	}
+
+	const extraListening = Math.ceil(listening - startListening);
+	const extraReading = Math.ceil(reading - startReading);
+
+	return {
+		listening: extraListening,
+		reading: extraReading,
+		total: extraListening + extraReading,
+		reachable: totalFor(listening, reading) >= targetTotal,
+	};
 }

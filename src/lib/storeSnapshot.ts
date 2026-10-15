@@ -26,7 +26,9 @@ export const STORAGE_VERSION = 7;
 export const DEFAULT_EXAM_DATE = '2026-05-24';
 export const EXAM_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export const AUTO_BACKUP_KEY_PREFIX = 'cheese-toeic-backup-';
-export const AUTO_BACKUP_MAX = 3;;
+export const AUTO_BACKUP_MAX = 3;
+/** Minimum gap between automatic (non-forced) backups so routine edits don't evict older restore points. */
+export const AUTO_BACKUP_MIN_INTERVAL_MS = 10 * 60 * 1000;
 
 type SnapshotMeta = {
   schema: 'cheese-toeic-snapshot';
@@ -86,6 +88,7 @@ type SnapshotLike = {
     records?: LegacyRecord[];
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
+    targetScore?: unknown;
     unlockedAchievements?: unknown;
     achievementUnlocks?: unknown;
   };
@@ -98,6 +101,7 @@ type SnapshotLike = {
     records?: LegacyRecord[];
     sprintConfig?: unknown;
     vocabularyEntries?: unknown;
+    targetScore?: unknown;
     unlockedAchievements?: unknown;
     achievementUnlocks?: unknown;
   };
@@ -109,6 +113,7 @@ type SnapshotLike = {
   records?: LegacyRecord[];
   sprintConfig?: unknown;
   vocabularyEntries?: unknown;
+  targetScore?: unknown;
   unlockedAchievements?: unknown;
   achievementUnlocks?: unknown;
 };
@@ -121,6 +126,8 @@ export type ParsedImportSnapshot = {
   historicalScores: HistoricalScoreRecord[];
   sprintConfig: SprintConfig;
   vocabularyEntries: VocabularyEntry[];
+  /** Only present when the payload carried a target score; otherwise keep the current one. */
+  targetScore?: number;
   unlockedAchievements: string[];
   achievementUnlocks: Record<string, string>;
   result: ImportSnapshotResult;
@@ -174,6 +181,10 @@ export function getPersistStorage() {
 
 export function clampScore(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(value / 5) * 5));
+}
+
+export function normalizeTargetScore(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? clampScore(value, 10, 990) : undefined;
 }
 
 export function normalizeExamDate(value: unknown) {
@@ -477,6 +488,7 @@ export function parseImportSnapshot(
           currentState
         )
       : currentState?.vocabularyEntries ?? [],
+    targetScore: normalizeTargetScore(source.targetScore),
     unlockedAchievements: normalizeUnlockedAchievements(source.unlockedAchievements),
     achievementUnlocks: normalizeAchievementUnlocks(source.achievementUnlocks),
     result: {
@@ -542,6 +554,7 @@ export function migratePersistedState(
   vocabularyEntries: VocabularyEntry[];
   targetScore: number;
   unlockedAchievements: string[];
+  achievementUnlocks: Record<string, string>;
 } {
   const persisted = persistedState as {
     sessions?: unknown;
@@ -556,6 +569,7 @@ export function migratePersistedState(
     vocabularyEntries?: unknown;
     targetScore?: unknown;
     unlockedAchievements?: unknown;
+    achievementUnlocks?: unknown;
   };
 
   if (version < 2 && persisted?.records) {
@@ -574,6 +588,7 @@ export function migratePersistedState(
       vocabularyEntries: [],
       targetScore: 850,
       unlockedAchievements: [],
+      achievementUnlocks: {},
     };
   }
 
@@ -587,8 +602,9 @@ export function migratePersistedState(
     historicalScores: normalizeHistoricalScores(persisted?.historicalScores),
     sprintConfig,
     vocabularyEntries: normalizeVocabularyEntries(persisted?.vocabularyEntries),
-    targetScore: typeof persisted?.targetScore === 'number' ? clampScore(persisted.targetScore, 10, 990) : 850,
-    unlockedAchievements: Array.isArray(persisted?.unlockedAchievements) ? persisted.unlockedAchievements.filter((a): a is string => typeof a === 'string') : [],
+    targetScore: normalizeTargetScore(persisted?.targetScore) ?? 850,
+    unlockedAchievements: normalizeUnlockedAchievements(persisted?.unlockedAchievements),
+    achievementUnlocks: normalizeAchievementUnlocks(persisted?.achievementUnlocks),
   };
 }
 
@@ -649,15 +665,6 @@ export function normalizeVocabularyEntries(incoming: unknown): VocabularyEntry[]
     .filter((e) => e.text.length > 0);
 }
 
-// ─── SnapshotLike extension ─────────────────────────────────────────────────────────
-// (extend SnapshotLike type to include new fields for parsing)
-declare module '@/lib/storeSnapshot' {
-  interface SnapshotLikeExtension {
-    sprintConfig?: unknown;
-    vocabularyEntries?: unknown;
-  }
-}
-
 // ─── Auto-Backup Utilities ──────────────────────────────────────────────────────────
 
 export type AutoBackupEntry = {
@@ -667,31 +674,54 @@ export type AutoBackupEntry = {
   debuggedCount: number;
 };
 
+function listAutoBackupKeys(storage: Storage) {
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (key?.startsWith(AUTO_BACKUP_KEY_PREFIX)) {
+      keys.push(key);
+    }
+  }
+  return keys.sort();
+}
+
+/**
+ * Writes a restore point. Routine callers pass `minIntervalMs` so frequent edits
+ * (e.g. every lap of a running timer) don't rotate out the older, more useful backups;
+ * destructive actions (reset/import) omit it and always back up.
+ */
 export function createAutoBackup(
   state: Parameters<typeof createSnapshot>[0],
-  storage: Storage
-): void {
-  const snapshot = createSnapshot(state);
-  const key = `${AUTO_BACKUP_KEY_PREFIX}${Date.now()}`;
+  storage: Storage,
+  options: { minIntervalMs?: number; now?: number } = {}
+): boolean {
+  const now = options.now ?? Date.now();
   try {
-    storage.setItem(key, JSON.stringify(snapshot));
+    if (options.minIntervalMs) {
+      const latestKey = listAutoBackupKeys(storage).at(-1);
+      const latestAt = latestKey ? Number(latestKey.slice(AUTO_BACKUP_KEY_PREFIX.length)) : NaN;
+      if (Number.isFinite(latestAt) && now - latestAt < options.minIntervalMs) {
+        return false;
+      }
+    }
+
+    const snapshot = createSnapshot(state);
+    storage.setItem(`${AUTO_BACKUP_KEY_PREFIX}${now}`, JSON.stringify(snapshot));
     // Prune old backups
-    const allKeys = Object.keys(storage)
-      .filter((k) => k.startsWith(AUTO_BACKUP_KEY_PREFIX))
-      .sort();
+    const allKeys = listAutoBackupKeys(storage);
     while (allKeys.length > AUTO_BACKUP_MAX) {
       const oldest = allKeys.shift()!;
       storage.removeItem(oldest);
     }
+    return true;
   } catch {
     // Ignore quota errors — backup is best-effort
+    return false;
   }
 }
 
 export function getAutoBackups(storage: Storage): AutoBackupEntry[] {
-  return Object.keys(storage)
-    .filter((k) => k.startsWith(AUTO_BACKUP_KEY_PREFIX))
-    .sort()
+  return listAutoBackupKeys(storage)
     .reverse()
     .map((key) => {
       try {

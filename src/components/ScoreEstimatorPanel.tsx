@@ -26,8 +26,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { getCopy, translatePart } from '@/lib/i18n';
 import {
+  estimateCurrentLevel,
   estimateToeicCombinedDualScore,
   estimateToeicSessionDualScore,
+  planCorrectAnswersForTarget,
   getCombinedDataConfidence,
   getCombinedEstimateBand,
   getSessionDataConfidence,
@@ -103,7 +105,6 @@ type ActiveSummary = {
   chart: ScoreTrendPoint[];
   color: string;
   scaleLabel: string;
-  penaltyRaw: number;
   confidence: ConfidenceSummary;
   insights: string[];
   partBreakdown: PartBreakdownItem[];
@@ -201,6 +202,16 @@ export function ScoreEstimatorPanel() {
     [selectedPairListening, selectedPairReading]
   );
   const pairStrictEstimate = pairEstimate.strict;
+  // How many more correct answers the selected set needed to hit the target, split by section.
+  const targetPlan = useMemo(() => {
+    if (!pairStrictEstimate.available || !pairStrictEstimate.listening || !pairStrictEstimate.reading) return null;
+    return planCorrectAnswersForTarget(
+      pairStrictEstimate.listening.adjustedRawCorrect,
+      pairStrictEstimate.reading.adjustedRawCorrect,
+      targetScore
+    );
+  }, [pairStrictEstimate, targetScore]);
+  const currentLevel = useMemo(() => estimateCurrentLevel(deferredSessions), [deferredSessions]);
 
   const listeningTrend = useMemo(
     () =>
@@ -696,19 +707,17 @@ export function ScoreEstimatorPanel() {
                 {activeSummary.score}
               </span>
               {mode === 'T' && (
-                <div className="hidden flex-col gap-1 md:flex">
+                <label className="flex flex-col gap-1">
                   <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
                     <Target className="size-3" />
                     {locale === 'zh' ? '目标分' : 'Target'}
                   </span>
-                  <input
-                    type="number"
-                    min="10" max="990" step="5"
+                  <TargetScoreInput
+                    key={targetScore}
                     value={targetScore}
-                    onChange={(e) => setTargetScore(Number(e.target.value) || 850)}
-                    className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+                    onCommit={setTargetScore}
                   />
-                </div>
+                </label>
               )}
             </div>
             
@@ -725,6 +734,22 @@ export function ScoreEstimatorPanel() {
                     : (locale === 'zh' ? `距目标分 ${targetScore - activeSummary.score}` : `Gap to Target: ${targetScore - activeSummary.score}`)}
                 </span>
               )}
+              {mode === 'T' && targetPlan && targetPlan.total > 0 && (
+                <span className="px-2.5 py-1 rounded-md bg-amber-500/10 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                  {targetPlan.reachable
+                    ? locale === 'zh'
+                      ? `约需多对 ${targetPlan.total} 题（听力 +${targetPlan.listening} / 阅读 +${targetPlan.reading}）`
+                      : `About ${targetPlan.total} more correct (L +${targetPlan.listening} / R +${targetPlan.reading})`
+                    : locale === 'zh' ? '目标高于满分换算上限' : 'Target is above the conversion ceiling'}
+                </span>
+              )}
+              {mode === 'T' && currentLevel.total && Math.max(currentLevel.listening?.setsUsed ?? 0, currentLevel.reading?.setsUsed ?? 0) > 1 && (
+                <span className="px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-[#2C2C2E] text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                  {locale === 'zh'
+                    ? `近期综合 ${currentLevel.total.scaled}（${currentLevel.total.interval.min}–${currentLevel.total.interval.max}）`
+                    : `Recent level ${currentLevel.total.scaled} (${currentLevel.total.interval.min}–${currentLevel.total.interval.max})`}
+                </span>
+              )}
               <span className="px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-[#2C2C2E] text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
                 {locale === 'zh' ? '波动' : 'Range'} {activeSummary.interval}
               </span>
@@ -739,7 +764,7 @@ export function ScoreEstimatorPanel() {
 
           <div className="relative z-10 grid grid-cols-4 gap-2 w-full md:w-auto md:flex-1 max-w-lg">
             <MetricBox label={copy.scoreRawCorrect} value={`${activeSummary.rawCorrect}${mode === 'T' ? '/200' : '/100'}`} />
-            <MetricBox label={locale === 'zh' ? '调整分' : 'Adj.'} value={`${activeSummary.adjustedRawCorrect}`} />
+            <MetricBox label={locale === 'zh' ? '折算答对' : 'Effective'} value={`${activeSummary.adjustedRawCorrect}`} />
             <MetricBox label={copy.scoreMistakes} value={`${activeSummary.mistakes}`} />
             <MetricBox label={copy.scoreAccuracy} value={`${activeSummary.accuracy}%`} />
           </div>
@@ -1122,7 +1147,6 @@ function buildSectionSummary({
     chart,
     color,
     scaleLabel: label,
-    penaltyRaw: estimate.bias.penaltyRaw,
     confidence: buildConfidenceSummary(getSessionDataConfidence(record), locale),
     insights: buildSectionInsights(estimate, locale),
     partBreakdown: estimate.partStats.slice(0, 4).map((item) => ({
@@ -1192,9 +1216,6 @@ function buildTotalSummary({
     chart,
     color,
     scaleLabel: label,
-    penaltyRaw: Number(
-      (((estimate.listening?.bias.penaltyRaw ?? 0) + (estimate.reading?.bias.penaltyRaw ?? 0)).toFixed(1))
-    ),
     confidence: buildConfidenceSummary(getCombinedDataConfidence(listeningRecord, readingRecord), locale),
     insights: buildTotalInsights(estimate, locale),
     partBreakdown,
@@ -1224,17 +1245,25 @@ function buildTotalSummary({
 function buildSectionInsights(estimate: ToeicSectionEstimate, locale: 'zh' | 'en') {
   const insights: string[] = [];
 
-  if (estimate.bias.penaltyRaw >= 1) {
+  if (estimate.bias.anomalyDetected) {
     insights.push(
       locale === 'zh'
-        ? `答题模式波动：基础题错误率偏高。模型已应用惩罚，下调 ${estimate.bias.penaltyRaw} 个原始分。这说明基础仍需夯实。`
-        : `Response pattern variance: Error rate in foundational questions is high. Model applied a penalty of ${estimate.bias.penaltyRaw} raw points.`
+        ? '简单题反而比难题错得多，常见原因是粗心或时间分配。分数只看答对题数，不会因此扣分，但这套的波动区间已相应放宽。'
+        : 'You missed more easy items than hard ones, often a sign of carelessness or pacing. Scores count only correct answers, so there is no deduction, but the range is wider for this set.'
     );
   } else {
     insights.push(
       locale === 'zh'
-        ? `答题发挥稳定，未检测到异常的高低分分布失衡。`
-        : `Performance is stable, no aberrant score distribution detected.`
+        ? '简单题和难题的错误比例正常，没有明显「会做却做错」的情况。'
+        : 'Your misses are spread normally between easy and hard items, with no sign of careless slips.'
+    );
+  }
+
+  if (estimate.guessCredit > 0) {
+    insights.push(
+      locale === 'zh'
+        ? `有 ${estimate.unfinishedPenalty} 题没做，估分按考场上全部涂满计算，约蒙对 ${estimate.guessCredit} 题。`
+        : `${estimate.unfinishedPenalty} questions were blank; the estimate assumes you fill them in on test day, about ${estimate.guessCredit} right by chance.`
     );
   }
 
@@ -1377,4 +1406,39 @@ function getTodayDateLocal() {
 function safeNumber(value: string) {
   const parsed = Number(value);
   return !Number.isFinite(parsed) ? 0 : Math.max(0, parsed);
+}
+
+/** Keeps a local draft while typing and commits (clamped by the store) on blur or Enter. */
+function TargetScoreInput({ value, onCommit }: { value: number; onCommit: (score: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(parsed)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.max(10, Math.min(990, Math.round(parsed / 5) * 5));
+    setDraft(String(clamped));
+    onCommit(clamped);
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min="10"
+      max="990"
+      step="5"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+    />
+  );
 }

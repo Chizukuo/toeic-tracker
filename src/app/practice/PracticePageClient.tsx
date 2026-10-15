@@ -4,15 +4,17 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 import { DebugForm } from '@/components/DebugForm';
+import { SessionVocabCard } from '@/components/SessionVocabCard';
 import { DashboardShell, DeferredPanelPlaceholder, useDashboardContext } from '@/components/DashboardShell';
 import { LapTimer } from '@/components/LapTimer';
-import { formatSessionTitle, translateStatus } from '@/lib/i18n';
-import { estimateToeicSessionScore, sumMistakes } from '@/lib/toeic';
+import { formatSessionTitle, translatePart, translateStatus } from '@/lib/i18n';
+import { estimateToeicSessionScore, getIncorrectAnswers, getPartsForType, PART_QUESTION_COUNTS } from '@/lib/toeic';
+import { getNextStepRecommendation } from '@/lib/nextStep';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CheckCircle2, Clock, FileText, Trophy } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock, FileText, PencilLine, Trophy } from 'lucide-react';
 
 const TimeWaterfallChart = dynamic(
   () => import('@/components/TimeWaterfallChart').then((module) => module.TimeWaterfallChart),
@@ -31,6 +33,14 @@ function resolvePracticeStep(session: ReturnType<typeof useDashboardContext>['ac
   if (session.status === 'debugged') return 'result';
   if (session.timerSummary || session.status === 'in-progress') return 'review';
   return 'timer';
+}
+
+function isStepAvailable(session: ReturnType<typeof useDashboardContext>['activeSession'], step: PracticeStep) {
+  // A live attempt (running clock or pending submit) must be finished on the timer step first.
+  if (session.timerRuntime) return step === 'timer';
+  if (step === 'review') return Boolean(session.timerSummary) || session.status !== 'not-started';
+  if (step === 'result') return session.status === 'debugged';
+  return true;
 }
 
 const slideVariants = {
@@ -52,6 +62,7 @@ export default function PracticePageClient() {
 function PracticeFlow() {
   const { activeSession, locale, sessions } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const historicalScoreCount = useStore((state) => state.historicalScores.length);
 
   const [step, setStep] = useState<PracticeStep>(() => resolvePracticeStep(activeSession));
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
@@ -70,31 +81,63 @@ function PracticeFlow() {
     setStep(next);
   };
 
+  // Same engine as the home page, so "next set" here never contradicts the home recommendation.
+  const nextSession = useMemo(() => {
+    const recommendation = getNextStepRecommendation({
+      locale,
+      sessions,
+      activeSessionId: activeSession.id,
+      historicalScoreCount,
+    });
+    const target = recommendation.href === '/practice' ? recommendation.targetSessionId : undefined;
+    return target && target !== activeSession.id ? sessions.find((session) => session.id === target) ?? null : null;
+  }, [activeSession.id, historicalScoreCount, locale, sessions]);
+
   const advanceToNext = () => {
-    const currentIndex = sessions.findIndex((s) => s.id === activeSession.id);
-    const nextSession = sessions[currentIndex + 1];
     if (nextSession) {
       selectSession(nextSession.id);
       setDirection('forward');
       setStep('timer');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const resultData = useMemo(() => {
     if (activeSession.status !== 'debugged') return null;
     const estimate = estimateToeicSessionScore(activeSession, 'strict');
-    const totalMistakes = sumMistakes(activeSession);
-    return { estimate, totalMistakes };
-  }, [activeSession]);
+    // Unanswered reading questions are not answers, so they count as wrong here; the score adds expected guess credit.
+    const totalMistakes = getIncorrectAnswers(activeSession, 'strict');
+    const unanswered = activeSession.type === 'R' ? activeSession.timerSummary?.unfinishedQuestions ?? 0 : 0;
 
-  const nextSession = useMemo(() => {
-    const currentIndex = sessions.findIndex((s) => s.id === activeSession.id);
-    return sessions[currentIndex + 1] ?? null;
-  }, [activeSession.id, sessions]);
+    // Compare against the closest earlier reviewed set of the same section.
+    const previous = sessions
+      .filter(
+        (s) =>
+          s.type === activeSession.type &&
+          s.status === 'debugged' &&
+          s.setNumber < activeSession.setNumber
+      )
+      .sort((a, b) => b.setNumber - a.setNumber)[0];
+    const comparison = previous
+      ? { label: previous.label, delta: estimate.scaled - estimateToeicSessionScore(previous, 'strict').scaled }
+      : null;
+
+    // The part that cost the most this time, as a concrete thing to drill next.
+    let biggestLoss: { part: ReturnType<typeof getPartsForType>[number]; mistakes: number; rate: number } | null = null;
+    for (const part of getPartsForType(activeSession.type)) {
+      const mistakes = Math.min(activeSession.mistakes[part] ?? 0, PART_QUESTION_COUNTS[part]);
+      const rate = mistakes / PART_QUESTION_COUNTS[part];
+      if (mistakes > 0 && (!biggestLoss || rate > biggestLoss.rate)) {
+        biggestLoss = { part, mistakes, rate };
+      }
+    }
+
+    return { estimate, totalMistakes, unanswered, accuracy: Math.round(100 - totalMistakes), comparison, biggestLoss };
+  }, [activeSession, sessions]);
 
   const steps: { key: PracticeStep; label: string; icon: typeof Clock }[] = [
     { key: 'timer', label: locale === 'zh' ? '计时' : 'Timer', icon: Clock },
-    { key: 'review', label: locale === 'zh' ? '复盘' : 'Review', icon: FileText },
+    { key: 'review', label: locale === 'zh' ? '对答案' : 'Check', icon: FileText },
     { key: 'result', label: locale === 'zh' ? '结果' : 'Result', icon: Trophy },
   ];
 
@@ -110,31 +153,48 @@ function PracticeFlow() {
               const Icon = s.icon;
               const isActive = step === s.key;
               const isDone = idx < stepIndex;
+              const isAvailable = !isActive && isStepAvailable(activeSession, s.key);
               return (
                 <div key={s.key} className="flex items-center gap-1">
                   {idx > 0 && (
                     <div className={cn(
-                      'mx-1 h-px w-6 sm:w-10 transition-colors',
+                      'mx-0.5 h-px w-3 sm:mx-1 sm:w-10 transition-colors',
                       isDone ? 'bg-emerald-500' : 'bg-[var(--separator-opaque)]'
                     )} />
                   )}
-                  <div className={cn(
-                    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
-                    isActive
-                      ? 'bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)]'
-                      : isDone
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-[var(--label-tertiary)]'
-                  )}>
+                  <button
+                    type="button"
+                    onClick={() => goToStep(s.key)}
+                    disabled={!isAvailable}
+                    aria-current={isActive ? 'step' : undefined}
+                    aria-label={s.label}
+                    title={s.label}
+                    className={cn(
+                      'flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-xs font-semibold sm:gap-1.5 sm:px-3 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--cheese-gold)]/50',
+                      isActive
+                        ? 'bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)]'
+                        : isDone
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-[var(--label-tertiary)]',
+                      isAvailable ? 'cursor-pointer hover:bg-[var(--surface-grouped)]' : !isActive && 'cursor-default opacity-60'
+                    )}
+                  >
                     <Icon className="size-3.5" />
-                    <span className="hidden sm:inline">{s.label}</span>
-                  </div>
+                    <span>{s.label}</span>
+                  </button>
                 </div>
               );
             })}
           </div>
 
-          <span className="cheese-pill">{activeSession.label} · {formatSessionTitle(locale, activeSession)}</span>
+          <Link
+            href="/"
+            title={locale === 'zh' ? '回首页换一套' : 'Pick another set on Home'}
+            className="cheese-pill shrink-0 whitespace-nowrap transition-opacity hover:opacity-80"
+          >
+            {activeSession.label}
+            <span className="hidden sm:inline"> · {formatSessionTitle(locale, activeSession)}</span>
+          </Link>
         </div>
       </div>
 
@@ -154,25 +214,17 @@ function PracticeFlow() {
               <LapTimer
                 key={`timer-${activeSession.id}`}
                 session={activeSession}
-                onFocusModeChange={() => {}}
                 onStrictAttemptSaved={() => {
                   setAutoFocusToken((v) => v + 1);
                   goToStep('review');
                 }}
+                onBacklogSkipped={() => goToStep('result')}
               />
             </div>
           )}
 
           {step === 'review' && (
-            <div className="cheese-card overflow-hidden p-6 sm:p-8">
-              <div className="mb-6">
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '复盘录入' : 'Review Input'}
-                </div>
-                <h2 className="mt-1.5 text-xl font-bold text-[var(--label-primary)]">
-                  {locale === 'zh' ? '录入错题与错因' : 'Log Mistakes & Root Causes'}
-                </h2>
-              </div>
+            <div>
               <DebugForm
                 key={`debug-${activeSession.id}`}
                 activeSession={activeSession}
@@ -185,8 +237,13 @@ function PracticeFlow() {
 
                   goToStep('result');
                 }}
-                onReviewUndone={() => {}}
               />
+            </div>
+          )}
+
+          {step === 'review' && (
+            <div className="mt-6">
+              <SessionVocabCard session={activeSession} locale={locale} />
             </div>
           )}
 
@@ -229,6 +286,22 @@ function PracticeFlow() {
                       <div className="mt-1 text-xs text-[var(--label-secondary)]">
                         {resultData.estimate.interval.min}–{resultData.estimate.interval.max} · {resultData.estimate.cefr}
                       </div>
+                      {resultData.comparison && (
+                        <div
+                          className={cn(
+                            'mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            resultData.comparison.delta > 0
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : resultData.comparison.delta < 0
+                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                : 'bg-[var(--surface-grouped)] text-[var(--label-secondary)]'
+                          )}
+                        >
+                          {locale === 'zh' ? `较 ${resultData.comparison.label} ` : `vs ${resultData.comparison.label} `}
+                          {resultData.comparison.delta > 0 ? '+' : ''}
+                          {resultData.comparison.delta}
+                        </div>
+                      )}
                     </motion.div>
 
                     <motion.div
@@ -238,16 +311,31 @@ function PracticeFlow() {
                       className="cheese-grouped rounded-[16px] p-5"
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                        {locale === 'zh' ? '错题数' : 'Mistakes'}
+                        {locale === 'zh' ? '错题数' : 'Wrong'}
                       </div>
                       <div className="mt-2 text-4xl font-bold text-[var(--label-primary)]">
                         {resultData.totalMistakes}
                       </div>
                       <div className="mt-1 text-xs text-[var(--label-secondary)]">
-                        {locale === 'zh' ? `正确率 ${((1 - resultData.totalMistakes / 100) * 100).toFixed(0)}%` : `Accuracy ${((1 - resultData.totalMistakes / 100) * 100).toFixed(0)}%`}
+                        {locale === 'zh' ? `正确率 ${resultData.accuracy}%` : `Accuracy ${resultData.accuracy}%`}
+                        {resultData.unanswered > 0 &&
+                          (locale === 'zh' ? ` · 含 ${resultData.unanswered} 题没做` : ` · incl. ${resultData.unanswered} unanswered`)}
                       </div>
                     </motion.div>
                   </div>
+                )}
+
+                {resultData?.biggestLoss && (
+                  <p className="mx-auto mt-4 max-w-md text-sm text-[var(--label-secondary)]">
+                    {locale === 'zh' ? '本套最大失分：' : 'Biggest loss this set: '}
+                    <span className="font-semibold text-[var(--label-primary)]">
+                      {translatePart(locale, resultData.biggestLoss.part)}
+                    </span>
+                    {' · '}
+                    {locale === 'zh'
+                      ? `错 ${resultData.biggestLoss.mistakes}/${PART_QUESTION_COUNTS[resultData.biggestLoss.part]}`
+                      : `${resultData.biggestLoss.mistakes}/${PART_QUESTION_COUNTS[resultData.biggestLoss.part]} wrong`}
+                  </p>
                 )}
 
                 <motion.div
@@ -266,14 +354,24 @@ function PracticeFlow() {
                       <ArrowRight className="size-4" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => goToStep('review')}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"
+                  >
+                    <PencilLine className="size-4" />
+                    {locale === 'zh' ? '修改错题数' : 'Edit answers'}
+                  </button>
                   <Link
                     href="/"
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"
                   >
-                    {locale === 'zh' ? '回任务台' : 'Mission Control'}
+                    {locale === 'zh' ? '回首页' : 'Home'}
                   </Link>
                 </motion.div>
               </div>
+
+              <SessionVocabCard session={activeSession} locale={locale} />
 
               <TimeWaterfallChart session={activeSession} />
             </div>

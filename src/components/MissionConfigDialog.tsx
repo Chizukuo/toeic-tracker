@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Target, CalendarDays, Zap, Check } from 'lucide-react';
+import { AlertTriangle, Target, CalendarDays, Zap, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useStore } from '@/store/useStore';
@@ -19,6 +19,8 @@ type MissionConfigDialogContentProps = {
   copy: ReturnType<typeof useDashboardContext>['copy'];
   initialDate: string;
   initialLength: number;
+  /** Labels of sets with recorded progress, keyed by their set number. */
+  recordedSets: Array<{ setNumber: number; label: string }>;
   onClose: () => void;
   onSave: (draftDate: string, draftLength: number) => void;
 };
@@ -26,7 +28,7 @@ type MissionConfigDialogContentProps = {
 const PRESET_LENGTHS = [5, 10, 15, 20];
 
 export function MissionConfigDialog({ isOpen, onClose }: MissionConfigDialogProps) {
-  const { copy, locale } = useDashboardContext();
+  const { copy, locale, sessions } = useDashboardContext();
   const storeExamDate = useStore((state) => state.examDate);
   const storeSprintConfig = useStore((state) => state.sprintConfig);
   const setExamDate = useStore((state) => state.setExamDate);
@@ -61,6 +63,9 @@ export function MissionConfigDialog({ isOpen, onClose }: MissionConfigDialogProp
           copy={copy}
           initialDate={storeExamDate}
           initialLength={storeSprintConfig.listeningCount}
+          recordedSets={sessions
+            .filter((session) => session.status !== 'not-started' || session.timerSummary || session.timerRuntime)
+            .map((session) => ({ setNumber: session.setNumber, label: session.label }))}
           onClose={onClose}
           onSave={handleSave}
         />
@@ -74,12 +79,14 @@ function MissionConfigDialogContent({
   copy,
   initialDate,
   initialLength,
+  recordedSets,
   onClose,
   onSave,
 }: MissionConfigDialogContentProps) {
   const [draftDate, setDraftDate] = useState(initialDate);
   const [draftLength, setDraftLength] = useState(initialLength);
   const [isSaving, setIsSaving] = useState(false);
+  const droppedSets = recordedSets.filter((set) => set.setNumber > draftLength).map((set) => set.label);
 
   const handleSaveClick = () => {
     setIsSaving(true);
@@ -101,6 +108,9 @@ function MissionConfigDialogContent({
         />
 
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mission-config-title"
           initial={{ opacity: 0, y: "100%" }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: "100%" }}
@@ -116,7 +126,7 @@ function MissionConfigDialogContent({
                 <Target className="size-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-(--label-primary)">
+                <h2 id="mission-config-title" className="text-lg font-bold tracking-tight text-(--label-primary)">
                   {copy.missionGoalTitle}
                 </h2>
                 <p className="mt-0.5 text-xs text-(--label-secondary)">
@@ -129,12 +139,13 @@ function MissionConfigDialogContent({
           <div className="p-6 space-y-8">
             {/* Exam Date Segment */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-bold text-(--label-primary)">
+              <label htmlFor="mission-exam-date" className="flex items-center gap-2 text-sm font-bold text-(--label-primary)">
                 <CalendarDays className="size-4 text-zinc-400" />
                 {copy.examCountdownLabel}
               </label>
               <div className="flex items-center gap-3 rounded-[16px] border border-(--separator) bg-(--surface-grouped) px-4 transition-colors focus-within:border-amber-400/50 focus-within:ring-2 focus-within:ring-amber-400/20">
                 <Input
+                  id="mission-exam-date"
                   type="date"
                   value={draftDate}
                   onChange={(e) => setDraftDate(e.target.value)}
@@ -164,6 +175,7 @@ function MissionConfigDialogContent({
                       type="button"
                       whileTap={{ scale: 0.92 }}
                       onClick={() => setDraftLength(len)}
+                      aria-pressed={isSelected}
                       className={`flex flex-col items-center justify-center gap-1 hover:scale-[1.02] rounded-[14px] border border-(--separator) py-3 text-sm font-bold transition-colors ${
                         isSelected
                           ? 'bg-amber-500 text-white border-amber-600 shadow-[0_2px_10px_rgba(245,158,11,0.25)] dark:bg-amber-500 dark:text-zinc-950'
@@ -178,6 +190,17 @@ function MissionConfigDialogContent({
                   );
                 })}
               </div>
+
+              {droppedSets.length > 0 && (
+                <div role="alert" className="flex items-start gap-2 rounded-[14px] border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    {locale === 'zh'
+                      ? `缩短后将移除已有记录的 ${droppedSets.join('、')}。保存前会自动备份，可在「数据」页恢复。`
+                      : `Shortening removes recorded sets ${droppedSets.join(', ')}. An auto-backup is taken first and can be restored from the Data page.`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
