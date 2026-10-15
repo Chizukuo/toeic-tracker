@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowRight, Calendar, Crosshair, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { DashboardShell, useDashboardContext } from '@/components/DashboardShell';
-import { getNextStepRecommendation } from '@/lib/nextStep';
-import { estimateToeicCombinedScore, isSessionEstimateEligible, type MistakeKey } from '@/lib/toeic';
+import { getNextStepRecommendation, getWeakestPart } from '@/lib/nextStep';
+import { estimateToeicCombinedScore, isSessionEstimateEligible, type SessionRecord } from '@/lib/toeic';
 import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -29,7 +30,9 @@ export default function HomePageClient() {
 function MissionControl() {
   const { locale, activeSession, sessions, homeMetrics } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const router = useRouter();
   const examDate = useStore((state) => state.examDate);
+  const setCount = useStore((state) => Math.max(state.sprintConfig.listeningCount, state.sprintConfig.readingCount));
   const historicalScoreCount = useStore((state) => state.historicalScores.length);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
@@ -50,43 +53,28 @@ function MissionControl() {
     [activeSession.id, historicalScoreCount, locale, sessions]
   );
 
-  const nextStepHref = nextStep.href === '/timer' ? '/practice' :
-                       nextStep.href === '/analytics' ? '/insights' :
-                       nextStep.href === '/scores' ? '/insights' :
-                       nextStep.href === '/unfinished' ? '/insights' : nextStep.href;
-
   const daysUntilExam = useMemo(() => {
-    const target = new Date(`${examDate}T09:00:00`);
-    const diff = target.getTime() - nowTs;
-    return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
+    // Count calendar days (local midnight to local midnight) so "tomorrow" always reads as 1.
+    const [year, month, day] = examDate.split('-').map(Number);
+    const examDay = new Date(year, month - 1, day).getTime();
+    const now = new Date(nowTs);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return Math.max(0, Math.round((examDay - today) / (24 * 60 * 60 * 1000)));
   }, [examDate, nowTs]);
 
   const scoreEstimate = useMemo(() => {
-    const latestL = [...sessions].reverse().find((s) => s.type === 'L' && isSessionEstimateEligible(s));
-    const latestR = [...sessions].reverse().find((s) => s.type === 'R' && isSessionEstimateEligible(s));
+    const latestOf = (type: SessionRecord['type']) =>
+      sessions
+        .filter((s) => s.type === type && isSessionEstimateEligible(s))
+        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))[0];
+    const latestL = latestOf('L');
+    const latestR = latestOf('R');
     if (!latestL && !latestR) return null;
     const combined = estimateToeicCombinedScore(latestL, latestR, 'strict');
     return combined.available ? combined : null;
   }, [sessions]);
 
-  const weakestPart = useMemo(() => {
-    const completed = sessions.filter((s) => s.status !== 'not-started');
-    if (completed.length === 0) return null;
-    let worst: MistakeKey | null = null;
-    let worstRate = -1;
-    for (const s of completed) {
-      const parts: MistakeKey[] = s.type === 'L'
-        ? ['Part 1', 'Part 2', 'Part 3', 'Part 4']
-        : ['Part 5', 'Part 6', 'Part 7 Single', 'Part 7 Multiple'];
-      for (const p of parts) {
-        const mistakes = (s.mistakes as Record<string, number>)[p] ?? 0;
-        const total = ({ 'Part 1': 6, 'Part 2': 25, 'Part 3': 39, 'Part 4': 30, 'Part 5': 30, 'Part 6': 16, 'Part 7 Single': 29, 'Part 7 Multiple': 25 } as Record<string, number>)[p] ?? 1;
-        const rate = mistakes / total;
-        if (rate > worstRate) { worstRate = rate; worst = p; }
-      }
-    }
-    return worst;
-  }, [sessions]);
+  const weakestPart = useMemo(() => getWeakestPart(sessions), [sessions]);
 
   const stageLabel = nextStep.kind === 'start-active' ? (locale === 'zh' ? '准备开始' : 'Ready') :
     nextStep.kind === 'resume-active' ? (locale === 'zh' ? '进行中' : 'In Progress') :
@@ -123,7 +111,7 @@ function MissionControl() {
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <motion.div whileTap={{ scale: 0.97 }} className="inline-block">
                 <Link
-                  href={nextStepHref}
+                  href={nextStep.href}
                   onClick={() => { if (nextStep.targetSessionId) selectSession(nextStep.targetSessionId); }}
                   className="inline-flex items-center gap-2.5 rounded-full bg-[var(--cheese-gold)] px-7 py-3.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(217,119,6,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(217,119,6,0.40)] hover:brightness-110 dark:text-zinc-900"
                 >
@@ -167,9 +155,11 @@ function MissionControl() {
           </div>
 
           {/* Dynamic dot grid */}
-          <div 
-            className="grid gap-1.5 sm:gap-2.5" 
-            style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(sessions.length / 2))}, minmax(0, 1fr))` }}
+          {/* Phones wrap the sets into as many rows as fit; wider screens keep the two-row (L / R) layout. */}
+          <div className="no-scrollbar -mx-1 overflow-x-auto px-1 pb-1">
+          <div
+            className="grid grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1.5 sm:gap-2.5 md:grid-cols-[repeat(var(--session-columns),minmax(2.25rem,1fr))]"
+            style={{ '--session-columns': Math.max(1, Math.ceil(sessions.length / 2)) } as CSSProperties}
           >
             {sessions.map((session) => {
               const isActive = session.id === activeSession.id;
@@ -180,8 +170,15 @@ function MissionControl() {
                 <button
                   key={session.id}
                   type="button"
-                  onClick={() => selectSession(session.id)}
+                  onClick={() => {
+                    if (isActive) {
+                      router.push('/practice');
+                      return;
+                    }
+                    selectSession(session.id);
+                  }}
                   title={`${session.label} — ${session.title}`}
+                  aria-pressed={isActive}
                   className={cn(
                     'relative group flex flex-col items-center justify-center gap-1.5 rounded-[10px] p-1.5 transition-colors sm:p-2',
                     isActive
@@ -221,6 +218,10 @@ function MissionControl() {
               );
             })}
           </div>
+          </div>
+          <p className="mt-3 text-[11px] text-[var(--label-tertiary)]">
+            {locale === 'zh' ? '点选套题设为当前套题，再点一次直接进入训练场。' : 'Tap a set to select it; tap it again to open it in Practice.'}
+          </p>
         </div>
       </motion.div>
 
@@ -303,7 +304,7 @@ function MissionControl() {
               <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
                 <span className="font-medium">{examDate}</span>
                 <span className="opacity-50">·</span>
-                <span>{locale === 'zh' ? `设为 ${sessions.length / 2} 套` : `${sessions.length / 2} Sets`}</span>
+                <span>{locale === 'zh' ? `共 ${setCount} 套` : `${setCount} Sets`}</span>
               </div>
             </button>
           </motion.div>

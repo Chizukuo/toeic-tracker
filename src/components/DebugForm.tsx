@@ -13,6 +13,7 @@ import {
   formatMinutes,
   getPartsForType,
   getReasonsForType,
+  PART_QUESTION_COUNTS,
   sumMistakes,
   type MistakeKey,
   type SessionRecord,
@@ -43,16 +44,13 @@ export function DebugForm({
   activeSession,
   autoFocusToken = 0,
   onReviewSaved,
-  onReviewUndone,
 }: {
   activeSession: SessionRecord;
   autoFocusToken?: number;
   onReviewSaved?: (nextStep: 'unfinished' | 'analytics') => void;
-  onReviewUndone?: () => void;
 }) {
   const saveDiagnostics = useStore((state) => state.saveDiagnostics);
   const saveOvertimeDiagnostics = useStore((state) => state.saveOvertimeDiagnostics);
-  const patchSession = useStore((state) => state.patchSession);
   const locale = useStore((state) => state.locale);
   const copy = getCopy(locale);
   const parts = useMemo(() => getPartsForType(activeSession.type), [activeSession.type]);
@@ -64,14 +62,6 @@ export function DebugForm({
   const [notes, setNotes] = useState<string>(activeSession.notes ?? '');
   const [saved, setSaved] = useState(false);
   const [overtimeSaved, setOvertimeSaved] = useState(false);
-  const [undoVisible, setUndoVisible] = useState(false);
-  const undoTimerRef = useRef<number | null>(null);
-  const undoPayloadRef = useRef<{
-    mistakes: Partial<Record<MistakeKey, number>>;
-    reasons: string[];
-    notes?: string;
-    status: SessionRecord['status'];
-  } | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const unresolvedBacklog = activeSession.type === 'R'
@@ -96,15 +86,17 @@ export function DebugForm({
     );
   }, [activeSession.mistakes, activeSession.reasons, activeSession.notes, mistakes, reasons, notes]);
 
+  // A first save is always allowed, so a clean run (zero mistakes, no tags) can still be closed out.
+  const canSaveReview = dirtyReview || activeSession.status !== 'debugged';
+
   const dirtyOvertime = useMemo(() => {
     return !sameNumberRecord<MistakeKey>(overtimeMistakes, activeSession.overtimeMistakes ?? {});
   }, [activeSession.overtimeMistakes, overtimeMistakes]);
 
   const updateMistake = (part: MistakeKey, value: string) => {
-    const parsed = Number(value);
     setMistakes((current) => ({
       ...current,
-      [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+      [part]: parseMistakeCount(value, part),
     }));
   };
 
@@ -136,10 +128,9 @@ export function DebugForm({
   };
 
   const updateOvertimeMistake = (part: MistakeKey, value: string) => {
-    const parsed = Number(value);
     setOvertimeMistakes((current) => ({
       ...current,
-      [part]: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+      [part]: parseMistakeCount(value, part),
     }));
   };
 
@@ -174,13 +165,6 @@ export function DebugForm({
   const handleSave = () => {
     const nextStatus: SessionRecord['status'] = unresolvedBacklog ? 'in-progress' : 'debugged';
 
-    undoPayloadRef.current = {
-      mistakes: activeSession.mistakes,
-      reasons: activeSession.reasons,
-      notes: activeSession.notes,
-      status: activeSession.status,
-    };
-
     saveDiagnostics(activeSession.id, {
       mistakes,
       reasons,
@@ -188,49 +172,11 @@ export function DebugForm({
       status: nextStatus,
     });
     setSaved(true);
-    setUndoVisible(true);
     window.setTimeout(() => setSaved(false), 1600);
 
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-    }
-
-    undoTimerRef.current = window.setTimeout(() => {
-      setUndoVisible(false);
-      undoPayloadRef.current = null;
-    }, 5000);
-
     trackUXEvent('review_saved', activeSession.id);
-    onReviewSaved?.(activeSession.type === 'R' ? 'unfinished' : 'analytics');
-  };
-
-  const handleUndoSave = () => {
-    const previous = undoPayloadRef.current;
-    if (!previous) {
-      return;
-    }
-
-    saveDiagnostics(activeSession.id, {
-      mistakes: previous.mistakes,
-      reasons: previous.reasons,
-      notes: previous.notes,
-      status: previous.status,
-    });
-
-    patchSession(activeSession.id, {
-      status: previous.status,
-    });
-
-    setUndoVisible(false);
-    undoPayloadRef.current = null;
-
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-
-    trackUXEvent('review_undone', activeSession.id);
-    onReviewUndone?.();
+    // Only a pending overtime backlog sends the user back to the timer; otherwise show the result.
+    onReviewSaved?.(unresolvedBacklog ? 'unfinished' : 'analytics');
   };
 
   const handleSaveOvertime = () => {
@@ -258,7 +204,7 @@ export function DebugForm({
       return;
     }
 
-    if (dirtyReview) {
+    if (canSaveReview) {
       handleSave();
     }
   });
@@ -284,14 +230,6 @@ export function DebugForm({
 
     window.setTimeout(() => focusInputAt(0), 40);
   }, [autoFocusToken, focusInputAt]);
-
-  useEffect(() => {
-    return () => {
-      if (undoTimerRef.current) {
-        window.clearTimeout(undoTimerRef.current);
-      }
-    };
-  }, []);
 
   return (
     <Card className="overflow-hidden rounded-[36px] border border-white/40 bg-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-900/40 dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
@@ -400,12 +338,15 @@ export function DebugForm({
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{translatePart(locale, part)}</div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-                    {mistakes[part] ?? 0}
+                    {mistakes[part] ?? 0}/{PART_QUESTION_COUNTS[part]}
                   </div>
                 </div>
                 <Input
                   type="number"
+                  inputMode="numeric"
                   min="0"
+                  max={PART_QUESTION_COUNTS[part]}
+                  aria-label={`${translatePart(locale, part)} ${copy.mistakesByPart}`}
                   className="mt-3 h-12 rounded-[16px] border-0 bg-white/80 text-center text-lg font-semibold focus-visible:ring-0 dark:bg-zinc-950/80"
                   value={mistakes[part] ?? ''}
                   ref={(element) => {
@@ -441,7 +382,9 @@ export function DebugForm({
                   </div>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     min="0"
+                    max={PART_QUESTION_COUNTS[part]}
                     className="mt-3 h-12 rounded-[16px] border-0 bg-white/80 text-center text-lg font-semibold focus-visible:ring-0 dark:bg-zinc-950/80"
                     value={overtimeMistakes[part] ?? ''}
                     onChange={(event) => updateOvertimeMistake(part, event.target.value)}
@@ -526,27 +469,18 @@ export function DebugForm({
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={!dirtyReview}
+            disabled={!canSaveReview}
             className="h-14 w-full rounded-full text-base font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
           >
             {saved ? <Check className="mr-2 size-4" /> : <Save className="mr-2 size-4" />}
             {saved
               ? `${copy.saveDiagnostics} OK`
-              : !dirtyReview
+              : !canSaveReview
                 ? (locale === 'zh' ? '暂无变更' : 'No Changes')
                 : unresolvedBacklog
                   ? (locale === 'zh' ? '保存复盘并进入补录' : 'Save Review & Continue Overtime')
                   : `${copy.saveDiagnostics} ${copy.markDebugged}`}
           </Button>
-
-          {undoVisible && (
-            <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11px] text-zinc-700 dark:text-zinc-300">
-              <span>{locale === 'zh' ? '已保存，可在 5 秒内撤销。' : 'Saved. You can undo within 5 seconds.'}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={handleUndoSave} className="h-7 px-2 text-[11px]">
-                {locale === 'zh' ? '撤销' : 'Undo'}
-              </Button>
-            </div>
-          )}
         </div>
 
         {unresolvedBacklog && (
@@ -592,6 +526,11 @@ export function DebugForm({
       </CardContent>
     </Card>
   );
+}
+
+function parseMistakeCount(value: string, part: MistakeKey) {
+  const parsed = Math.floor(Number(value));
+  return Number.isFinite(parsed) ? Math.min(Math.max(0, parsed), PART_QUESTION_COUNTS[part]) : 0;
 }
 
 function StepTag({ label, active }: { label: string; active: boolean }) {

@@ -12,7 +12,7 @@ import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, CheckCircle2, Clock, FileText, Trophy } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock, FileText, PencilLine, Trophy } from 'lucide-react';
 
 const TimeWaterfallChart = dynamic(
   () => import('@/components/TimeWaterfallChart').then((module) => module.TimeWaterfallChart),
@@ -31,6 +31,24 @@ function resolvePracticeStep(session: ReturnType<typeof useDashboardContext>['ac
   if (session.status === 'debugged') return 'result';
   if (session.timerSummary || session.status === 'in-progress') return 'review';
   return 'timer';
+}
+
+function isStepAvailable(session: ReturnType<typeof useDashboardContext>['activeSession'], step: PracticeStep) {
+  // A live attempt (running clock or pending submit) must be finished on the timer step first.
+  if (session.timerRuntime) return step === 'timer';
+  if (step === 'review') return Boolean(session.timerSummary) || session.status !== 'not-started';
+  if (step === 'result') return session.status === 'debugged';
+  return true;
+}
+
+/** Next set that still needs work, scanning forward from the current one and wrapping around. */
+function findNextOpenSession<T extends { id: string; status: string }>(sessions: T[], currentId: string) {
+  const currentIndex = sessions.findIndex((session) => session.id === currentId);
+  for (let offset = 1; offset < sessions.length; offset++) {
+    const candidate = sessions[(currentIndex + offset) % sessions.length];
+    if (candidate.status !== 'debugged') return candidate;
+  }
+  return null;
 }
 
 const slideVariants = {
@@ -70,27 +88,26 @@ function PracticeFlow() {
     setStep(next);
   };
 
+  const nextSession = useMemo(
+    () => findNextOpenSession(sessions, activeSession.id),
+    [activeSession.id, sessions]
+  );
+
   const advanceToNext = () => {
-    const currentIndex = sessions.findIndex((s) => s.id === activeSession.id);
-    const nextSession = sessions[currentIndex + 1];
     if (nextSession) {
       selectSession(nextSession.id);
       setDirection('forward');
       setStep('timer');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const resultData = useMemo(() => {
     if (activeSession.status !== 'debugged') return null;
     const estimate = estimateToeicSessionScore(activeSession, 'strict');
-    const totalMistakes = sumMistakes(activeSession);
-    return { estimate, totalMistakes };
+    const totalMistakes = Math.min(sumMistakes(activeSession), 100);
+    return { estimate, totalMistakes, accuracy: Math.round(100 - totalMistakes) };
   }, [activeSession]);
-
-  const nextSession = useMemo(() => {
-    const currentIndex = sessions.findIndex((s) => s.id === activeSession.id);
-    return sessions[currentIndex + 1] ?? null;
-  }, [activeSession.id, sessions]);
 
   const steps: { key: PracticeStep; label: string; icon: typeof Clock }[] = [
     { key: 'timer', label: locale === 'zh' ? '计时' : 'Timer', icon: Clock },
@@ -110,6 +127,7 @@ function PracticeFlow() {
               const Icon = s.icon;
               const isActive = step === s.key;
               const isDone = idx < stepIndex;
+              const isAvailable = !isActive && isStepAvailable(activeSession, s.key);
               return (
                 <div key={s.key} className="flex items-center gap-1">
                   {idx > 0 && (
@@ -118,23 +136,38 @@ function PracticeFlow() {
                       isDone ? 'bg-emerald-500' : 'bg-[var(--separator-opaque)]'
                     )} />
                   )}
-                  <div className={cn(
-                    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all',
-                    isActive
-                      ? 'bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)]'
-                      : isDone
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-[var(--label-tertiary)]'
-                  )}>
+                  <button
+                    type="button"
+                    onClick={() => goToStep(s.key)}
+                    disabled={!isAvailable}
+                    aria-current={isActive ? 'step' : undefined}
+                    aria-label={s.label}
+                    title={s.label}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--cheese-gold)]/50',
+                      isActive
+                        ? 'bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)]'
+                        : isDone
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-[var(--label-tertiary)]',
+                      isAvailable ? 'cursor-pointer hover:bg-[var(--surface-grouped)]' : !isActive && 'cursor-default opacity-60'
+                    )}
+                  >
                     <Icon className="size-3.5" />
                     <span className="hidden sm:inline">{s.label}</span>
-                  </div>
+                  </button>
                 </div>
               );
             })}
           </div>
 
-          <span className="cheese-pill">{activeSession.label} · {formatSessionTitle(locale, activeSession)}</span>
+          <Link
+            href="/"
+            title={locale === 'zh' ? '在任务台切换套题' : 'Switch sets on Mission Control'}
+            className="cheese-pill truncate transition-opacity hover:opacity-80"
+          >
+            {activeSession.label} · {formatSessionTitle(locale, activeSession)}
+          </Link>
         </div>
       </div>
 
@@ -154,7 +187,6 @@ function PracticeFlow() {
               <LapTimer
                 key={`timer-${activeSession.id}`}
                 session={activeSession}
-                onFocusModeChange={() => {}}
                 onStrictAttemptSaved={() => {
                   setAutoFocusToken((v) => v + 1);
                   goToStep('review');
@@ -185,7 +217,6 @@ function PracticeFlow() {
 
                   goToStep('result');
                 }}
-                onReviewUndone={() => {}}
               />
             </div>
           )}
@@ -244,7 +275,7 @@ function PracticeFlow() {
                         {resultData.totalMistakes}
                       </div>
                       <div className="mt-1 text-xs text-[var(--label-secondary)]">
-                        {locale === 'zh' ? `正确率 ${((1 - resultData.totalMistakes / 100) * 100).toFixed(0)}%` : `Accuracy ${((1 - resultData.totalMistakes / 100) * 100).toFixed(0)}%`}
+                        {locale === 'zh' ? `正确率 ${resultData.accuracy}%` : `Accuracy ${resultData.accuracy}%`}
                       </div>
                     </motion.div>
                   </div>
@@ -266,6 +297,14 @@ function PracticeFlow() {
                       <ArrowRight className="size-4" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => goToStep('review')}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"
+                  >
+                    <PencilLine className="size-4" />
+                    {locale === 'zh' ? '修改复盘' : 'Edit Review'}
+                  </button>
                   <Link
                     href="/"
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"

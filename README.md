@@ -35,21 +35,22 @@
 ## 页面路由
 
 ```
-/              Mission Control — 总览仪表盘、动态练习网格、倒计时
-/plan          Sprint Plan — 自定义周期练习长廊与状态切换
-/practice      Sprint Flow — **核心入口**。集成计时、录入与复盘
+/              Mission Control — 总览仪表盘、套题网格（点选切换，再点进入训练）、倒计时
+/practice      Sprint Flow — 核心入口。计时 → 复盘 → 结果，步骤条可回跳修改
 /vocab         Vocab Vault — 生词本，支持查词与记忆追踪
-/insights      Deep Analytics — 诊断、预测（PEASEA）、行动建议
-/vault         Data Management — 快照备份、链接同步、系统重置
+/insights      Deep Analytics — 诊断、预测（PEASEA）、未完成题追踪、行动建议
+/vault         Data Management — 快照备份、链接同步、自动备份恢复、系统重置
 ```
+
+旧路由 `/plan`、`/timer`、`/scores`、`/analytics`、`/unfinished` 会永久重定向到上面对应的新页面。
 
 ## 推荐工作流
 
 我们的设计鼓励一种 **“专注 -> 诊断 -> 固化”** 的循环：
 
-1. **Plan**：在 `/plan` 选择当前的练习节点（如 R3 或 L5）。
-2. **Practice**：进入 `/practice` 启动计时。阅读时手动点击 Lap 记录各 Part 用时。
-3. **Review**：倒计时结束（或主动提交）后，直接原地录入错题数与错因标签。
+1. **Plan**：在首页 `/` 的套题网格中选择当前的练习节点（如 R3 或 L5），再点一次即可进入训练。
+2. **Practice**：进入 `/practice` 启动计时。阅读时点击 Part 卡片切换题型（空格键可顺次推进），系统自动累计各 Part 用时；计时期间浏览器标签页会同步显示剩余时间。
+3. **Review**：倒计时结束（或主动交卷）后，直接原地录入错题数与错因标签（`Ctrl/Cmd + Enter` 保存）。保存后仍可通过步骤条或「修改复盘」回来调整。
 4. **Log Vocab**：复盘时遇到的生词，顺手在 `/vocab` 或 practice 侧边栏录入，系统自动抓取释义。
 5. **Analyze**：在 `/insights` 查看本次练习后的分数波动与弱项变化。
 6. **Sync**：周期性在 `/vault` 生成同步链接，备份到移动端或备忘录。

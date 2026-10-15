@@ -56,6 +56,43 @@ type InitialTimerState = {
 
 const getNow = () => Date.now();
 
+/** Mirrors the running clock into the tab title so it stays visible while the user is in the test PDF. */
+function useDocumentTitleClock(label: string | null) {
+  useEffect(() => {
+    if (!label) return;
+    const prefix = `${label} · `;
+    document.title = `${prefix}${document.title}`;
+    return () => {
+      // Strip only our prefix so a title set by a route change in the meantime survives.
+      if (document.title.startsWith(prefix)) {
+        document.title = document.title.slice(prefix.length);
+      }
+    };
+  }, [label]);
+}
+
+/** Two-step confirm for destructive taps: first call arms it, second call within the window runs it. */
+function useArmedConfirm(timeoutMs = 3000) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), timeoutMs);
+    return () => window.clearTimeout(id);
+  }, [armed, timeoutMs]);
+
+  const trigger = (action: () => void) => {
+    if (armed) {
+      setArmed(false);
+      action();
+      return;
+    }
+    setArmed(true);
+  };
+
+  return { armed, trigger };
+}
+
 function toValidTime(value?: string) {
   if (!value) {
     return null;
@@ -221,6 +258,10 @@ function ListeningFlow({
     onStrictAttemptSaved?.(session.id);
   }, [session.id, elapsedMs, patchSession, onStrictAttemptSaved]);
 
+  const handleContinueToReview = useCallback(() => {
+    onStrictAttemptSaved?.(session.id);
+  }, [session.id, onStrictAttemptSaved]);
+
   // Tick
   useEffect(() => {
     if (!isActive) return;
@@ -232,6 +273,7 @@ function ListeningFlow({
   }, [isActive]);
 
   const elapsedFormatted = formatClock(elapsedMs);
+  useDocumentTitleClock(isActive ? elapsedFormatted : null);
   const hasPrevious = Boolean(session.timerSummary);
   const previousTime = hasPrevious ? session.timerSummary!.totalElapsedMs : 0;
 
@@ -304,7 +346,7 @@ function ListeningFlow({
       {!isActive && hasPrevious && (
         <motion.button
           type="button"
-          onClick={handleComplete}
+          onClick={handleContinueToReview}
           disabled={isSubmitting}
           whileTap={{ scale: 0.97 }}
           className="flex w-full items-center justify-center gap-2.5 rounded-full bg-emerald-500 px-8 py-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(16,185,129,0.30)] transition-all hover:shadow-[0_6px_20px_rgba(16,185,129,0.40)] hover:brightness-110 disabled:opacity-60"
@@ -410,6 +452,10 @@ function ReadingTimer({
 
 
   const warning = !overtimeMode && (isListening || timeLeft <= 5 * 60 * 1000);
+  const restartConfirm = useArmedConfirm();
+  useDocumentTitleClock(
+    timerRunning ? (overtimeMode ? `+${formatClock(overtimeElapsedMs)}` : formatClock(timeLeft)) : null
+  );
   const progressValue = overtimeMode ? 100 : ((totalDurationMs - timeLeft) / totalDurationMs) * 100;
   const unresolvedBacklog = session.type === 'R' && (session.timerSummary?.unfinishedQuestions ?? 0) > 0 && !hasResolvedUnfinished(session);
   const unfinishedByPartTotal = useMemo(() => sumReadingPartDistribution(unfinishedByPartDraft), [unfinishedByPartDraft]);
@@ -990,7 +1036,13 @@ function ReadingTimer({
           {!timerRunning && !pendingSubmit && !overtimeMode && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <Button
-                onClick={unresolvedBacklog ? startBacklogResolutionTimer : startTimer}
+                onClick={
+                  unresolvedBacklog
+                    ? startBacklogResolutionTimer
+                    : session.timerSummary
+                      ? () => restartConfirm.trigger(startTimer)
+                      : startTimer
+                }
                 size="lg"
                 className={cn(
                   'h-14 rounded-full px-8 text-base font-semibold shadow-xl transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]',
@@ -1005,7 +1057,9 @@ function ReadingTimer({
                 {unresolvedBacklog
                   ? (locale === 'zh' ? '开始补录计时' : 'Start Overtime Timer')
                   : session.timerSummary
-                    ? copy.restartStrictAttempt
+                    ? restartConfirm.armed
+                      ? (locale === 'zh' ? '再点一次：覆盖上次计时' : 'Tap again to overwrite last run')
+                      : copy.restartStrictAttempt
                     : copy.startStrictAttempt}
               </Button>
             </motion.div>
@@ -1020,8 +1074,8 @@ function ReadingTimer({
                  onClick={submitForced}
                  className="h-16 px-10 rounded-full border-red-200 bg-white/70 text-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.15)] backdrop-blur-md hover:bg-white dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.96]"
                >
-                 <CheckCircle2 className="size-5 sm:mr-2" />
-                 <span className="hidden sm:inline font-bold text-lg tracking-wide">{locale === 'zh' ? '交卷' : 'Submit Test'}</span>
+                 <CheckCircle2 className="mr-2 size-5" />
+                 <span className="font-bold text-lg tracking-wide">{locale === 'zh' ? '交卷' : 'Submit Test'}</span>
                </Button>
             </motion.div>
           )}
@@ -1148,8 +1202,16 @@ function ReadingTimer({
               <Input
                 type="number"
                 min="0"
+                inputMode="numeric"
+                aria-label={locale === 'zh' ? '未完题数' : 'Unfinished count'}
                 value={unfinishedQuestions}
                 onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    strictSubmitFromPending();
+                  }
+                }}
                 className="h-11 w-24 border-0 bg-transparent text-center text-lg font-semibold focus-visible:ring-0"
                 placeholder={copy.unfinishedPlaceholder}
               />
@@ -1237,8 +1299,16 @@ function ReadingTimer({
                <Input
                  type="number"
                  min="0"
+                 inputMode="numeric"
+                 aria-label={locale === 'zh' ? '未完题数' : 'Unfinished count'}
                  value={unfinishedQuestions}
                  onChange={(event) => updateUnfinishedQuestionsInput(event.target.value)}
+                 onKeyDown={(event) => {
+                   if (event.key === 'Enter') {
+                     event.preventDefault();
+                     strictSubmitFromPending();
+                   }
+                 }}
                  className="h-16 text-center text-3xl font-semibold bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl border-zinc-200 dark:border-zinc-800"
                  placeholder="0"
                  autoFocus
@@ -1283,14 +1353,16 @@ function ReadingTimer({
           </div>
 
           <div className="grid grid-cols-2 gap-px bg-zinc-200/50 dark:bg-zinc-800/50 border-t border-zinc-200/50 dark:border-zinc-800/50">
-            <button 
-              onClick={strictSubmitFromPending} 
+            <button
+              type="button"
+              onClick={strictSubmitFromPending}
               className="bg-white/80 py-5 text-base font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               {locale === 'zh' ? '直接交卷' : 'Submit Now'}
             </button>
-            <button 
-              onClick={startOvertime} 
+            <button
+              type="button"
+              onClick={startOvertime}
               className="bg-white/80 py-5 text-base font-semibold text-red-600 transition-colors hover:bg-red-50 dark:bg-zinc-900/80 dark:text-red-400 dark:hover:bg-red-900/20"
             >
               {locale === 'zh' ? '开启加时赛' : 'Start Overtime'}

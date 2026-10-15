@@ -79,10 +79,17 @@ export function DataVaultPanel() {
 	const [autoBackups, setAutoBackups] = useState<AutoBackupEntry[]>([]);
 	const [includeVocabularyInSync, setIncludeVocabularyInSync] = useState(true);
 
-	useEffect(() => {
-		if (typeof window !== 'undefined') {
+	const refreshAutoBackups = () => {
+		if (typeof window === 'undefined') return;
+		try {
 			setAutoBackups(getAutoBackups(window.localStorage));
+		} catch {
+			setAutoBackups([]);
 		}
+	};
+
+	useEffect(() => {
+		refreshAutoBackups();
 	}, []);
 
 	const recordedSessions = sessions.filter((session) => session.status !== 'not-started').length;
@@ -440,6 +447,7 @@ export function DataVaultPanel() {
 		}
 
 		const result = importSnapshot(pendingFileImport.payload);
+		refreshAutoBackups();
 		setImportOpen(false);
 		setPendingFileImport(null);
 		pushFeedback('success', formatImportFeedback(locale, copy.importSuccess, result));
@@ -480,6 +488,7 @@ export function DataVaultPanel() {
 		}
 
 		const result = importSnapshot(pendingSyncImport.snapshot);
+		refreshAutoBackups();
 		pushFeedback('success', formatImportFeedback(locale, copy.importSuccess, result));
 		setPendingSyncImport(null);
 		setSyncImportOpen(false);
@@ -514,6 +523,7 @@ export function DataVaultPanel() {
 
 	const handleReset = () => {
 		resetProgress();
+		refreshAutoBackups();
 		setResetOpen(false);
 		pushFeedback('info', copy.resetSuccess);
 	};
@@ -687,7 +697,7 @@ export function DataVaultPanel() {
 								key={bk.key} 
 								icon={<RotateCcw className="text-indigo-500" />} 
 								title={formatExportedAt(bk.exportedAt)} 
-								description={`${bk.sessionCount} ${locale === 'zh' ? '组记录' : 'records'}, ${bk.debuggedCount} ${locale === 'zh' ? '已知晓' : 'reviewed'}`}
+								description={`${bk.sessionCount} ${locale === 'zh' ? '组记录' : 'records'}, ${bk.debuggedCount} ${locale === 'zh' ? '已复盘' : 'reviewed'}`}
 								actionLabel={locale === 'zh' ? '加载' : 'Load'}
 								onClick={() => handleRestoreBackup(bk.key)} 
 							/>

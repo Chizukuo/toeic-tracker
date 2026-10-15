@@ -73,10 +73,26 @@ export function DashboardShell({
   const copy = getCopy(locale);
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [menuPathname, setMenuPathname] = useState(pathname);
+
+  // Close the mobile menu whenever the route changes (e.g. browser back).
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
+    setIsMobileMenuOpen(false);
+  }
 
   useEffect(() => {
     ensureInitialized();
   }, [ensureInitialized]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
@@ -242,13 +258,14 @@ export function DashboardShell({
 
           
           
-          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
+          <nav aria-label={locale === 'zh' ? '主导航' : 'Main navigation'} className="no-scrollbar hidden min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 md:flex md:justify-center md:px-2 lg:gap-1.5">
             {navigationItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
                     "relative flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-2.5 py-2 text-[13px] font-medium transition-colors md:px-3 lg:px-4 lg:py-2 lg:text-sm",
                     isActive ? "text-zinc-900 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -277,6 +294,7 @@ export function DashboardShell({
                 type="button"
                 aria-label={locale === 'zh' ? '切换导航菜单' : 'Toggle navigation menu'}
                 aria-expanded={isMobileMenuOpen}
+                aria-controls="mobile-nav"
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                 className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-(--separator) bg-(--surface-elevated) text-(--label-primary) shadow-(--shadow-soft) transition-colors"
               >
@@ -309,6 +327,8 @@ export function DashboardShell({
               />
 
               <motion.nav
+                id="mobile-nav"
+                aria-label={locale === 'zh' ? '主导航' : 'Main navigation'}
                 className="fixed top-[5.3rem] left-1/2 z-50 w-[calc(100%-1rem)] max-w-350 -translate-x-1/2 rounded-[24px] border border-(--separator) bg-(--surface-elevated) p-2.5 shadow-(--shadow-elevated) backdrop-blur-xl md:hidden"
                 style={{ top: 'calc(5.3rem + env(safe-area-inset-top))' }}
                 initial={{ opacity: 0, y: -16, scale: 0.96 }}
@@ -335,6 +355,7 @@ export function DashboardShell({
                       >
                         <Link
                           href={item.href}
+                          aria-current={isActive ? 'page' : undefined}
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={cn(
                             'group relative flex items-center justify-between rounded-2xl border px-3.5 py-3 text-sm transition-colors',

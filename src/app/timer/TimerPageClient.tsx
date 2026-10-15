@@ -303,16 +303,6 @@ function TimerPageContent() {
                   autoNavigate: willAutoAdvance,
                 });
               }}
-              onReviewUndone={() => {
-                dismissFlowToast();
-                pushFlowToast({
-                  title: locale === 'zh' ? '已撤销本次复盘' : 'Review reverted',
-                  body: locale === 'zh' ? '自动推进已取消，你可以继续修改后再保存。' : 'Auto-advance is canceled. You can edit and save again.',
-                  cta: locale === 'zh' ? '继续编辑' : 'Continue Editing',
-                  href: '/timer',
-                  autoNavigate: false,
-                });
-              }}
             />
           </CardContent>
         </Card>

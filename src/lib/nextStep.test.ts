@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getNextStepRecommendation } from '@/lib/nextStep';
+import { getNextStepRecommendation, getWeakestPart } from '@/lib/nextStep';
 import { createInitialSessions } from '@/lib/toeic';
 
 describe('next step recommendation engine', () => {
@@ -33,7 +33,7 @@ describe('next step recommendation engine', () => {
 
     expect(recommendation.kind).toBe('resolve-backlog');
     expect(recommendation.targetSessionId).toBe('R3');
-    expect(recommendation.href).toBe('/unfinished');
+    expect(recommendation.href).toBe('/practice');
   });
 
   it('resumes the active session when it is still in progress and no backlog exists', () => {
@@ -55,7 +55,7 @@ describe('next step recommendation engine', () => {
 
     expect(recommendation.kind).toBe('resume-active');
     expect(recommendation.targetSessionId).toBe('L2');
-    expect(recommendation.href).toBe('/timer');
+    expect(recommendation.href).toBe('/practice');
   });
 
   it('switches to the next unfinished session that matches the weakest side', () => {
@@ -83,7 +83,7 @@ describe('next step recommendation engine', () => {
 
     expect(recommendation.kind).toBe('reinforce-weakness');
     expect(recommendation.targetSessionId).toBe('R2');
-    expect(recommendation.href).toBe('/timer');
+    expect(recommendation.href).toBe('/practice');
   });
 
   it('keeps weakness reinforcement on listening sessions for listening hotspots', () => {
@@ -111,7 +111,7 @@ describe('next step recommendation engine', () => {
 
     expect(recommendation.kind).toBe('reinforce-weakness');
     expect(recommendation.targetSessionId).toBe('L2');
-    expect(recommendation.href).toBe('/timer');
+    expect(recommendation.href).toBe('/practice');
   });
 
   it('asks for a score record when the workflow is clean but no history exists', () => {
@@ -128,6 +128,32 @@ describe('next step recommendation engine', () => {
     });
 
     expect(recommendation.kind).toBe('record-score');
-    expect(recommendation.href).toBe('/scores');
+    expect(recommendation.href).toBe('/insights');
+  });
+});
+describe('weakest part', () => {
+  it('reports no weak spot until a mistake has been logged', () => {
+    const sessions = createInitialSessions();
+    const l1 = sessions.find((session) => session.id === 'L1');
+    if (!l1) throw new Error('Missing fixture session');
+
+    l1.status = 'debugged';
+    expect(getWeakestPart(sessions)).toBeNull();
+
+    l1.mistakes = { 'Part 2': 5 };
+    expect(getWeakestPart(sessions)).toBe('Part 2');
+  });
+
+  it('aggregates error rates across sessions instead of using a single outlier', () => {
+    const sessions = createInitialSessions();
+    const [l1, l2, l3] = ['L1', 'L2', 'L3'].map((id) => sessions.find((session) => session.id === id)!);
+
+    // Part 1 has one bad run (3/6) but two clean ones; Part 3 is consistently weak.
+    for (const session of [l1, l2, l3]) session.status = 'debugged';
+    l1.mistakes = { 'Part 1': 3, 'Part 3': 12 };
+    l2.mistakes = { 'Part 3': 12 };
+    l3.mistakes = { 'Part 3': 12 };
+
+    expect(getWeakestPart(sessions)).toBe('Part 3');
   });
 });

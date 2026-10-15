@@ -388,4 +388,19 @@ describe('useStore snapshot compatibility', () => {
     expect(imported).toBeDefined();
     expect(imported?.sessionIds).toEqual(['R6']);
   });
+
+  it('clamps the target score and restores it from an imported snapshot', () => {
+    const state = useStore.getState();
+
+    state.setTargetScore(1200);
+    expect(useStore.getState().targetScore).toBe(990);
+
+    state.setTargetScore(903);
+    const snapshot = useStore.getState().exportSnapshot();
+    expect(snapshot.data.targetScore).toBe(905);
+
+    state.setTargetScore(600);
+    useStore.getState().importSnapshot(snapshot);
+    expect(useStore.getState().targetScore).toBe(905);
+  });
 });

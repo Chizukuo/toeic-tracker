@@ -696,19 +696,17 @@ export function ScoreEstimatorPanel() {
                 {activeSummary.score}
               </span>
               {mode === 'T' && (
-                <div className="hidden flex-col gap-1 md:flex">
+                <label className="flex flex-col gap-1">
                   <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
                     <Target className="size-3" />
                     {locale === 'zh' ? '目标分' : 'Target'}
                   </span>
-                  <input
-                    type="number"
-                    min="10" max="990" step="5"
+                  <TargetScoreInput
+                    key={targetScore}
                     value={targetScore}
-                    onChange={(e) => setTargetScore(Number(e.target.value) || 850)}
-                    className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+                    onCommit={setTargetScore}
                   />
-                </div>
+                </label>
               )}
             </div>
             
@@ -1377,4 +1375,39 @@ function getTodayDateLocal() {
 function safeNumber(value: string) {
   const parsed = Number(value);
   return !Number.isFinite(parsed) ? 0 : Math.max(0, parsed);
+}
+
+/** Keeps a local draft while typing and commits (clamped by the store) on blur or Enter. */
+function TargetScoreInput({ value, onCommit }: { value: number; onCommit: (score: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(parsed)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.max(10, Math.min(990, Math.round(parsed / 5) * 5));
+    setDraft(String(clamped));
+    onCommit(clamped);
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min="10"
+      max="990"
+      step="5"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
+    />
+  );
 }

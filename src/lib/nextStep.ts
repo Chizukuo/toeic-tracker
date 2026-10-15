@@ -10,7 +10,7 @@ import {
 
 export type NextStepRecommendation = {
   kind: 'resolve-backlog' | 'resume-active' | 'start-active' | 'reinforce-weakness' | 'record-score' | 'review-analytics';
-  href: '/unfinished' | '/timer' | '/scores' | '/analytics' | '/practice' | '/insights';
+  href: '/practice' | '/insights';
   targetSessionId?: string;
   tone: 'coral' | 'amber' | 'cyan' | 'slate';
   title: string;
@@ -36,7 +36,7 @@ export function getNextStepRecommendation({
   if (backlogSession) {
     return {
       kind: 'resolve-backlog',
-      href: '/unfinished',
+      href: '/practice',
       targetSessionId: backlogSession.id,
       tone: 'coral',
       title:
@@ -51,14 +51,14 @@ export function getNextStepRecommendation({
         locale === 'zh'
           ? '先把 backlog 清掉，再看估分和趋势才更可信。'
           : 'Clear the backlog before trusting projections and trends.',
-      cta: locale === 'zh' ? '打开未完成页' : 'Open Unfinished',
+      cta: locale === 'zh' ? '去补录未完成题' : 'Resolve Unfinished',
     };
   }
 
   if (activeSession?.status === 'in-progress' || activeSession?.timerRuntime) {
     return {
       kind: 'resume-active',
-      href: '/timer',
+      href: '/practice',
       targetSessionId: activeSession.id,
       tone: 'amber',
       title: locale === 'zh' ? `继续 ${activeSession.label}` : `Resume ${activeSession.label}`,
@@ -68,14 +68,14 @@ export function getNextStepRecommendation({
           : `${formatSessionTitle(locale, activeSession)} is still in progress. Close the loop on timing and review before switching context.`,
       helper:
         locale === 'zh' ? '不要同时摊开多个 session。' : 'Do not spread focus across multiple sessions.',
-      cta: locale === 'zh' ? '回到计时页' : 'Open Timer',
+      cta: locale === 'zh' ? '继续训练' : 'Resume Practice',
     };
   }
 
   if (activeSession?.status === 'not-started') {
     return {
       kind: 'start-active',
-      href: '/timer',
+      href: '/practice',
       targetSessionId: activeSession.id,
       tone: 'cyan',
       title: locale === 'zh' ? `开始 ${activeSession.label}` : `Start ${activeSession.label}`,
@@ -97,7 +97,7 @@ export function getNextStepRecommendation({
   if (historicalScoreCount === 0) {
     return {
       kind: 'record-score',
-      href: '/scores',
+      href: '/insights',
       tone: 'amber',
       title: locale === 'zh' ? '补一条历史成绩' : 'Add a score record',
       body:
@@ -106,13 +106,13 @@ export function getNextStepRecommendation({
           : 'The training loop is in place. The next useful move is to write a mock or projected score into history and start tracking trends.',
       helper:
         locale === 'zh' ? '没有历史曲线时，总分变化很难校准。' : 'Without score history, total-score movement is hard to calibrate.',
-      cta: locale === 'zh' ? '打开估分页' : 'Open Scores',
+      cta: locale === 'zh' ? '去记录成绩' : 'Record a Score',
     };
   }
 
   return {
     kind: 'review-analytics',
-    href: '/analytics',
+    href: '/insights',
     tone: 'slate',
     title: locale === 'zh' ? '回看趋势与热点' : 'Review trend and hotspots',
     body:
@@ -121,7 +121,7 @@ export function getNextStepRecommendation({
         : 'There is no obvious workflow blocker right now, so this is a good time to inspect whether weak spots are starting to converge.',
     helper:
       locale === 'zh' ? '优先验证训练有没有真正改变失分结构。' : 'Verify whether training is actually changing the loss structure.',
-    cta: locale === 'zh' ? '查看分析页' : 'Open Analytics',
+    cta: locale === 'zh' ? '查看参考台' : 'Open Insights',
   };
 }
 
@@ -160,7 +160,7 @@ function getWeaknessPlan(locale: Locale, sessions: SessionRecord[]): NextStepRec
 
   return {
     kind: 'reinforce-weakness',
-    href: '/timer',
+    href: '/practice',
     targetSessionId: candidate.id,
     tone: targetType === 'L' ? 'cyan' : 'amber',
     title:
@@ -179,24 +179,34 @@ function getWeaknessPlan(locale: Locale, sessions: SessionRecord[]): NextStepRec
   };
 }
 
-function getWeakestPart(sessions: SessionRecord[]): MistakeKey | null {
-  const completed = sessions.filter((session) => session.status !== 'not-started');
-  if (completed.length === 0) {
-    return null;
+/**
+ * Part with the highest aggregate error rate across every started session of its type.
+ * Returns null until at least one mistake has been logged, so a clean record has no "weak spot".
+ */
+export function getWeakestPart(sessions: SessionRecord[]): MistakeKey | null {
+  const totals = new Map<MistakeKey, { mistakes: number; questions: number }>();
+
+  for (const session of sessions) {
+    if (session.status === 'not-started') {
+      continue;
+    }
+
+    for (const part of getPartsForType(session.type)) {
+      const entry = totals.get(part) ?? { mistakes: 0, questions: 0 };
+      entry.mistakes += Math.min(Math.max(session.mistakes[part] ?? 0, 0), PART_QUESTION_COUNTS[part]);
+      entry.questions += PART_QUESTION_COUNTS[part];
+      totals.set(part, entry);
+    }
   }
 
   let weakestPart: MistakeKey | null = null;
-  let weakestRate = -1;
+  let weakestRate = 0;
 
-  for (const session of completed) {
-    for (const part of getPartsForType(session.type)) {
-      const mistakes = session.mistakes[part] ?? 0;
-      const rate = PART_QUESTION_COUNTS[part] > 0 ? mistakes / PART_QUESTION_COUNTS[part] : 0;
-
-      if (rate > weakestRate) {
-        weakestRate = rate;
-        weakestPart = part;
-      }
+  for (const [part, { mistakes, questions }] of totals) {
+    const rate = questions > 0 ? mistakes / questions : 0;
+    if (rate > weakestRate) {
+      weakestRate = rate;
+      weakestPart = part;
     }
   }
 
