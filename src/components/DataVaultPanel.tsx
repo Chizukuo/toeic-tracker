@@ -954,6 +954,11 @@ function formatImportFeedback(locale: 'zh' | 'en', message: string, result: { so
 }
 function formatImportSourceLabel(locale: 'zh' | 'en', source: string) { return source === 'snapshot' ? (locale === 'zh' ? '标准快照' : 'snapshot') : source === 'persisted-state' ? (locale === 'zh' ? '持久化状态' : 'persisted state') : source === 'legacy-records' ? (locale === 'zh' ? '旧版记录' : 'legacy records') : locale === 'zh' ? '兼容状态' : 'state payload'; }
 function formatImportedVersion(locale: 'zh' | 'en', version: string | number) { return version === 'legacy' ? (locale === 'zh' ? '旧版格式' : 'legacy format') : `v${version}`; }
-function formatExportedAt(value: string) { return value.replace('T', ' ').replace('.000Z', ' UTC'); }
+// Shown in the viewer's local time; the raw ISO string (with milliseconds and "Z") meant nothing to people.
+function formatExportedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
 function formatBytes(value: number) { return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KB`; }
 function formatFeedbackTime(timestamp: number, locale: 'zh' | 'en') { const label = new Date(timestamp).toLocaleTimeString(locale === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); return locale === 'zh' ? `更新于 ${label}` : `Updated ${label}`; }

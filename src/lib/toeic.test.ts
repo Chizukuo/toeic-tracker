@@ -11,6 +11,7 @@ import {
   getCombinedDataConfidence,
   getSessionDataConfidence,
   getSessionPartLossMap,
+  mergeSessionWithDefaults,
   planCorrectAnswersForTarget,
   type SessionRecord,
 } from '@/lib/toeic';
@@ -138,8 +139,17 @@ describe('toeic scoring rules', () => {
 
     expect(confidence.level).toBe('low');
     expect(confidence.issues).toContain('timer-running');
-    expect(confidence.issues).toContain('missing-timer');
     expect(confidence.issues).toContain('missing-review');
+
+    // The listening stopwatch is optional, so an untimed listening review is fully trusted...
+    const untimedListening = { ...listening, status: 'debugged' as const, timerRuntime: undefined };
+    expect(getSessionDataConfidence(untimedListening)).toEqual({ level: 'high', issues: [] });
+
+    // ...while untimed reading only drops to medium, since the 75-minute limit is unverified.
+    const reading = createInitialSessions().find((session) => session.id === 'R1');
+    if (!reading) throw new Error('Missing R1 session fixture');
+    const untimedReading = { ...reading, status: 'debugged' as const, mistakes: { 'Part 5': 3 } };
+    expect(getSessionDataConfidence(untimedReading)).toEqual({ level: 'medium', issues: ['missing-timer'] });
   });
 
   it('combines paired estimates and keeps medium confidence when reading still has backlog', () => {
@@ -403,5 +413,23 @@ describe('score estimator', () => {
     expect(plan.listening === 0 || shortBy(plan.listening - 1, plan.reading)).toBe(true);
 
     expect(planCorrectAnswersForTarget(99, 99, 995).reachable).toBe(false);
+  });
+});
+
+describe('session normalization', () => {
+  it('clamps corrupt lap times to the length of the Reading section', () => {
+    const merged = mergeSessionWithDefaults({
+      id: 'R3',
+      readingLapTimes: { 'Part 5': 10 * 60 * 1000, 'Part 6': 145 * 24 * 60 * 60 * 1000 },
+      timerRuntime: {
+        startedAt: '2026-05-01T09:00:00.000Z',
+        currentLapIndex: 1,
+        readingLapTimes: { 'Part 6': 145 * 24 * 60 * 60 * 1000 },
+      },
+    });
+
+    expect(merged.readingLapTimes['Part 5']).toBe(10 * 60 * 1000);
+    expect(merged.readingLapTimes['Part 6']).toBe(75 * 60 * 1000);
+    expect(merged.timerRuntime?.readingLapTimes['Part 6']).toBe(75 * 60 * 1000);
   });
 });

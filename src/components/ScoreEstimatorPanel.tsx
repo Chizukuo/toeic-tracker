@@ -29,6 +29,7 @@ import {
   estimateCurrentLevel,
   estimateToeicCombinedDualScore,
   estimateToeicSessionDualScore,
+  isSessionEstimateEligible,
   planCorrectAnswersForTarget,
   getCombinedDataConfidence,
   getCombinedEstimateBand,
@@ -133,7 +134,8 @@ export function ScoreEstimatorPanel() {
   const copy = getCopy(locale);
 
   const [mode, setMode] = useState<ScoreMode>('T');
-  const [selectedPair, setSelectedPair] = useState('1');
+  // Open on the newest set where both sections can be scored, falling back to any scored set.
+  const [selectedPair, setSelectedPair] = useState(() => pickDefaultSetNumber(sessions));
   const [historyDate, setHistoryDate] = useState('');
   const [historyListening, setHistoryListening] = useState('350');
   const [historyReading, setHistoryReading] = useState('330');
@@ -1060,7 +1062,7 @@ export function ScoreEstimatorPanel() {
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400" 
                             : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
                         )}>
-                          {item.source === 'estimated' ? 'EST' : 'MAN'}
+                          {item.source === 'estimated' ? (locale === 'zh' ? '估分' : 'Est.') : (locale === 'zh' ? '实测' : 'Actual')}
                         </span>
                       </div>
                       <div className="text-[13px] text-zinc-500 mt-1 font-medium flex gap-2">
@@ -1211,7 +1213,7 @@ function buildTotalSummary({
     accuracy: estimate.accuracy,
     band: getCombinedEstimateBand(estimate.total),
     interval: formatInterval(estimate.interval.min, estimate.interval.max),
-    cefr: formatCefr(estimate.cefr),
+    cefr: formatSectionCefrPair(estimate, locale),
     available: estimate.available,
     chart,
     color,
@@ -1236,7 +1238,7 @@ function buildTotalSummary({
         label: locale === 'zh' ? '总分' : 'Total',
         score: estimate.total,
         interval: formatInterval(estimate.interval.min, estimate.interval.max),
-        cefr: formatCefr(estimate.cefr),
+        cefr: formatSectionCefrPair(estimate, locale),
       },
     ],
   };
@@ -1313,6 +1315,13 @@ function getPartWeaknessNarrative(part: ToeicSectionEstimate['weakestPart'], loc
 
 function formatInterval(min: number, max: number) { return `${min}-${max}`; }
 function formatCefr(level: ToeicCefrLevel) { return level === 'Below A1' ? '<A1' : level; }
+// ETS maps CEFR per section; a single blended level for the total would hide which side lags.
+function formatSectionCefrPair(estimate: ToeicCombinedEstimate, locale: 'zh' | 'en') {
+  if (!estimate.listening || !estimate.reading) return formatCefr(estimate.cefr);
+  const listening = formatCefr(estimate.listening.cefr);
+  const reading = formatCefr(estimate.reading.cefr);
+  return locale === 'zh' ? `听 ${listening} / 读 ${reading}` : `L ${listening} / R ${reading}`;
+}
 
 function buildConfidenceSummary(confidence: DataConfidence, locale: 'zh' | 'en'): ConfidenceSummary {
   if (confidence.level === 'high') {
@@ -1441,4 +1450,14 @@ function TargetScoreInput({ value, onCommit }: { value: number; onCommit: (score
       className="w-18 bg-transparent text-[24px] font-bold text-zinc-300 dark:text-zinc-600 focus:text-amber-500 focus:outline-none transition-colors border-b border-transparent focus:border-amber-500/30"
     />
   );
+}
+
+function pickDefaultSetNumber(sessions: SessionRecord[]) {
+  const eligibleSets = (type: SessionRecord['type']) =>
+    new Set(sessions.filter((session) => session.type === type && isSessionEstimateEligible(session)).map((session) => session.setNumber));
+  const listening = eligibleSets('L');
+  const reading = eligibleSets('R');
+  const complete = [...listening].filter((setNumber) => reading.has(setNumber));
+  const candidates = complete.length > 0 ? complete : [...listening, ...reading];
+  return String(candidates.length > 0 ? Math.max(...candidates) : 1);
 }

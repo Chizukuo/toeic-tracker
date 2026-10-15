@@ -82,12 +82,12 @@ export function UnfinishedTrackerPanel() {
         hasBacklog: count > 0 && !resolved,
         tag: count > 0 && !resolved
           ? locale === 'zh'
-            ? '待补录'
-            : 'Pending'
+            ? '待处理'
+            : 'To handle'
           : session.timerSummary?.timedOut
             ? locale === 'zh'
-              ? '已补录'
-              : 'Resolved'
+              ? '已处理'
+              : 'Handled'
             : locale === 'zh'
               ? '正常交卷'
               : 'Saved',
@@ -278,12 +278,12 @@ export function UnfinishedTrackerPanel() {
 
             <WidgetCard className="flex flex-col">
               <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '处理清单' : 'Resolution Queue'}
+                {locale === 'zh' ? '待处理' : 'To handle'}
               </div>
               <div className="mt-2 text-[14px] leading-relaxed text-zinc-500">
                 {locale === 'zh'
-                  ? '优先清掉仍有遗漏的 session，避免后面的分析与估分失真。'
-                  : 'Resolve leftover sessions first so analytics and projections stay trustworthy.'}
+                  ? '每套可以选择补做完（看看时间够的话能拿几分）或直接跳过。'
+                  : 'For each set, finish the leftovers (to see your score with enough time) or skip them.'}
               </div>
 
               <div className="mt-5 space-y-3">
@@ -315,7 +315,7 @@ export function UnfinishedTrackerPanel() {
                         </div>
                         <div className="mt-1 text-[13px] text-zinc-500 leading-normal">
                           {locale === 'zh'
-                            ? `仍有 ${session.count} 题未补录完成。`
+                            ? `有 ${session.count} 题没做完，还没处理。`
                             : `${session.count} questions pending.`}
                         </div>
                       </div>
@@ -338,12 +338,12 @@ export function UnfinishedTrackerPanel() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/6 dark:border-white/6 pb-4">
                 <div>
                   <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-                    {locale === 'zh' ? '超时画像' : 'Overtime Profile'}
+                    {locale === 'zh' ? '时间不够的情况' : 'When time ran out'}
                   </div>
                   <div className="mt-1 text-[13px] text-zinc-500">
                     {locale === 'zh'
-                      ? '阅读超时后的速度损失和补录表现。'
-                      : 'Speed loss and overtime performance.'}
+                      ? '阅读做不完的时候，丢了多少分、补做时表现如何。'
+                      : 'How much running out of time cost you, and how finishing late went.'}
                   </div>
                 </div>
                 <div className="px-3 py-1 bg-white dark:bg-[#2C2C2E] rounded-full text-[10px] font-bold tracking-widest border border-black/4 dark:border-white/4 shadow-sm">
@@ -354,28 +354,28 @@ export function UnfinishedTrackerPanel() {
               <div className="mt-6 grid gap-4 md:grid-cols-4">
                 <TrackerStat
                   icon={<TimerReset className="size-4" />}
-                  label={locale === 'zh' ? '超时场次' : 'Timed Out'}
+                  label={locale === 'zh' ? '超时套数' : 'Timed out'}
                   value={`${overtimeInsight.timedOutCount}`}
                   helper={locale === 'zh' ? '阅读套题' : 'Sets'}
                   tone="coral"
                 />
                 <TrackerStat
                   icon={<ClipboardList className="size-4" />}
-                  label={locale === 'zh' ? '已完成补录' : 'Resolved'}
+                  label={locale === 'zh' ? '已处理' : 'Handled'}
                   value={`${overtimeInsight.resolvedCount}`}
-                  helper={locale === 'zh' ? '已写入数据' : 'Resolved'}
+                  helper={locale === 'zh' ? '补做或跳过' : 'Finished or skipped'}
                   tone="cyan"
                 />
                 <TrackerStat
                   icon={<Orbit className="size-4" />}
-                  label={locale === 'zh' ? '累计加时' : 'Total Overtime'}
+                  label={locale === 'zh' ? '补做总用时' : 'Extra time'}
                   value={formatMinutes(overtimeInsight.totalOvertimeMs)}
                   helper={locale === 'zh' ? '额外耗时' : 'Extra time'}
                   tone="amber"
                 />
                 <TrackerStat
                   icon={<Orbit className="size-4" />}
-                  label={locale === 'zh' ? '平均速度' : 'Avg Gap'}
+                  label={locale === 'zh' ? '时间够时多拿' : 'Gain with time'}
                   value={`${overtimeInsight.averageSpeedGap}`}
                   helper={locale === 'zh' ? '分数差值' : 'Score gap'}
                   tone="slate"
@@ -385,34 +385,34 @@ export function UnfinishedTrackerPanel() {
 
             <WidgetCard className="flex flex-col">
               <div className="text-[12px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-                {locale === 'zh' ? '关键观察' : 'Key Observations'}
+                {locale === 'zh' ? '要点' : 'Takeaways'}
               </div>
               <div className="mt-2 text-[14px] leading-relaxed text-zinc-500">
                 {locale === 'zh'
-                  ? '衡量时间压力具体压垮了哪一侧。'
-                  : 'Measures where time pressure is breaking performance.'}
+                  ? '看看时间压力主要影响了哪里。'
+                  : 'Where time pressure hurts you most.'}
               </div>
 
               <div className="mt-5 space-y-3">
                 <InsightTile
-                  title={locale === 'zh' ? '最大速度损失' : 'Largest Speed Gap'}
+                  title={locale === 'zh' ? '时间影响最大的一套' : 'Set most hurt by time'}
                   body={overtimeInsight.maxSpeedGapSession
                     ? `${overtimeInsight.maxSpeedGapSession.label} 拉开了 ${overtimeInsight.maxSpeedGapSession.gap} 分差。`
-                    : locale === 'zh' ? '样本不足。' : 'Insufficient samples.'}
+                    : locale === 'zh' ? '数据还不够。' : 'Not enough data yet.'}
                   actionLabel={overtimeInsight.maxSpeedGapSession ? copy.openSession : undefined}
                   onClick={overtimeInsight.maxSpeedGapSession ? () => openSession(overtimeInsight.maxSpeedGapSession!.id) : undefined}
                 />
                 <InsightTile
-                  title={locale === 'zh' ? '补录热点 Part' : 'Overtime Hotspot'}
+                  title={locale === 'zh' ? '补做时错最多的 Part' : 'Most missed when finishing late'}
                   body={overtimeInsight.hotspotPart
                     ? `${overtimeInsight.hotspotPart.part} 累计错了 ${overtimeInsight.hotspotPart.mistakes} 题。`
-                    : locale === 'zh' ? '样本不足。' : 'Insufficient samples.'}
+                    : locale === 'zh' ? '数据还不够。' : 'Not enough data yet.'}
                 />
                 <InsightTile
                   title={locale === 'zh' ? '最近一次超时' : 'Latest Timeout'}
                   body={overtimeInsight.latestTimedOut
-                    ? `${overtimeInsight.latestTimedOut.label} 有 ${overtimeInsight.latestTimedOut.timerSummary?.unfinishedQuestions ?? 0} 题超时。`
-                    : locale === 'zh' ? '样本不足。' : 'Insufficient samples.'}
+                    ? `${overtimeInsight.latestTimedOut.label} 有 ${overtimeInsight.latestTimedOut.timerSummary?.unfinishedQuestions ?? 0} 题没来得及做。`
+                    : locale === 'zh' ? '数据还不够。' : 'Not enough data yet.'}
                   actionLabel={overtimeInsight.latestTimedOut ? copy.openSession : undefined}
                   onClick={overtimeInsight.latestTimedOut ? () => openSession(overtimeInsight.latestTimedOut!.id) : undefined}
                 />

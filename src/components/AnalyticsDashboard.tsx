@@ -26,6 +26,7 @@ import {
   getAnalyticsDataConfidence,
   getSessionPartLossMap,
   hasRecordedSessionData,
+  isSessionEstimateEligible,
   LISTENING_PARTS,
   type AnalyticsConfidence,
   type MistakeKey,
@@ -89,12 +90,6 @@ export function AnalyticsDashboard() {
     const partMistakes = new Map<string, number>();
     const partAttempts = new Map<string, number>();
     const reasonCounts = new Map<string, number>();
-    const fullListeningLossMap = Object.fromEntries(
-      LISTENING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
-    ) as Partial<Record<MistakeKey, number>>;
-    const fullReadingLossMap = Object.fromEntries(
-      READING_PARTS.map((part) => [part, PART_QUESTION_COUNTS[part]])
-    ) as Partial<Record<MistakeKey, number>>;
     let totalTrackedLoss = 0;
     let recordedSessions = 0;
 
@@ -114,20 +109,13 @@ export function AnalyticsDashboard() {
       const setNumber = index + 1;
       const listening = sessionMap.get(`L${setNumber}`);
       const reading = sessionMap.get(`R${setNumber}`);
-      const listeningRecorded = listening ? hasRecordedSessionData(listening) : false;
-      const readingRecorded = reading ? hasRecordedSessionData(reading) : false;
-      const pairHasData = listeningRecorded || readingRecorded;
+      // Only scored sections count: an attempt that hasn't been reviewed has no real mistake
+      // count yet, and a section that wasn't done is missing data, not 100% wrong.
+      const listeningScored = listening ? isSessionEstimateEligible(listening) : false;
+      const readingScored = reading ? isSessionEstimateEligible(reading) : false;
 
-      const listeningLossMap = listeningRecorded && listening
-        ? getSessionPartLossMap(listening)
-        : pairHasData && listening
-          ? fullListeningLossMap
-          : undefined;
-      const readingLossMap = readingRecorded && reading
-        ? getSessionPartLossMap(reading)
-        : pairHasData && reading
-          ? fullReadingLossMap
-          : undefined;
+      const listeningLossMap = listeningScored && listening ? getSessionPartLossMap(listening) : undefined;
+      const readingLossMap = readingScored && reading ? getSessionPartLossMap(reading) : undefined;
 
       const listeningLoss = listeningLossMap
         ? LISTENING_PARTS.reduce((sum, part) => sum + (listeningLossMap[part] ?? 0), 0)
@@ -252,7 +240,7 @@ export function AnalyticsDashboard() {
           </div>
           {lossSummary.latest?.Total !== undefined && (
             <div className="flex flex-col items-end">
-              <span className="text-[12px] font-medium text-zinc-400 uppercase tracking-widest">{locale === 'zh' ? '最新错题' : 'Latest Loss'}</span>
+              <span className="text-[12px] font-medium text-zinc-400 uppercase tracking-widest">{lossSummary.latest.paired ? (locale === 'zh' ? '最近一整套错题' : 'Latest full set') : (locale === 'zh' ? '最新错题' : 'Latest Loss')}</span>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{lossSummary.latest.Total}</span>
                 <TrendIndicator delta={lossSummary.latest.Total - (lossSummary.previous?.Total ?? lossSummary.latest.Total)} />
@@ -607,14 +595,18 @@ function summarizeLossTrend(data: LossTrendPoint[]): LossTrendSummary {
     return { availableCount: 0, pairedCount, partialCount };
   }
 
-  const latest = available[available.length - 1];
-  const previous = available.length > 1 ? available[available.length - 2] : undefined;
-  const recent = available.slice(-3);
+  // Compare like with like: a set with only one section done would look like a huge improvement
+  // next to a full set. Use sets with both sections once any exist.
+  const paired = available.filter((point) => point.paired);
+  const basis = paired.length > 0 ? paired : available;
+  const latest = basis[basis.length - 1];
+  const previous = basis.length > 1 ? basis[basis.length - 2] : undefined;
+  const recent = basis.slice(-3);
   const recentTotals = recent.map((point) => point.Total ?? 0);
   const recentAverage = recentTotals.reduce((sum, value) => sum + value, 0) / recentTotals.length;
   const recentRange = recentTotals.length > 1 ? Math.max(...recentTotals) - Math.min(...recentTotals) : 0;
-  const best = available.reduce((lowest, point) => ((point.Total ?? Infinity) < (lowest.Total ?? Infinity) ? point : lowest), available[0]);
-  const worst = available.reduce((highest, point) => ((point.Total ?? -Infinity) > (highest.Total ?? -Infinity) ? point : highest), available[0]);
+  const best = basis.reduce((lowest, point) => ((point.Total ?? Infinity) < (lowest.Total ?? Infinity) ? point : lowest), basis[0]);
+  const worst = basis.reduce((highest, point) => ((point.Total ?? -Infinity) > (highest.Total ?? -Infinity) ? point : highest), basis[0]);
 
   return { availableCount: available.length, pairedCount, partialCount, latest, previous, best, worst, recentAverage: Number(recentAverage.toFixed(1)), recentRange };
 }
@@ -673,14 +665,22 @@ function buildLossInsight({ locale, summary }: { locale: 'zh' | 'en'; summary: L
       : 'Trend analysis will appear here after more data is recorded.';
   }
 
+  const stability = summary.recentRange !== undefined && summary.pairedCount >= 3
+      ? (locale === 'zh' ? `近三套波动范围在 ${summary.recentRange} 题左右。` : `Recent variation is around ${summary.recentRange} questions.`)
+      : '';
+
+  // With only one section recorded there is nothing to compare, so don't name a "dominant" side.
+  if (!summary.latest.paired) {
+    const onlyListening = summary.latest.Listening !== undefined;
+    return locale === 'zh'
+      ? `目前只有${onlyListening ? '听力' : '阅读'}的记录，做完同一套的${onlyListening ? '阅读' : '听力'}后才能比较两边。`
+      : `Only ${onlyListening ? 'listening' : 'reading'} is recorded so far; finish the matching ${onlyListening ? 'reading' : 'listening'} set to compare.`;
+  }
+
   const listening = summary.latest.Listening ?? 0;
   const reading = summary.latest.Reading ?? 0;
   
   const dominant = listening > reading ? (locale === 'zh' ? '听力' : 'Listening') : reading > listening ? (locale === 'zh' ? '阅读' : 'Reading') : (locale === 'zh' ? '听力与阅读' : 'Listening and Reading');
-
-  const stability = summary.recentRange !== undefined && summary.availableCount >= 3
-      ? (locale === 'zh' ? `近三套波动范围在 ${summary.recentRange} 题左右。` : `Recent variation is around ${summary.recentRange} questions.`)
-      : '';
 
   return locale === 'zh'
     ? `当前失分主要集中在${dominant}部分。${stability}`

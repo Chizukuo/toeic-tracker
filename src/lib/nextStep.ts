@@ -1,6 +1,7 @@
 import { formatSessionTitle, translatePart, type Locale } from '@/lib/i18n';
 import {
   getSessionTypeForPart,
+  getTargetDurationMs,
   getPartsForType,
   hasResolvedUnfinished,
   PART_QUESTION_COUNTS,
@@ -24,11 +25,13 @@ export function getNextStepRecommendation({
   sessions,
   activeSessionId,
   historicalScoreCount,
+  now = Date.now(),
 }: {
   locale: Locale;
   sessions: SessionRecord[];
   activeSessionId: string;
   historicalScoreCount: number;
+  now?: number;
 }): NextStepRecommendation {
   const selectedSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0];
   // A clock that is still running outranks everything else, even if another set is selected.
@@ -54,6 +57,22 @@ export function getNextStepRecommendation({
           ? '处理完后，估分会更准。'
           : 'Your estimate gets more accurate once this is settled.',
       cta: locale === 'zh' ? '去处理' : 'Handle them',
+    };
+  }
+
+  if (activeSession?.timerRuntime && isExpiredReadingAttempt(activeSession, now)) {
+    return {
+      kind: 'resume-active',
+      href: '/practice',
+      targetSessionId: activeSession.id,
+      tone: 'coral',
+      title: locale === 'zh' ? `${activeSession.label} 时间到了，还没交卷` : `${activeSession.label} ran out of time`,
+      body:
+        locale === 'zh'
+          ? '填一下还有几题没做，就能保存这次成绩并开始对答案。'
+          : 'Enter how many questions you did not get to, then save the attempt and check answers.',
+      helper: locale === 'zh' ? '用时已按 75 分钟上限记录。' : 'Time is recorded up to the 75-minute limit.',
+      cta: locale === 'zh' ? '去交卷' : 'Submit it',
     };
   }
 
@@ -146,6 +165,14 @@ export function getNextStepRecommendation({
       locale === 'zh' ? '也可以在首页加大计划题量，继续练。' : 'You can also add more sets from the Home page.',
     cta: locale === 'zh' ? '查看分析' : 'Open Insights',
   };
+}
+
+function isExpiredReadingAttempt(session: SessionRecord, now: number) {
+  const runtime = session.timerRuntime;
+  if (session.type !== 'R' || !runtime || runtime.isOvertime) return false;
+  if (runtime.pendingSubmit) return true;
+  const startedAt = new Date(runtime.startedAt).getTime();
+  return Number.isFinite(startedAt) && now - startedAt >= getTargetDurationMs('R');
 }
 
 function getBacklogSession(sessions: SessionRecord[]) {

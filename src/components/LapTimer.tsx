@@ -596,6 +596,14 @@ function ReadingTimer({
     };
   }
 
+  // Lap time can't run past the 75-minute deadline; otherwise reopening an attempt days later
+  // would book the whole gap onto the current Part. Overtime is open-ended by design.
+  function lapClockNow() {
+    const now = getNow();
+    if (overtimeMode || !startedAtRef.current) return now;
+    return Math.min(now, startedAtRef.current + totalDurationMs);
+  }
+
   function selectActiveLap(index: number) {
     if (index === currentLapIndex || (!timerRunning && isRunning)) {
       if (!isRunning) setCurrentLapIndex(index);
@@ -607,7 +615,7 @@ function ReadingTimer({
       return;
     }
 
-    const now = getNow();
+    const now = lapClockNow();
     const elapsed = Math.max(now - lapStartedAtRef.current, 0);
     const nextLapTimes = elapsed > 0
       ? {
@@ -644,13 +652,14 @@ function ReadingTimer({
     if (!lapStartedAtRef.current || !currentSegment || !timerRunning) {
       return readingLapTimes;
     }
-    const elapsed = Math.max(getNow() - lapStartedAtRef.current, 1);
+    const now = lapClockNow();
+    const elapsed = Math.max(now - lapStartedAtRef.current, 1);
     const nextTimes = {
       ...readingLapTimes,
       [currentSegment.key]: (readingLapTimes[currentSegment.key] ?? 0) + elapsed,
     };
     setReadingLapTimes(nextTimes);
-    lapStartedAtRef.current = getNow();
+    lapStartedAtRef.current = now;
     setCurrentLapLiveMs(0);
     return nextTimes;
   }

@@ -213,3 +213,24 @@ describe('plan progress', () => {
     expect(recommendation.targetSessionId).toBe('R1');
   });
 });
+
+describe('expired attempts', () => {
+  it('asks to submit a reading attempt whose 75 minutes ran out long ago', () => {
+    const sessions = createInitialSessions();
+    const stale = sessions.find((session) => session.id === 'R3');
+    if (!stale) throw new Error('Missing fixture session');
+    stale.status = 'in-progress';
+    stale.timerRuntime = { startedAt: '2026-05-01T09:00:00.000Z', currentLapIndex: 1, readingLapTimes: {} };
+
+    const recommendation = getNextStepRecommendation({
+      locale: 'zh',
+      sessions,
+      activeSessionId: 'L3',
+      historicalScoreCount: 3,
+      now: new Date('2026-10-15T09:00:00.000Z').getTime(),
+    });
+
+    expect(recommendation.targetSessionId).toBe('R3');
+    expect(recommendation.cta).toBe('去交卷');
+  });
+});

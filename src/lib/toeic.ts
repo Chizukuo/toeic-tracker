@@ -538,7 +538,8 @@ export function getSessionDataConfidence(record: SessionRecord): DataConfidence 
 		issues.push("timer-running");
 	}
 
-	if (!record.timerSummary) {
+	// The listening stopwatch is optional; only reading needs the 75-minute limit to be trusted.
+	if (record.type === "R" && !record.timerSummary && !record.timerRuntime) {
 		issues.push("missing-timer");
 	}
 
@@ -551,7 +552,7 @@ export function getSessionDataConfidence(record: SessionRecord): DataConfidence 
 	}
 
 	return {
-		level: issues.includes("timer-running") || issues.includes("missing-timer")
+		level: issues.includes("timer-running")
 			? "low"
 			: issues.length > 0
 				? "medium"
@@ -1290,6 +1291,18 @@ export function getWorstPartLabel(sessions: SessionRecord[]) {
 	return worstLabel;
 }
 
+/** No single Part can take longer than the whole Reading section; longer values are corrupt. */
+function clampLapTimes(times: Partial<Record<ReadingLapKey, number>> | undefined) {
+	const limit = getTargetDurationMs("R");
+	const clamped: Partial<Record<ReadingLapKey, number>> = {};
+	for (const [key, value] of Object.entries(times ?? {}) as Array<[ReadingLapKey, number | undefined]>) {
+		if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+			clamped[key] = Math.min(value, limit);
+		}
+	}
+	return clamped;
+}
+
 export function mergeSessionWithDefaults(
 	incoming: Partial<SessionRecord> & Pick<SessionRecord, "id">
 ) {
@@ -1324,7 +1337,7 @@ export function mergeSessionWithDefaults(
 		mistakes: incoming.mistakes ?? {},
 		overtimeMistakes: incoming.overtimeMistakes ?? undefined,
 		reasons: incoming.reasons ?? [],
-		readingLapTimes: incoming.readingLapTimes ?? {},
+		readingLapTimes: clampLapTimes(incoming.readingLapTimes),
 		notes: incoming.notes ?? undefined,
 		timerSummary: incoming.timerSummary
 			? {
@@ -1342,6 +1355,7 @@ export function mergeSessionWithDefaults(
 		timerRuntime: incoming.timerRuntime
 			? {
 				...incoming.timerRuntime,
+				readingLapTimes: clampLapTimes(incoming.timerRuntime.readingLapTimes),
 				unfinishedByPartDraft: normalizeReadingPartDistribution(incoming.timerRuntime.unfinishedByPartDraft),
 			}
 			: undefined,
@@ -1360,6 +1374,7 @@ export type ToeicSectionLevel = {
 	type: SessionType;
 	scaled: number;
 	interval: ScoreInterval;
+	cefr: ToeicCefrLevel;
 	/** Effective correct answers behind the level (guess credit included), for target planning. */
 	rawCorrect: number;
 	setsUsed: number;
@@ -1440,6 +1455,7 @@ export function estimateSectionLevel(
 	return {
 		type,
 		scaled,
+		cefr: getSectionCefrLevel(scaled),
 		interval: {
 			min: roundToNearestFive(meanScaled - halfWidth, 5, 495),
 			max: roundToNearestFive(meanScaled + halfWidth, 5, 495),
