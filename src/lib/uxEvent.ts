@@ -4,6 +4,7 @@ export type UXEventType =
   | 'review_saved'
   | 'review_undone'
   | 'overtime_saved'
+  | 'overtime_skipped'
   | 'auto_advance_triggered'
   | 'listening_start'
   | 'listening_complete'

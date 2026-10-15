@@ -193,3 +193,23 @@ describe('live attempts', () => {
     expect(recommendation.href).toBe('/practice');
   });
 });
+
+describe('plan progress', () => {
+  it('points at the next unfinished set instead of claiming the plan is done', () => {
+    const sessions = createInitialSessions();
+    const l1 = sessions.find((session) => session.id === 'L1');
+    if (!l1) throw new Error('Missing fixture session');
+    // A perfect first set leaves no weak Part to target.
+    l1.status = 'debugged';
+
+    const recommendation = getNextStepRecommendation({
+      locale: 'zh',
+      sessions,
+      activeSessionId: 'L1',
+      historicalScoreCount: 0,
+    });
+
+    expect(recommendation.kind).toBe('start-active');
+    expect(recommendation.targetSessionId).toBe('R1');
+  });
+});

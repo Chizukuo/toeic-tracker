@@ -8,7 +8,8 @@ import { SessionVocabCard } from '@/components/SessionVocabCard';
 import { DashboardShell, DeferredPanelPlaceholder, useDashboardContext } from '@/components/DashboardShell';
 import { LapTimer } from '@/components/LapTimer';
 import { formatSessionTitle, translatePart, translateStatus } from '@/lib/i18n';
-import { estimateToeicSessionScore, getPartsForType, PART_QUESTION_COUNTS, sumMistakes } from '@/lib/toeic';
+import { estimateToeicSessionScore, getIncorrectAnswers, getPartsForType, PART_QUESTION_COUNTS } from '@/lib/toeic';
+import { getNextStepRecommendation } from '@/lib/nextStep';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -42,16 +43,6 @@ function isStepAvailable(session: ReturnType<typeof useDashboardContext>['active
   return true;
 }
 
-/** Next set that still needs work, scanning forward from the current one and wrapping around. */
-function findNextOpenSession<T extends { id: string; status: string }>(sessions: T[], currentId: string) {
-  const currentIndex = sessions.findIndex((session) => session.id === currentId);
-  for (let offset = 1; offset < sessions.length; offset++) {
-    const candidate = sessions[(currentIndex + offset) % sessions.length];
-    if (candidate.status !== 'debugged') return candidate;
-  }
-  return null;
-}
-
 const slideVariants = {
   enterFromRight: { opacity: 0, x: 60 },
   enterFromLeft: { opacity: 0, x: -60 },
@@ -71,6 +62,7 @@ export default function PracticePageClient() {
 function PracticeFlow() {
   const { activeSession, locale, sessions } = useDashboardContext();
   const selectSession = useStore((state) => state.selectSession);
+  const historicalScoreCount = useStore((state) => state.historicalScores.length);
 
   const [step, setStep] = useState<PracticeStep>(() => resolvePracticeStep(activeSession));
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
@@ -89,10 +81,17 @@ function PracticeFlow() {
     setStep(next);
   };
 
-  const nextSession = useMemo(
-    () => findNextOpenSession(sessions, activeSession.id),
-    [activeSession.id, sessions]
-  );
+  // Same engine as the home page, so "next set" here never contradicts the home recommendation.
+  const nextSession = useMemo(() => {
+    const recommendation = getNextStepRecommendation({
+      locale,
+      sessions,
+      activeSessionId: activeSession.id,
+      historicalScoreCount,
+    });
+    const target = recommendation.href === '/practice' ? recommendation.targetSessionId : undefined;
+    return target && target !== activeSession.id ? sessions.find((session) => session.id === target) ?? null : null;
+  }, [activeSession.id, historicalScoreCount, locale, sessions]);
 
   const advanceToNext = () => {
     if (nextSession) {
@@ -106,7 +105,9 @@ function PracticeFlow() {
   const resultData = useMemo(() => {
     if (activeSession.status !== 'debugged') return null;
     const estimate = estimateToeicSessionScore(activeSession, 'strict');
-    const totalMistakes = Math.min(sumMistakes(activeSession), 100);
+    // Unanswered reading questions count as wrong, matching the score estimate above.
+    const totalMistakes = getIncorrectAnswers(activeSession, 'strict');
+    const unanswered = activeSession.type === 'R' ? activeSession.timerSummary?.unfinishedQuestions ?? 0 : 0;
 
     // Compare against the closest earlier reviewed set of the same section.
     const previous = sessions
@@ -131,12 +132,12 @@ function PracticeFlow() {
       }
     }
 
-    return { estimate, totalMistakes, accuracy: Math.round(100 - totalMistakes), comparison, biggestLoss };
+    return { estimate, totalMistakes, unanswered, accuracy: Math.round(100 - totalMistakes), comparison, biggestLoss };
   }, [activeSession, sessions]);
 
   const steps: { key: PracticeStep; label: string; icon: typeof Clock }[] = [
     { key: 'timer', label: locale === 'zh' ? '计时' : 'Timer', icon: Clock },
-    { key: 'review', label: locale === 'zh' ? '复盘' : 'Review', icon: FileText },
+    { key: 'review', label: locale === 'zh' ? '对答案' : 'Check', icon: FileText },
     { key: 'result', label: locale === 'zh' ? '结果' : 'Result', icon: Trophy },
   ];
 
@@ -157,7 +158,7 @@ function PracticeFlow() {
                 <div key={s.key} className="flex items-center gap-1">
                   {idx > 0 && (
                     <div className={cn(
-                      'mx-1 h-px w-6 sm:w-10 transition-colors',
+                      'mx-0.5 h-px w-3 sm:mx-1 sm:w-10 transition-colors',
                       isDone ? 'bg-emerald-500' : 'bg-[var(--separator-opaque)]'
                     )} />
                   )}
@@ -169,7 +170,7 @@ function PracticeFlow() {
                     aria-label={s.label}
                     title={s.label}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--cheese-gold)]/50',
+                      'flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-xs font-semibold sm:gap-1.5 sm:px-3 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--cheese-gold)]/50',
                       isActive
                         ? 'bg-[var(--cheese-gold-soft)] text-[var(--cheese-gold)]'
                         : isDone
@@ -179,7 +180,7 @@ function PracticeFlow() {
                     )}
                   >
                     <Icon className="size-3.5" />
-                    <span className="hidden sm:inline">{s.label}</span>
+                    <span>{s.label}</span>
                   </button>
                 </div>
               );
@@ -188,10 +189,11 @@ function PracticeFlow() {
 
           <Link
             href="/"
-            title={locale === 'zh' ? '在任务台切换套题' : 'Switch sets on Mission Control'}
-            className="cheese-pill truncate transition-opacity hover:opacity-80"
+            title={locale === 'zh' ? '回首页换一套' : 'Pick another set on Home'}
+            className="cheese-pill shrink-0 whitespace-nowrap transition-opacity hover:opacity-80"
           >
-            {activeSession.label} · {formatSessionTitle(locale, activeSession)}
+            {activeSession.label}
+            <span className="hidden sm:inline"> · {formatSessionTitle(locale, activeSession)}</span>
           </Link>
         </div>
       </div>
@@ -216,20 +218,13 @@ function PracticeFlow() {
                   setAutoFocusToken((v) => v + 1);
                   goToStep('review');
                 }}
+                onBacklogSkipped={() => goToStep('result')}
               />
             </div>
           )}
 
           {step === 'review' && (
-            <div className="cheese-card overflow-hidden p-6 sm:p-8">
-              <div className="mb-6">
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '复盘录入' : 'Review Input'}
-                </div>
-                <h2 className="mt-1.5 text-xl font-bold text-[var(--label-primary)]">
-                  {locale === 'zh' ? '录入错题与错因' : 'Log Mistakes & Root Causes'}
-                </h2>
-              </div>
+            <div>
               <DebugForm
                 key={`debug-${activeSession.id}`}
                 activeSession={activeSession}
@@ -316,13 +311,15 @@ function PracticeFlow() {
                       className="cheese-grouped rounded-[16px] p-5"
                     >
                       <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                        {locale === 'zh' ? '错题数' : 'Mistakes'}
+                        {locale === 'zh' ? '错题数' : 'Wrong'}
                       </div>
                       <div className="mt-2 text-4xl font-bold text-[var(--label-primary)]">
                         {resultData.totalMistakes}
                       </div>
                       <div className="mt-1 text-xs text-[var(--label-secondary)]">
                         {locale === 'zh' ? `正确率 ${resultData.accuracy}%` : `Accuracy ${resultData.accuracy}%`}
+                        {resultData.unanswered > 0 &&
+                          (locale === 'zh' ? ` · 含 ${resultData.unanswered} 题没做` : ` · incl. ${resultData.unanswered} unanswered`)}
                       </div>
                     </motion.div>
                   </div>
@@ -363,13 +360,13 @@ function PracticeFlow() {
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"
                   >
                     <PencilLine className="size-4" />
-                    {locale === 'zh' ? '修改复盘' : 'Edit Review'}
+                    {locale === 'zh' ? '修改错题数' : 'Edit answers'}
                   </button>
                   <Link
                     href="/"
                     className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--separator)] px-6 py-3 text-sm font-semibold text-[var(--label-secondary)] transition-all hover:text-[var(--label-primary)] hover:bg-[var(--surface-grouped)] active:scale-[0.97]"
                   >
-                    {locale === 'zh' ? '回任务台' : 'Mission Control'}
+                    {locale === 'zh' ? '回首页' : 'Home'}
                   </Link>
                 </motion.div>
               </div>

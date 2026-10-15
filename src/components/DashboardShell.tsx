@@ -139,11 +139,11 @@ export function DashboardShell({
   const activeSession = homeMetrics.activeSession;
 
   const navigationItems = [
-    { href: '/', label: locale === 'zh' ? '任务台' : 'Mission', icon: Home },
-    { href: '/practice', label: locale === 'zh' ? '训练场' : 'Practice', icon: Clock },
-    { href: '/insights', label: locale === 'zh' ? '参考台' : 'Insights', icon: BarChart2 },
+    { href: '/', label: locale === 'zh' ? '首页' : 'Home', icon: Home },
+    { href: '/practice', label: locale === 'zh' ? '练习' : 'Practice', icon: Clock },
+    { href: '/insights', label: locale === 'zh' ? '分析' : 'Insights', icon: BarChart2 },
     { href: '/vocab', label: locale === 'zh' ? '生词本' : 'Vocab', icon: BookOpen },
-    { href: '/vault', label: locale === 'zh' ? '数据' : 'Data', icon: Database },
+    { href: '/vault', label: locale === 'zh' ? '备份' : 'Backup', icon: Database },
   ];
 
   return (

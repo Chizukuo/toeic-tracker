@@ -14,6 +14,7 @@ import { translatePart } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 import { MissionConfigDialog } from '@/components/MissionConfigDialog';
+import { WelcomeGuide } from '@/components/WelcomeGuide';
 
 const ActivityCalendar = dynamic(() => import('@/components/ActivityCalendar').then(mod => mod.ActivityCalendar));
 const WeeklyReport = dynamic(() => import('@/components/WeeklyReport').then(mod => mod.WeeklyReport));
@@ -53,14 +54,18 @@ function MissionControl() {
     [activeSession.id, historicalScoreCount, locale, sessions]
   );
 
-  const daysUntilExam = useMemo(() => {
-    // Count calendar days (local midnight to local midnight) so "tomorrow" always reads as 1.
+  // Calendar days (local midnight to local midnight) so "tomorrow" always reads as 1; negative once the date has passed.
+  const examDayOffset = useMemo(() => {
     const [year, month, day] = examDate.split('-').map(Number);
     const examDay = new Date(year, month - 1, day).getTime();
     const now = new Date(nowTs);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    return Math.max(0, Math.round((examDay - today) / (24 * 60 * 60 * 1000)));
+    return Math.round((examDay - today) / (24 * 60 * 60 * 1000));
   }, [examDate, nowTs]);
+  const examDateIsSet = Number.isFinite(examDayOffset) && examDayOffset >= 0;
+  const hasProgress = sessions.some(
+    (session) => session.status !== 'not-started' || Boolean(session.timerSummary || session.timerRuntime)
+  );
 
   const scoreEstimate = useMemo(() => {
     const latestOf = (type: SessionRecord['type']) =>
@@ -83,6 +88,8 @@ function MissionControl() {
 
   return (
     <div className="space-y-8">
+      <WelcomeGuide locale={locale} hasProgress={hasProgress} examDateIsSet={examDateIsSet} />
+
       {/* ─── Main Task Card (Premium CTA) ─── */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -120,9 +127,7 @@ function MissionControl() {
                 </Link>
               </motion.div>
 
-              {nextStep.targetSessionId && (
-                <span className="cheese-pill">{nextStep.targetSessionId}</span>
-              )}
+              <span className="text-xs text-[var(--label-tertiary)]">{nextStep.helper}</span>
             </div>
           </div>
         </div>
@@ -219,8 +224,14 @@ function MissionControl() {
             })}
           </div>
           </div>
-          <p className="mt-3 text-[11px] text-[var(--label-tertiary)]">
-            {locale === 'zh' ? '点选套题设为当前套题，再点一次直接进入训练场。' : 'Tap a set to select it; tap it again to open it in Practice.'}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[var(--label-tertiary)]">
+            <span>{locale === 'zh' ? 'L = 听力　R = 阅读' : 'L = Listening　R = Reading'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-[var(--label-tertiary)]" />{locale === 'zh' ? '未开始' : 'Not started'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-[var(--cheese-gold)]" />{locale === 'zh' ? '进行中' : 'In progress'}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" />{locale === 'zh' ? '已对完答案' : 'Reviewed'}</span>
+          </div>
+          <p className="mt-1.5 text-[11px] text-[var(--label-tertiary)]">
+            {locale === 'zh' ? '点一下选中套题，再点一次开始练习。' : 'Tap a set to select it; tap it again to start practicing.'}
           </p>
         </div>
       </motion.div>
@@ -250,7 +261,7 @@ function MissionControl() {
                 <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
                   {scoreEstimate
                     ? `${scoreEstimate.interval.min}–${scoreEstimate.interval.max} · ${scoreEstimate.cefr}`
-                    : locale === 'zh' ? '完成至少一套后可估分' : 'Complete a set to estimate'}
+                    : locale === 'zh' ? '做完一套并对完答案后显示' : 'Shows after you check one set'}
                 </div>
               </div>
             </Link>
@@ -273,8 +284,8 @@ function MissionControl() {
                 </div>
                 <div className="mt-1.5 text-xs text-[var(--label-secondary)]">
                   {weakestPart
-                    ? locale === 'zh' ? '当前最大失分源' : 'Highest loss source'
-                    : locale === 'zh' ? '暂无数据' : 'No data yet'}
+                    ? locale === 'zh' ? '目前错得最多的题型' : 'Where you miss the most'
+                    : locale === 'zh' ? '填过错题数后显示' : 'Shows after you enter mistakes'}
                 </div>
               </div>
             </Link>
@@ -292,17 +303,23 @@ function MissionControl() {
                   <Calendar className="size-3.5 text-[var(--cheese-cyan)]" />
                 </div>
                 <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '目标配置' : 'Mission Goal'}
+                  {locale === 'zh' ? '距离考试' : 'Until exam'}
                 </span>
               </div>
-              <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
-                {daysUntilExam}
-                <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
-                  {locale === 'zh' ? '天' : 'days'}
-                </span>
-              </div>
+              {examDateIsSet ? (
+                <div className="mt-4 text-3xl font-bold tracking-tight text-[var(--label-primary)]">
+                  {examDayOffset}
+                  <span className="ml-1 text-base font-normal text-[var(--label-tertiary)]">
+                    {locale === 'zh' ? '天' : 'days'}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-4 text-xl font-bold text-[var(--label-primary)]">
+                  {locale === 'zh' ? '设置考试日期' : 'Set your exam date'}
+                </div>
+              )}
               <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-[var(--label-secondary)]">
-                <span className="font-medium">{examDate}</span>
+                <span className="font-medium">{examDateIsSet ? examDate : (locale === 'zh' ? '点这里修改日期和题量' : 'Tap to change date and plan')}</span>
                 <span className="opacity-50">·</span>
                 <span>{locale === 'zh' ? `共 ${setCount} 套` : `${setCount} Sets`}</span>
               </div>
